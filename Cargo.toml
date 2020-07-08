@@ -1,0 +1,26 @@
+[package]
+name = "johnnycanencrypt"
+version = "0.1.0"
+authors = ["Kushal Das <mail@kushaldas.in>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "johnnycanencrypt"
+crate-type = ["cdylib"]
+
+
+[dependencies]
+sequoia-openpgp = "*"
+
+[dependencies.pyo3]
+version = "0.11.1"
+features = ["extension-module"]
+
+
+[package.metadata.maturin]
+classifier = ["Programming Language :: Python"]
+requires-python = "3.7"
+project-url = ["https://kushaldas.in"]
+
