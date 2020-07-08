@@ -1,13 +1,112 @@
 use pyo3::prelude::*;
+use pyo3::types::PyBytes;
+use std::collections::HashMap;
 use std::io::Write;
 use std::str;
 
 extern crate sequoia_openpgp as openpgp;
 use crate::openpgp::armor;
+use crate::openpgp::crypto::{KeyPair, SessionKey};
+use crate::openpgp::parse::stream::{
+    DecryptionHelper, DecryptorBuilder, MessageStructure,
+    VerificationHelper,
+};
 use crate::openpgp::parse::Parse;
+use crate::openpgp::policy::NullPolicy as NP;
+use crate::openpgp::policy::Policy;
 use crate::openpgp::policy::StandardPolicy as P;
 use crate::openpgp::serialize::stream::{Encryptor, LiteralWriter, Message};
 use crate::openpgp::types::KeyFlags;
+use crate::openpgp::types::SymmetricAlgorithm;
+
+struct Helper {
+    keys: HashMap<openpgp::KeyID, KeyPair>,
+}
+
+impl Helper {
+    /// Creates a Helper for the given Certs with appropriate secrets.
+    fn new(p: &dyn Policy, cert: &openpgp::Cert, pass: &str) -> Self {
+        // Map (sub)KeyIDs to secrets.
+        let mut keys = HashMap::new();
+
+        for ka in cert.keys().with_policy(p, None).secret() {
+            keys.insert(
+                ka.key().keyid(),
+                ka.key()
+                    .clone()
+                    .decrypt_secret(&openpgp::crypto::Password::from(pass))
+                    .unwrap()
+                    .into_keypair()
+                    .unwrap(),
+            );
+        }
+        Helper { keys }
+    }
+}
+
+impl DecryptionHelper for Helper {
+    fn decrypt<D>(
+        &mut self,
+        pkesks: &[openpgp::packet::PKESK],
+        _skesks: &[openpgp::packet::SKESK],
+        sym_algo: Option<SymmetricAlgorithm>,
+        mut decrypt: D,
+    ) -> openpgp::Result<Option<openpgp::Fingerprint>>
+    where
+        D: FnMut(SymmetricAlgorithm, &SessionKey) -> bool,
+    {
+        // Try each PKESK until we succeed.
+        for pkesk in pkesks {
+            let keyid = pkesk.recipient();
+            // If the keyid is not present, we should just skip to next pkesk
+            let keypair = self.keys.get_mut(&keyid).unwrap();
+            let fp = keypair.public().fingerprint();
+            // now get the algo
+            if pkesk
+                .decrypt(keypair, sym_algo)
+                .map(|(algo, session_key)| decrypt(algo, &session_key))
+                .unwrap_or(false)
+            {
+                return Ok(Some(fp));
+            }
+        }
+        Ok(None)
+    }
+}
+
+impl VerificationHelper for Helper {
+    fn get_certs(&mut self, _ids: &[openpgp::KeyHandle]) -> openpgp::Result<Vec<openpgp::Cert>> {
+        Ok(Vec::new()) // Feed the Certs to the verifier here.
+    }
+    fn check(&mut self, _structure: MessageStructure) -> openpgp::Result<()> {
+        //for layer in structure.iter() {
+        //match layer {
+        //MessageLayer::Compression { algo } => eprintln!("Compressed using {}", algo),
+        //MessageLayer::Encryption {
+        //sym_algo,
+        //aead_algo,
+        //} => {
+        //if let Some(aead_algo) = aead_algo {
+        //eprintln!("Encrypted and protected using {}/{}", sym_algo, aead_algo);
+        //} else {
+        //eprintln!("Encrypted using {}", sym_algo);
+        //}
+        //}
+        //MessageLayer::SignatureGroup { ref results } => {
+        //for result in results {
+        //match result {
+        //Ok(GoodChecksum { ka, .. }) => {
+        //eprintln!("Good signature from {}", ka.cert());
+        //}
+        //Err(e) => eprintln!("Error: {:?}", e),
+        //}
+        //}
+        //}
+        //}
+        //}
+        Ok(()) // Implement your verification policy here.
+    }
+}
 
 #[pyclass]
 #[derive(Debug)]
@@ -60,6 +159,20 @@ impl Johnny {
         // Finalize the armor writer.
         sink.finalize().expect("Failed to write data");
         Ok(str::from_utf8(&result).unwrap().to_string())
+    }
+
+    pub fn decrypt_bytes(&self, py: Python, data: Vec<u8>, password: String) -> PyResult<PyObject> {
+        let p = &NP::new();
+
+        let mut result = Vec::new();
+        let reader = std::io::BufReader::new(&data[..]);
+        let mut decryptor = DecryptorBuilder::from_reader(reader)
+            .unwrap()
+            .with_policy(p, None, Helper::new(p, &self.cert, &password))
+            .unwrap();
+        std::io::copy(&mut decryptor, &mut result).unwrap();
+        let res = PyBytes::new(py, &result);
+        Ok(res.into())
     }
 }
 
