@@ -1,14 +1,12 @@
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 
-
 use std::collections::HashMap;
+use std::fs::File;
 use std::io;
 use std::io::prelude;
 use std::io::Write;
 use std::str;
-use std::fs::File;
-
 
 extern crate sequoia_openpgp as openpgp;
 use crate::openpgp::armor;
@@ -112,16 +110,10 @@ impl VerificationHelper for Helper {
         Ok(()) // Implement your verification policy here.
     }
 }
-fn sign_bytes_detached_internal(
-    cert: &openpgp::cert::Cert,
-    input: &mut dyn io::Read,
-    password: String
-) -> PyResult<String> {
+
+// To create key pairs; from the given Cert
+fn get_keys(cert: &openpgp::cert::Cert, password: String) -> Vec<openpgp::crypto::KeyPair> {
     let p = &P::new();
-
-    // TODO: WHY?
-    let mut input = input;
-
     let mut keys = Vec::new();
     for key in cert
         .keys()
@@ -141,6 +133,18 @@ fn sign_bytes_detached_internal(
             .expect("decryption failed");
         keys.push(key.into_keypair().unwrap());
     }
+    keys
+}
+
+fn sign_bytes_detached_internal(
+    cert: &openpgp::cert::Cert,
+    input: &mut dyn io::Read,
+    password: String,
+) -> PyResult<String> {
+    // TODO: WHY?
+    let mut input = input;
+
+    let mut keys = get_keys(cert, password);
 
     let mut result = Vec::new();
     let mut sink = armor::Writer::new(&mut result, armor::Kind::Signature)
@@ -244,7 +248,6 @@ impl Johnny {
         let mut localdata = File::open(filepath).unwrap();
         sign_bytes_detached_internal(&self.cert, &mut localdata, password)
     }
-
 
 
 }
