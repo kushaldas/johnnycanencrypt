@@ -1,26 +1,37 @@
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
+
 use std::collections::HashMap;
+use std::fs::File;
+use std::io;
+use td::io::prelude;
 use std::io::Write;
+use std::path::Path;
 use std::str;
 
+extern crate anyhow;
+
 extern crate sequoia_openpgp as openpgp;
+
 use crate::openpgp::armor;
 use crate::openpgp::crypto::{KeyPair, SessionKey};
 use crate::openpgp::parse::stream::{
-    DecryptionHelper, DecryptorBuilder, MessageStructure,
-    VerificationHelper,
+    DecryptionHelper, DecryptorBuilder, DetachedVerifierBuilder, GoodChecksum, MessageLayer,
+    MessageStructure, VerificationHelper,
 };
+
 use crate::openpgp::parse::Parse;
 use crate::openpgp::policy::NullPolicy as NP;
 use crate::openpgp::policy::Policy;
 use crate::openpgp::policy::StandardPolicy as P;
-use crate::openpgp::serialize::stream::{Encryptor, LiteralWriter, Message};
+use crate::openpgp::serialize::stream::{Encryptor, LiteralWriter, Message, Signer};
 use crate::openpgp::types::KeyFlags;
 use crate::openpgp::types::SymmetricAlgorithm;
 
+// TODO: Clean up the cert below after writing tests
 struct Helper {
     keys: HashMap<openpgp::KeyID, KeyPair>,
+    cert: openpgp::Cert,
 }
 
 impl Helper {
@@ -40,7 +51,8 @@ impl Helper {
                     .unwrap(),
             );
         }
-        Helper { keys }
+        let cloned = cert.clone();
+        Helper { keys, cert: cloned }
     }
 }
 
@@ -76,36 +88,116 @@ impl DecryptionHelper for Helper {
 
 impl VerificationHelper for Helper {
     fn get_certs(&mut self, _ids: &[openpgp::KeyHandle]) -> openpgp::Result<Vec<openpgp::Cert>> {
-        Ok(Vec::new()) // Feed the Certs to the verifier here.
+        Ok(vec![]) // Feed the Certs to the verifier here.
     }
     fn check(&mut self, _structure: MessageStructure) -> openpgp::Result<()> {
-        //for layer in structure.iter() {
-        //match layer {
-        //MessageLayer::Compression { algo } => eprintln!("Compressed using {}", algo),
-        //MessageLayer::Encryption {
-        //sym_algo,
-        //aead_algo,
-        //} => {
-        //if let Some(aead_algo) = aead_algo {
-        //eprintln!("Encrypted and protected using {}/{}", sym_algo, aead_algo);
-        //} else {
-        //eprintln!("Encrypted using {}", sym_algo);
-        //}
-        //}
-        //MessageLayer::SignatureGroup { ref results } => {
-        //for result in results {
-        //match result {
-        //Ok(GoodChecksum { ka, .. }) => {
-        //eprintln!("Good signature from {}", ka.cert());
-        //}
-        //Err(e) => eprintln!("Error: {:?}", e),
-        //}
-        //}
-        //}
-        //}
-        //}
-        Ok(()) // Implement your verification policy here.
+        Ok(())
     }
+}
+
+struct VHelper {
+    cert: openpgp::Cert,
+}
+
+impl VHelper {
+    /// Creates a VHelper for the given Cert for signature verification.
+    fn new(cert: &openpgp::Cert) -> Self {
+        let cloned = cert.clone();
+        VHelper { cert: cloned }
+    }
+}
+
+impl VerificationHelper for VHelper {
+    fn get_certs(&mut self, _ids: &[openpgp::KeyHandle]) -> openpgp::Result<Vec<openpgp::Cert>> {
+        Ok(vec![self.cert.clone()]) // Feed the Certs to the verifier here.
+    }
+    fn check(&mut self, structure: MessageStructure) -> openpgp::Result<()> {
+        let mut good = false;
+        for (i, layer) in structure.into_iter().enumerate() {
+            match (i, layer) {
+                // First, we are interested in signatures over the
+                // data, i.e. level 0 signatures.
+                (0, MessageLayer::SignatureGroup { results }) => {
+                    // Finally, given a VerificationResult, which only says
+                    // whether the signature checks out mathematically, we apply
+                    // our policy.
+                    match results.into_iter().next() {
+                        Some(Ok(_)) => good = true,
+                        Some(Err(e)) => return Err(openpgp::Error::from(e).into()),
+                        None => return Err(anyhow::anyhow!("No signature")),
+                    }
+                }
+                _ => return Err(anyhow::anyhow!("Unexpected message structure")),
+            }
+        }
+
+        if good {
+            Ok(()) // Good signature.
+        } else {
+            Err(anyhow::anyhow!("Signature verification failed"))
+        }
+    }
+}
+
+// To create key pairs; from the given Cert
+fn get_keys(cert: &openpgp::cert::Cert, password: String) -> Vec<openpgp::crypto::KeyPair> {
+    let p = &P::new();
+    let mut keys = Vec::new();
+    for key in cert
+        .keys()
+        .with_policy(p, None)
+        .alive()
+        .revoked(false)
+        .for_signing()
+        .secret()
+        .map(|kd| kd.key())
+    {
+        let mut key = key.clone();
+        let algo = key.pk_algo();
+
+        let _keypair = key
+            .secret_mut()
+            .decrypt_in_place(algo, &openpgp::crypto::Password::from(password.clone()))
+            .expect("decryption failed");
+        keys.push(key.into_keypair().unwrap());
+    }
+    keys
+}
+
+fn sign_bytes_detached_internal(
+    cert: &openpgp::cert::Cert,
+    input: &mut dyn io::Read,
+    password: String,
+) -> PyResult<String> {
+    // TODO: WHY?
+    let mut input = input;
+
+    let mut keys = get_keys(cert, password);
+
+    let mut result = Vec::new();
+    let mut sink = armor::Writer::new(&mut result, armor::Kind::Signature)
+        .expect("Failed to create armored writer.");
+
+    // Stream an OpenPGP message.
+    let message = Message::new(&mut sink);
+
+    // Now, create a signer that emits the detached signature(s).
+    let mut signer = Signer::new(message, keys.pop().expect("No key for signing"));
+    for s in keys {
+        signer = signer.add_signer(s);
+    }
+    let mut signer = signer.detached().build().expect("Failed to create signer");
+
+    // Copy all the data.
+    io::copy(&mut input, &mut signer).expect("Failed to sign data");
+
+    // Finally, teardown the stack to ensure all the data is written.
+    signer.finalize().expect("Failed to write data");
+
+    // Finalize the armor writer.
+    sink.finalize().expect("Failed to write data");
+
+    Ok(String::from_utf8(result).unwrap())
 }
 
 #[pyclass]
@@ -173,6 +265,42 @@ impl Johnny {
         std::io::copy(&mut decryptor, &mut result).unwrap();
         let res = PyBytes::new(py, &result);
         Ok(res.into())
+    }
+
+    pub fn sign_bytes_detached(&self, data: Vec<u8>, password: String) -> PyResult<String> {
+        let mut localdata = io::Cursor::new(data);
+        sign_bytes_detached_internal(&self.cert, &mut localdata, password)
+    }
+
+    pub fn sign_file_detached(&self, filepath: String, password: String) -> PyResult<String> {
+        let mut localdata = File::open(filepath).unwrap();
+        sign_bytes_detached_internal(&self.cert, &mut localdata, password)
+    }
+
+    pub fn verify_bytes(&self, data: Vec<u8>, sig: Vec<u8>) -> PyResult<bool> {
+        let p = &P::new();
+        let vh = VHelper::new(&self.cert);
+        let mut v = DetachedVerifierBuilder::from_bytes(&sig[..])
+            .unwrap()
+            .with_policy(p, None, vh)
+            .unwrap();
+        match v.verify_bytes(data) {
+            Ok(()) => return Ok(true),
+            Err(_) => return Ok(false),
+        };
+    }
+    pub fn verify_file(&self, filepath: Vec<u8>, sig: Vec<u8>) -> PyResult<bool> {
+        let p = &P::new();
+        let vh = VHelper::new(&self.cert);
+        let mut v = DetachedVerifierBuilder::from_bytes(&sig[..])
+            .unwrap()
+            .with_policy(p, None, vh)
+            .unwrap();
+        let path = Path::new(str::from_utf8(&filepath[..]).unwrap());
+        match v.verify_file(path) {
+            Ok(()) => return Ok(true),
+            Err(_) => return Ok(false),
+        };
     }
 }
 
