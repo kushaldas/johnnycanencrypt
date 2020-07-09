@@ -4,8 +4,9 @@ use pyo3::types::PyBytes;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io;
-use std::io::prelude;
+use td::io::prelude;
 use std::io::Write;
+use std::path::Path;
 use std::str;
 
 extern crate anyhow;
@@ -27,6 +28,7 @@ use crate::openpgp::serialize::stream::{Encryptor, LiteralWriter, Message, Signe
 use crate::openpgp::types::KeyFlags;
 use crate::openpgp::types::SymmetricAlgorithm;
 
+// TODO: Clean up the cert below after writing tests
 struct Helper {
     keys: HashMap<openpgp::KeyID, KeyPair>,
     cert: openpgp::Cert,
@@ -275,7 +277,7 @@ impl Johnny {
         sign_bytes_detached_internal(&self.cert, &mut localdata, password)
     }
 
-    pub fn verify_bytes(&self, data: Vec<u8>, sig: Vec<u8>) -> PyResult<bool>{
+    pub fn verify_bytes(&self, data: Vec<u8>, sig: Vec<u8>) -> PyResult<bool> {
         let p = &P::new();
         let vh = VHelper::new(&self.cert);
         let mut v = DetachedVerifierBuilder::from_bytes(&sig[..])
@@ -285,7 +287,19 @@ impl Johnny {
         match v.verify_bytes(data) {
             Ok(()) => return Ok(true),
             Err(_) => return Ok(false),
-
+        };
+    }
+    pub fn verify_file(&self, filepath: Vec<u8>, sig: Vec<u8>) -> PyResult<bool> {
+        let p = &P::new();
+        let vh = VHelper::new(&self.cert);
+        let mut v = DetachedVerifierBuilder::from_bytes(&sig[..])
+            .unwrap()
+            .with_policy(p, None, vh)
+            .unwrap();
+        let path = Path::new(str::from_utf8(&filepath[..]).unwrap());
+        match v.verify_file(path) {
+            Ok(()) => return Ok(true),
+            Err(_) => return Ok(false),
         };
     }
 }
