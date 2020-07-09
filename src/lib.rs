@@ -8,12 +8,17 @@ use std::io::prelude;
 use std::io::Write;
 use std::str;
 
+extern crate anyhow;
+
 extern crate sequoia_openpgp as openpgp;
+
 use crate::openpgp::armor;
 use crate::openpgp::crypto::{KeyPair, SessionKey};
 use crate::openpgp::parse::stream::{
-    DecryptionHelper, DecryptorBuilder, MessageStructure, VerificationHelper,
+    DecryptionHelper, DecryptorBuilder, DetachedVerifierBuilder, GoodChecksum, MessageLayer,
+    MessageStructure, VerificationHelper,
 };
+
 use crate::openpgp::parse::Parse;
 use crate::openpgp::policy::NullPolicy as NP;
 use crate::openpgp::policy::Policy;
@@ -24,6 +29,7 @@ use crate::openpgp::types::SymmetricAlgorithm;
 
 struct Helper {
     keys: HashMap<openpgp::KeyID, KeyPair>,
+    cert: openpgp::Cert,
 }
 
 impl Helper {
@@ -43,7 +49,8 @@ impl Helper {
                     .unwrap(),
             );
         }
-        Helper { keys }
+        let cloned = cert.clone();
+        Helper { keys, cert: cloned }
     }
 }
 
@@ -79,35 +86,54 @@ impl DecryptionHelper for Helper {
 
 impl VerificationHelper for Helper {
     fn get_certs(&mut self, _ids: &[openpgp::KeyHandle]) -> openpgp::Result<Vec<openpgp::Cert>> {
-        Ok(Vec::new()) // Feed the Certs to the verifier here.
+        Ok(vec![]) // Feed the Certs to the verifier here.
     }
     fn check(&mut self, _structure: MessageStructure) -> openpgp::Result<()> {
-        //for layer in structure.iter() {
-        //match layer {
-        //MessageLayer::Compression { algo } => eprintln!("Compressed using {}", algo),
-        //MessageLayer::Encryption {
-        //sym_algo,
-        //aead_algo,
-        //} => {
-        //if let Some(aead_algo) = aead_algo {
-        //eprintln!("Encrypted and protected using {}/{}", sym_algo, aead_algo);
-        //} else {
-        //eprintln!("Encrypted using {}", sym_algo);
-        //}
-        //}
-        //MessageLayer::SignatureGroup { ref results } => {
-        //for result in results {
-        //match result {
-        //Ok(GoodChecksum { ka, .. }) => {
-        //eprintln!("Good signature from {}", ka.cert());
-        //}
-        //Err(e) => eprintln!("Error: {:?}", e),
-        //}
-        //}
-        //}
-        //}
-        //}
-        Ok(()) // Implement your verification policy here.
+        Ok(())
+    }
+}
+
+struct VHelper {
+    cert: openpgp::Cert,
+}
+
+impl VHelper {
+    /// Creates a VHelper for the given Cert for signature verification.
+    fn new(cert: &openpgp::Cert) -> Self {
+        let cloned = cert.clone();
+        VHelper { cert: cloned }
+    }
+}
+
+impl VerificationHelper for VHelper {
+    fn get_certs(&mut self, _ids: &[openpgp::KeyHandle]) -> openpgp::Result<Vec<openpgp::Cert>> {
+        Ok(vec![self.cert.clone()]) // Feed the Certs to the verifier here.
+    }
+    fn check(&mut self, structure: MessageStructure) -> openpgp::Result<()> {
+        let mut good = false;
+        for (i, layer) in structure.into_iter().enumerate() {
+            match (i, layer) {
+                // First, we are interested in signatures over the
+                // data, i.e. level 0 signatures.
+                (0, MessageLayer::SignatureGroup { results }) => {
+                    // Finally, given a VerificationResult, which only says
+                    // whether the signature checks out mathematically, we apply
+                    // our policy.
+                    match results.into_iter().next() {
+                        Some(Ok(_)) => good = true,
+                        Some(Err(e)) => return Err(openpgp::Error::from(e).into()),
+                        None => return Err(anyhow::anyhow!("No signature")),
+                    }
+                }
+                _ => return Err(anyhow::anyhow!("Unexpected message structure")),
+            }
+        }
+
+        if good {
+            Ok(()) // Good signature.
+        } else {
+            Err(anyhow::anyhow!("Signature verification failed"))
+        }
     }
 }
 
@@ -249,7 +275,19 @@ impl Johnny {
         sign_bytes_detached_internal(&self.cert, &mut localdata, password)
     }
 
+    pub fn verify_bytes(&self, data: Vec<u8>, sig: Vec<u8>) -> PyResult<bool>{
+        let p = &P::new();
+        let vh = VHelper::new(&self.cert);
+        let mut v = DetachedVerifierBuilder::from_bytes(&sig[..])
+            .unwrap()
+            .with_policy(p, None, vh)
+            .unwrap();
+        match v.verify_bytes(data) {
+            Ok(()) => return Ok(true),
+            Err(_) => return Ok(false),
 
+        };
+    }
 }
 
 #[pymodule]

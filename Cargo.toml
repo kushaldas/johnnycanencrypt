@@ -13,6 +13,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 sequoia-openpgp = "*"
+anyhow = "1.0.31"
 
 [dependencies.pyo3]
 version = "0.11.1"
