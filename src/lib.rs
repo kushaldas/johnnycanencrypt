@@ -1,5 +1,6 @@
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
+use pyo3::wrap_pyfunction;
 
 use std::collections::HashMap;
 use std::fs::File;
@@ -14,6 +15,8 @@ extern crate anyhow;
 extern crate sequoia_openpgp as openpgp;
 
 use crate::openpgp::armor;
+use openpgp::armor::{Kind, Writer};
+
 use crate::openpgp::crypto::{KeyPair, SessionKey};
 use crate::openpgp::parse::stream::{
     DecryptionHelper, DecryptorBuilder, DetachedVerifierBuilder, GoodChecksum, MessageLayer,
@@ -25,8 +28,11 @@ use crate::openpgp::policy::NullPolicy as NP;
 use crate::openpgp::policy::Policy;
 use crate::openpgp::policy::StandardPolicy as P;
 use crate::openpgp::serialize::stream::{Encryptor, LiteralWriter, Message, Signer};
+use crate::openpgp::serialize::Marshal;
+use crate::openpgp::serialize::MarshalInto;
 use crate::openpgp::types::KeyFlags;
 use crate::openpgp::types::SymmetricAlgorithm;
+use openpgp::cert::prelude::*;
 
 // TODO: Clean up the cert below after writing tests
 struct Helper {
@@ -200,6 +206,30 @@ fn sign_bytes_detached_internal(
     Ok(String::from_utf8(result).unwrap())
 }
 
+#[pyfunction]
+fn create_newkey(py: Python, password: String, userid: String) -> PyResult<(String, String)> {
+    let (cert, _) = CertBuilder::new()
+        .add_storage_encryption_subkey()
+        .add_signing_subkey()
+        .set_cipher_suite(CipherSuite::RSA4k)
+        .set_password(Some(openpgp::crypto::Password::from(password)))
+        .add_userid(userid)
+        .generate()
+        .unwrap();
+    let mut buf = Vec::new();
+    let mut buffer = Vec::new();
+
+    let mut writer = Writer::new(&mut buf, Kind::SecretKey).unwrap();
+    cert.as_tsk().serialize(&mut buffer).unwrap();
+    writer.write_all(&buffer).unwrap();
+    writer.finalize().unwrap();
+    let armored = cert.armored().to_vec().unwrap();
+    Ok((
+        String::from_utf8(armored).unwrap(),
+        String::from_utf8(buf).unwrap(),
+    ))
+}
+
 #[pyclass]
 #[derive(Debug)]
 struct Johnny {
@@ -362,6 +392,7 @@ impl Johnny {
 #[pymodule]
 /// A Python module implemented in Rust.
 fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
+    m.add_wrapped(wrap_pyfunction!(create_newkey))?;
     m.add_class::<Johnny>()?;
     Ok(())
 }
