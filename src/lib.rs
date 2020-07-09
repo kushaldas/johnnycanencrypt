@@ -1,6 +1,7 @@
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use std::collections::HashMap;
+use std::io;
 use std::io::Write;
 use std::str;
 
@@ -8,14 +9,13 @@ extern crate sequoia_openpgp as openpgp;
 use crate::openpgp::armor;
 use crate::openpgp::crypto::{KeyPair, SessionKey};
 use crate::openpgp::parse::stream::{
-    DecryptionHelper, DecryptorBuilder, MessageStructure,
-    VerificationHelper,
+    DecryptionHelper, DecryptorBuilder, MessageStructure, VerificationHelper,
 };
 use crate::openpgp::parse::Parse;
 use crate::openpgp::policy::NullPolicy as NP;
 use crate::openpgp::policy::Policy;
 use crate::openpgp::policy::StandardPolicy as P;
-use crate::openpgp::serialize::stream::{Encryptor, LiteralWriter, Message};
+use crate::openpgp::serialize::stream::{Encryptor, LiteralWriter, Message, Signer};
 use crate::openpgp::types::KeyFlags;
 use crate::openpgp::types::SymmetricAlgorithm;
 
@@ -107,6 +107,61 @@ impl VerificationHelper for Helper {
         Ok(()) // Implement your verification policy here.
     }
 }
+fn sign_bytes_detached_internal(
+    cert: &openpgp::cert::Cert,
+    input: &mut dyn io::Read,
+    password: String
+) -> PyResult<String> {
+    let p = &P::new();
+
+    // TODO: WHY?
+    let mut input = input;
+
+    let mut keys = Vec::new();
+    for key in cert
+        .keys()
+        .with_policy(p, None)
+        .alive()
+        .revoked(false)
+        .for_signing()
+        .secret()
+        .map(|kd| kd.key())
+    {
+        let mut key = key.clone();
+        let algo = key.pk_algo();
+
+        let _keypair = key
+            .secret_mut()
+            .decrypt_in_place(algo, &openpgp::crypto::Password::from(password.clone()))
+            .expect("decryption failed");
+        keys.push(key.into_keypair().unwrap());
+    }
+
+    let mut result = Vec::new();
+    let mut sink = armor::Writer::new(&mut result, armor::Kind::Signature)
+        .expect("Failed to create armored writer.");
+
+    // Stream an OpenPGP message.
+    let message = Message::new(&mut sink);
+
+    // Now, create a signer that emits the detached signature(s).
+    let mut signer = Signer::new(message, keys.pop().expect("No key for signing"));
+    for s in keys {
+        signer = signer.add_signer(s);
+    }
+    let mut signer = signer.detached().build().expect("Failed to create signer");
+
+    // Copy all the data.
+    io::copy(&mut input, &mut signer).expect("Failed to sign data");
+
+    // Finally, teardown the stack to ensure all the data is written.
+    signer.finalize().expect("Failed to write data");
+
+    // Finalize the armor writer.
+    sink.finalize().expect("Failed to write data");
+
+    Ok(String::from_utf8(result).unwrap())
+}
 
 #[pyclass]
 #[derive(Debug)]
@@ -173,6 +228,11 @@ impl Johnny {
         std::io::copy(&mut decryptor, &mut result).unwrap();
         let res = PyBytes::new(py, &result);
         Ok(res.into())
+    }
+
+    pub fn sign_bytes_detached(&self, data: Vec<u8>, password: String) -> PyResult<String> {
+        let mut localdata = io::Cursor::new(data);
+        sign_bytes_detached_internal(&self.cert, &mut localdata, password)
     }
 }
 
