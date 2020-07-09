@@ -1,9 +1,14 @@
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
+
+
 use std::collections::HashMap;
 use std::io;
+use std::io::prelude;
 use std::io::Write;
 use std::str;
+use std::fs::File;
+
 
 extern crate sequoia_openpgp as openpgp;
 use crate::openpgp::armor;
@@ -234,6 +239,14 @@ impl Johnny {
         let mut localdata = io::Cursor::new(data);
         sign_bytes_detached_internal(&self.cert, &mut localdata, password)
     }
+
+    pub fn sign_file_detached(&self, filepath: String, password: String) -> PyResult<String> {
+        let mut localdata = File::open(filepath).unwrap();
+        sign_bytes_detached_internal(&self.cert, &mut localdata, password)
+    }
+
+
+
 }
 
 #[pymodule]
