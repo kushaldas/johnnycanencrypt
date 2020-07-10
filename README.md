@@ -56,5 +56,55 @@ kushal 🐍
 
 ```
 
+## Quick API documentation
+
+Remember that this will change a lot in the coming days.
+
+
+```Python
+import johnnycanencrypt as jce
+```
+
+To create new RSA4096 size key, call `jce.newkey("password", "userid")`, both *password* and *userid* are Python str.
+Remember to save them into different files ending with *.asc*. 
+
+To do any encryption/decryption we have to create an object of the **Johnny** class with the private or public key file.
+Remember, except **password** input, every else takes `bytes` as input type.
+
+### Signing a file with detached signature
+
+```Python
+j = Johnny("private.asc")
+signature = j.sign_file_detached("filename.txt".encode("utf-8"), "password")
+with open("filename.txt.asc", "w") as f:
+    f.write(signature)
+```
+
+### Verifying a signature
+
+
+```Python
+j = Johnny("public.asc")
+with open("filename.txt.asc") as f:
+    sig = f.read()
+
+verified = j.verify_file("filename.txt".encode("utf-8"), sig.encode("utf-8"))
+print(f"Verified: {verified}")
+```
+
+For signing and verifying there are similar method available for bytes, `verify_bytes`, `sign_bytes_detached`.
+
+
+### Encrypting and decrypting files
+
+```Python
+j = jce.Johnny("public.asc")
+assert j.encrypt_file(inputfile.encode("utf-8"), output_file_path.encode("utf-8"))
+jp = jce.Johnny("secret.asc")
+
+result = jp.decrypt_file(output_file_path.encode("utf-8"), decrypted_output_path.encode("utf-8"), "password")
+```
+
+
 
 ## LICENSE: GPLv3+
