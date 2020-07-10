@@ -1,5 +1,7 @@
 # Johnny can encrypt
 
+[![CircleCI branch](https://img.shields.io/circleci/project/github/kushaldas/johnnycanencrypt/master.svg)](https://circleci.com/gh/kushaldas/workflows/johnnycanencrypt/tree/master)
+
 Johnnycanencrypt aka **jce** is a Python module written in Rust to do basic encryption and decryption operations.
 It uses amazing [sequoia-pgp](https://sequoia-pgp.org/) library for the actual OpenPGP operations.
 
