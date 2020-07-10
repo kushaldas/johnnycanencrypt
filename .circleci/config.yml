@@ -3,40 +3,44 @@ jobs:
   build-buster:
     docker:
       - image: circleci/python:3.7-buster
+        environment:
+          BASH_ENV: ~/.bashrc
     steps:
       - checkout
-      - restore_cache:
-          key: deps1-{{ .Branch }}-{{ checksum "requirements-dev.txt" }}
+      - run:
+          name: Make Cargo available
+          command: |
+            echo 'export PATH=$HOME/.cargo/bin:$PATH' >> /home/circleci/.bashrc
+            source /home/circleci/.bashrc
+
+      - run:
+          name: Install system dependencies
+          command: sudo apt install -y python3-dev libnettle6 nettle-dev libhogweed4 python3-pip python3-venv clang
+
       - run:
           command: |
             python3 -m venv .venv
             . .venv/bin/activate
-            python3 -m pip3 install -r requirements-dev.txt
-      - save_cache:
-          key: deps1-{{ .Branch }}-{{ checksum "requirements-dev.txt" }}
-          paths:
-            - "venv"
+            python3 -m pip install -r requirements-dev.txt
       - run:
           name: Install Rustup nightly
           command: |
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > install.sh
-            sh install.sh
-            rustup toolchain install nightly --allow-downgrade
+            sh install.sh -y --default-toolchain nightly --component clippy rustfmt cargo
 
       - run:
           name: Build Johnny can encrypt
           command: |
             . .venv/bin/activate
+            source /home/circleci/.cargo/env
             maturin develop
 
       - run:
           name: Running tests
           command: |
             . .venv/bin/activate
+            source /home/circleci/.cargo/env
             python3 -m pytest -vv
-      - store_artifacts:
-          path: target/wheels
-          destination: wheels
 
 workflows:
   version: 2
