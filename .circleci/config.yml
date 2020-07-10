@@ -38,3 +38,9 @@ jobs:
           path: target/wheels
           destination: wheels
 
+workflows:
+  version: 2
+  johnny_can_encrypt_ci:
+    jobs:
+      - build-buster
+
