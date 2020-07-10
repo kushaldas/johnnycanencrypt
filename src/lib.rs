@@ -5,7 +5,6 @@ use pyo3::wrap_pyfunction;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io;
-use std::io::prelude;
 use std::io::Write;
 use std::path::Path;
 use std::str;
@@ -19,7 +18,7 @@ use openpgp::armor::{Kind, Writer};
 
 use crate::openpgp::crypto::{KeyPair, SessionKey};
 use crate::openpgp::parse::stream::{
-    DecryptionHelper, DecryptorBuilder, DetachedVerifierBuilder, GoodChecksum, MessageLayer,
+    DecryptionHelper, DecryptorBuilder, DetachedVerifierBuilder, MessageLayer,
     MessageStructure, VerificationHelper,
 };
 
@@ -34,10 +33,8 @@ use crate::openpgp::types::KeyFlags;
 use crate::openpgp::types::SymmetricAlgorithm;
 use openpgp::cert::prelude::*;
 
-// TODO: Clean up the cert below after writing tests
 struct Helper {
     keys: HashMap<openpgp::KeyID, KeyPair>,
-    cert: openpgp::Cert,
 }
 
 impl Helper {
@@ -57,8 +54,7 @@ impl Helper {
                     .unwrap(),
             );
         }
-        let cloned = cert.clone();
-        Helper { keys, cert: cloned }
+        Helper { keys }
     }
 }
 
@@ -207,7 +203,7 @@ fn sign_bytes_detached_internal(
 }
 
 #[pyfunction]
-fn create_newkey(py: Python, password: String, userid: String) -> PyResult<(String, String)> {
+fn create_newkey(password: String, userid: String) -> PyResult<(String, String)> {
     let (cert, _) = CertBuilder::new()
         .add_storage_encryption_subkey()
         .add_signing_subkey()
