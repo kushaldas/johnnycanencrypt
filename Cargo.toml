@@ -10,6 +10,9 @@ edition = "2018"
 name = "johnnycanencrypt"
 crate-type = ["cdylib"]
 
+[features]
+default = ["pyo3/extension-module"]
+
 
 [dependencies]
 sequoia-openpgp = "0.17.0"
