@@ -9,6 +9,13 @@ It uses amazing [sequoia-pgp](https://sequoia-pgp.org/) library for the actual O
 
 ## How to build?
 
+### Build dependencies in Fedora
+
+```
+sudo dnf install nettle clang clang-devel
+```
+
+
 ```
 python3 -m venv .venv
 source .venv/bin/activate
