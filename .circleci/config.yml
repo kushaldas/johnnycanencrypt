@@ -37,6 +37,10 @@ common-steps:
         maturin develop
         maturin build --manylinux=off
 
+  - &store_result
+    store_artifacts:
+      path: target/wheels
+
   - &test_jce
     run:
       name: Running tests
@@ -57,6 +61,7 @@ jobs:
       - *install_dependencies
       - *build_jce
       - *test_jce
+      - *store_result
 
   build-buster-3.8:
     docker:
@@ -68,7 +73,7 @@ jobs:
       - *install_dependencies
       - *build_jce
       - *test_jce
-
+      - *store_result
 
 workflows:
   version: 2
