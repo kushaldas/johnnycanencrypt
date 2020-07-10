@@ -1,0 +1,40 @@
+version: 2
+jobs:
+  build-buster:
+    docker:
+      - image: circleci/python:3.7-buster
+    steps:
+      - checkout
+      - restore_cache:
+          key: deps1-{{ .Branch }}-{{ checksum "requirements-dev.txt" }}
+      - run:
+          command: |
+            python3 -m venv .venv
+            . .venv/bin/activate
+            python3 -m pip3 install -r requirements-dev.txt
+      - save_cache:
+          key: deps1-{{ .Branch }}-{{ checksum "requirements-dev.txt" }}
+          paths:
+            - "venv"
+      - run:
+          name: Install Rustup nightly
+          command: |
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > install.sh
+            sh install.sh
+            rustup toolchain install nightly --allow-downgrade
+
+      - run:
+          name: Build Johnny can encrypt
+          command: |
+            . .venv/bin/activate
+            maturin develop
+
+      - run:
+          name: Running tests
+          command: |
+            . .venv/bin/activate
+            python3 -m pytest -vv
+      - store_artifacts:
+          path: target/wheels
+          destination: wheels
+
