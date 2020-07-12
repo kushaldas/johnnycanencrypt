@@ -1,7 +1,7 @@
+use pyo3::exceptions::*;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use pyo3::wrap_pyfunction;
-use pyo3::exceptions::*;
 
 use std::collections::HashMap;
 use std::fs::File;
@@ -19,8 +19,8 @@ use openpgp::armor::{Kind, Writer};
 
 use crate::openpgp::crypto::{KeyPair, SessionKey};
 use crate::openpgp::parse::stream::{
-    DecryptionHelper, DecryptorBuilder, DetachedVerifierBuilder, MessageLayer,
-    MessageStructure, VerificationHelper,
+    DecryptionHelper, DecryptorBuilder, DetachedVerifierBuilder, MessageLayer, MessageStructure,
+    VerificationHelper,
 };
 
 use crate::openpgp::parse::Parse;
@@ -33,7 +33,6 @@ use crate::openpgp::serialize::MarshalInto;
 use crate::openpgp::types::KeyFlags;
 use crate::openpgp::types::SymmetricAlgorithm;
 use openpgp::cert::prelude::*;
-
 
 struct Helper {
     keys: HashMap<openpgp::KeyID, KeyPair>,
@@ -178,6 +177,10 @@ fn sign_bytes_detached_internal(
 
     let mut keys = get_keys(cert, password);
 
+    if keys.len() == 0 {
+        return Err(AttributeError::py_err("No signing key is present."));
+    }
+
     let mut result = Vec::new();
     let mut sink = armor::Writer::new(&mut result, armor::Kind::Signature)
         .expect("Failed to create armored writer.");
@@ -241,11 +244,13 @@ impl Johnny {
     #[new]
     fn new(filepath: String) -> PyResult<Self> {
         if !std::fs::metadata(filepath.clone()).is_ok() {
-            return Err(FileNotFoundError::py_err(format!("{} is not found.", filepath)));
+            return Err(FileNotFoundError::py_err(format!(
+                "{} is not found.",
+                filepath
+            )));
         }
         let cert = openpgp::Cert::from_file(&filepath).unwrap();
         Ok(Johnny { filepath, cert })
-
     }
 
     pub fn encrypt_bytes(&self, data: Vec<u8>) -> PyResult<String> {
