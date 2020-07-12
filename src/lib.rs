@@ -178,6 +178,10 @@ fn sign_bytes_detached_internal(
 
     let mut keys = get_keys(cert, password);
 
+    if keys.len() == 0 {
+        return Err(AttributeError::py_err("No signing key is present."));
+    }
+
     let mut result = Vec::new();
     let mut sink = armor::Writer::new(&mut result, armor::Kind::Signature)
         .expect("Failed to create armored writer.");
