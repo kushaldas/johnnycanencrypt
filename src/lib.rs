@@ -1,6 +1,7 @@
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use pyo3::wrap_pyfunction;
+use pyo3::exceptions::*;
 
 use std::collections::HashMap;
 use std::fs::File;
@@ -32,6 +33,7 @@ use crate::openpgp::serialize::MarshalInto;
 use crate::openpgp::types::KeyFlags;
 use crate::openpgp::types::SymmetricAlgorithm;
 use openpgp::cert::prelude::*;
+
 
 struct Helper {
     keys: HashMap<openpgp::KeyID, KeyPair>,
@@ -237,9 +239,13 @@ struct Johnny {
 #[pymethods]
 impl Johnny {
     #[new]
-    fn new(filepath: String) -> Self {
+    fn new(filepath: String) -> PyResult<Self> {
+        if !std::fs::metadata(filepath.clone()).is_ok() {
+            return Err(FileNotFoundError::py_err(format!("{} is not found.", filepath)));
+        }
         let cert = openpgp::Cert::from_file(&filepath).unwrap();
-        Johnny { filepath, cert }
+        Ok(Johnny { filepath, cert })
+
     }
 
     pub fn encrypt_bytes(&self, data: Vec<u8>) -> PyResult<String> {
