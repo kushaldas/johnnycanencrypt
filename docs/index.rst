@@ -15,6 +15,7 @@ is written.
    :caption: Contents:
 
    build
+   api
 
 
 Indices and tables
