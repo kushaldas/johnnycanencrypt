@@ -28,7 +28,7 @@ maturin develop
 ```Python
 >>> import johnnycanencrypt as jce
 >>> j = jce.Johnny("secret.asc")
->>> data = j.encrypt_bytes("kushal 🐍".encode("utf-8"))
+>>> data = j.encrypt_bytes(b"kushal \xf0\x9f\x90\x8d")
 >>> print(data)
 -----BEGIN PGP MESSAGE-----
 
@@ -75,8 +75,8 @@ Remember, except **password** input, every else takes `bytes` as input type.
 
 ```Python
 j = Johnny("private.asc")
-signature = j.sign_file_detached("filename.txt".encode("utf-8"), "password")
-with open("filename.txt.asc", "w") as f:
+signature = j.sign_file_detached(b"filename.txt", "password")
+with open(b"filename.txt.asc", "wb") as f:
     f.write(signature)
 ```
 
@@ -85,10 +85,10 @@ with open("filename.txt.asc", "w") as f:
 
 ```Python
 j = Johnny("public.asc")
-with open("filename.txt.asc") as f:
+with open(b"filename.txt.asc", "b") as f:
     sig = f.read()
 
-verified = j.verify_file("filename.txt".encode("utf-8"), sig.encode("utf-8"))
+verified = j.verify_file(b"filename.txt", sig)
 print(f"Verified: {verified}")
 ```
 
@@ -99,12 +99,12 @@ For signing and verifying there are similar method available for bytes, `verify_
 
 ```Python
 j = jce.Johnny("public.asc")
-assert j.encrypt_file(inputfile.encode("utf-8"), output_file_path.encode("utf-8"))
+assert j.encrypt_file(inputfile, output_file_path)
 jp = jce.Johnny("secret.asc")
 
-result = jp.decrypt_file(output_file_path.encode("utf-8"), decrypted_output_path.encode("utf-8"), "password")
+result = jp.decrypt_file(output_file_path, decrypted_output_path, "password")
 ```
 
-
+Note that, in this context, `inputfile`, `output_file_path`, and `decrypted_output_path` should be binary, not strings.
 
 ## LICENSE: GPLv3+
