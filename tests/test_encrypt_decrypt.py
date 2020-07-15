@@ -4,11 +4,23 @@ import johnnycanencrypt as jce
 DATA= "Kushal loves 🦀"
 
 def test_encrypt_decrypt_bytes():
+    "Tests raw bytes as output"
     j = jce.Johnny("tests/files/public.asc")
     enc = j.encrypt_bytes(DATA.encode("utf-8"))
     jp = jce.Johnny("tests/files/secret.asc")
     result = jp.decrypt_bytes(enc, "redhat")
     assert DATA == result.decode("utf-8")
+
+def test_encrypt_decrypt_bytes_armored():
+    "Tests ascii-armored output"
+    j = jce.Johnny("tests/files/public.asc")
+    enc = j.encrypt_bytes(DATA.encode("utf-8"), armor=True)
+    assert enc.startswith(b"-----BEGIN PGP MESSAGE-----")
+    jp = jce.Johnny("tests/files/secret.asc")
+    result = jp.decrypt_bytes(enc, "redhat")
+    assert DATA == result.decode("utf-8")
+
+
 
 def test_encrypt_decrypt_files():
     inputfile = "tests/files/text.txt"

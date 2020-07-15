@@ -253,7 +253,12 @@ impl Johnny {
         Ok(Johnny { filepath, cert })
     }
 
-    pub fn encrypt_bytes(&self, py: Python, data: Vec<u8>) -> PyResult<PyObject> {
+    pub fn encrypt_bytes(
+        &self,
+        py: Python,
+        data: Vec<u8>,
+        armor: Option<bool>,
+    ) -> PyResult<PyObject> {
         let mode = KeyFlags::default().set_storage_encryption(true);
         let p = &P::new();
         let recipients = self
@@ -263,11 +268,15 @@ impl Johnny {
             .alive()
             .revoked(false)
             .key_flags(&mode);
+        // TODO: Find better way to do this in rust
         let mut result = Vec::new();
-        let mut sink = armor::Writer::new(&mut result, armor::Kind::Message)?;
+        let mut result2 = Vec::new();
+        let mut sink = armor::Writer::new(&mut result2, armor::Kind::Message)?;
         // Stream an OpenPGP message.
-        let message = Message::new(&mut sink);
-
+        let message = match armor {
+            Some(true) => Message::new(&mut sink),
+            _ => Message::new(&mut result),
+        };
         // We want to encrypt a literal data packet.
         let encryptor = Encryptor::for_recipients(message, recipients)
             .build()
@@ -285,10 +294,18 @@ impl Johnny {
         // writer stack.
         literal_writer.finalize().unwrap();
 
-        // Finalize the armor writer.
-        sink.finalize().expect("Failed to write data");
-        let res = PyBytes::new(py, &result);
-        Ok(res.into())
+        match armor {
+            Some(true) => {
+                // Finalize the armor writer.
+                sink.finalize().expect("Failed to write data");
+                let res = PyBytes::new(py, &result2);
+                return Ok(res.into());
+            }
+            _ => {
+                let res = PyBytes::new(py, &result);
+                return Ok(res.into());
+            }
+        }
     }
 
     pub fn decrypt_bytes(&self, py: Python, data: Vec<u8>, password: String) -> PyResult<PyObject> {
