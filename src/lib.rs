@@ -253,7 +253,7 @@ impl Johnny {
         Ok(Johnny { filepath, cert })
     }
 
-    pub fn encrypt_bytes(&self, data: Vec<u8>) -> PyResult<String> {
+    pub fn encrypt_bytes(&self, py: Python, data: Vec<u8>) -> PyResult<PyObject> {
         let mode = KeyFlags::default().set_storage_encryption(true);
         let p = &P::new();
         let recipients = self
@@ -287,7 +287,8 @@ impl Johnny {
 
         // Finalize the armor writer.
         sink.finalize().expect("Failed to write data");
-        Ok(str::from_utf8(&result).unwrap().to_string())
+        let res = PyBytes::new(py, &result);
+        Ok(res.into())
     }
 
     pub fn decrypt_bytes(&self, py: Python, data: Vec<u8>, password: String) -> PyResult<PyObject> {

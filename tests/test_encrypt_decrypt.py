@@ -7,7 +7,7 @@ def test_encrypt_decrypt_bytes():
     j = jce.Johnny("tests/files/public.asc")
     enc = j.encrypt_bytes(DATA.encode("utf-8"))
     jp = jce.Johnny("tests/files/secret.asc")
-    result = jp.decrypt_bytes(enc.encode("utf-8"), "redhat")
+    result = jp.decrypt_bytes(enc, "redhat")
     assert DATA == result.decode("utf-8")
 
 def test_encrypt_decrypt_files():
