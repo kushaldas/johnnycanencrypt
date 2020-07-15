@@ -321,7 +321,7 @@ impl Johnny {
         let res = PyBytes::new(py, &result);
         Ok(res.into())
     }
-    pub fn encrypt_file(&self, filepath: Vec<u8>, output: Vec<u8>) -> PyResult<bool> {
+    pub fn encrypt_file(&self, filepath: Vec<u8>, output: Vec<u8>, armor: Option<bool>) -> PyResult<bool> {
         let mode = KeyFlags::default().set_storage_encryption(true);
         let p = &P::new();
         let recipients = self
@@ -333,28 +333,55 @@ impl Johnny {
             .key_flags(&mode);
         let mut input = File::open(str::from_utf8(&filepath[..]).unwrap()).unwrap();
         let mut outfile = File::create(str::from_utf8(&output[..]).unwrap()).unwrap();
-        // Stream an OpenPGP message.
-        let message = Message::new(&mut outfile);
+        // TODO: Find better ways to write this code
+        match armor {
+            // For armored output file.
+            Some(true) => {
+                let mut sink = armor::Writer::new(&mut outfile, armor::Kind::Message).unwrap();
+                // Stream an OpenPGP message.
+                let message = Message::new(&mut sink);
 
-        // We want to encrypt a literal data packet.
-        let encryptor = Encryptor::for_recipients(message, recipients)
-            .build()
-            .expect("Failed to create encryptor");
+                // We want to encrypt a literal data packet.
+                let encryptor = Encryptor::for_recipients(message, recipients)
+                    .build()
+                    .expect("Failed to create encryptor");
 
-        let mut literal_writer = LiteralWriter::new(encryptor)
-            .build()
-            .expect("Failed to create literal writer");
+                let mut literal_writer = LiteralWriter::new(encryptor)
+                    .build()
+                    .expect("Failed to create literal writer");
 
-        // Copy stdin to our writer stack to encrypt the data.
-        io::copy(&mut input, &mut literal_writer).expect("Failed to encrypt");
-        //literal_writer.write_all(&data).unwrap();
+                // Copy stdin to our writer stack to encrypt the data.
+                io::copy(&mut input, &mut literal_writer).expect("Failed to encrypt");
+                //literal_writer.write_all(&data).unwrap();
 
-        // Finally, finalize the OpenPGP message by tearing down the
-        // writer stack.
-        literal_writer.finalize().unwrap();
+                // Finally, finalize the OpenPGP message by tearing down the
+                // writer stack.
+                literal_writer.finalize().unwrap();
 
-        // Finalize the armor writer.
-        //sink.finalize().expect("Failed to write data");
+                // Finalize the armor writer.
+                sink.finalize().expect("Failed to write data");}
+            _ => {
+                let message = Message::new(&mut outfile);
+
+                // We want to encrypt a literal data packet.
+                let encryptor = Encryptor::for_recipients(message, recipients)
+                    .build()
+                    .expect("Failed to create encryptor");
+
+                let mut literal_writer = LiteralWriter::new(encryptor)
+                    .build()
+                    .expect("Failed to create literal writer");
+
+                // Copy stdin to our writer stack to encrypt the data.
+                io::copy(&mut input, &mut literal_writer).expect("Failed to encrypt");
+                //literal_writer.write_all(&data).unwrap();
+
+                // Finally, finalize the OpenPGP message by tearing down the
+                // writer stack.
+                literal_writer.finalize().unwrap();
+            }
+    }
+
         Ok(true)
     }
 

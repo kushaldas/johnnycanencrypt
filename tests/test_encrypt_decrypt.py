@@ -40,6 +40,7 @@ def test_encrypt_decrypt_bytes_armored():
 
 
 def test_encrypt_decrypt_files():
+    "Tests encrypt/decrypt file in binary format"
     inputfile = "tests/files/text.txt"
     output = "/tmp/text-encrypted.pgp"
     decrypted_output = "/tmp/text.txt"
@@ -50,5 +51,23 @@ def test_encrypt_decrypt_files():
     assert j.encrypt_file(inputfile.encode("utf-8"), output.encode("utf-8"))
     jp = jce.Johnny("tests/files/secret.asc")
     assert jp.decrypt_file(output.encode("utf-8"), decrypted_output.encode("utf-8"), "redhat")
+
+    verify_files(inputfile, decrypted_output)
+
+def test_encrypt_decrypt_files_armored():
+    inputfile = "tests/files/text.txt"
+    output = "/tmp/text-encrypted.asc"
+    decrypted_output = "/tmp/text.txt"
+    clean_outputfiles(output, decrypted_output)
+
+    # Now encrypt and then decrypt
+    j = jce.Johnny("tests/files/public.asc")
+    assert j.encrypt_file(inputfile.encode("utf-8"), output.encode("utf-8"), armor=True)
+    jp = jce.Johnny("tests/files/secret.asc")
+    assert jp.decrypt_file(output.encode("utf-8"), decrypted_output.encode("utf-8"), "redhat")
+
+    with open(output) as f:
+        line = f.readline().strip("\n")
+        assert line == "-----BEGIN PGP MESSAGE-----"
 
     verify_files(inputfile, decrypted_output)
