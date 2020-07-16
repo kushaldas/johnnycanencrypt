@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+
+- This changelog :)
 - If the public/secret key file is missing, while trying to create a `Johnny` object will raise `FileNotFound` error.
 - If one tries to decrypt using a public key file, it will throw `AttributeError`.
 - `encrypt_bytes` now returns bytes (instead of string).
