@@ -19,6 +19,24 @@ def verify_files(inputfile, decrypted_output):
         decrypted_text = f.read()
     assert original_text ==  decrypted_text
 
+def test_encryption_of_multiple_keys():
+    "Encrypt bytes to a file using multiple keys"
+    output = "/tmp/multiple-enc.asc"
+    if os.path.exists(output):
+        os.remove(output)
+    jce.encrypt_bytes_to_file(["tests/files/public.asc", "tests/files/hellopublic.asc"], DATA.encode("utf-8"), output.encode("utf-8"), armor=True)
+    assert os.path.exists(output)
+    # Now let us decrypt it via first secret key
+    with open(output, "rb") as f:
+        enc = f.read()
+    jp = jce.Johnny("tests/files/hellosecret.asc")
+    result = jp.decrypt_bytes(enc, "redhat")
+    assert DATA == result.decode("utf-8")
+
+    jp = jce.Johnny("tests/files/secret.asc")
+    result = jp.decrypt_bytes(enc, "redhat")
+    assert DATA == result.decode("utf-8")
+
 
 def test_encrypt_decrypt_bytes():
     "Tests raw bytes as output"
