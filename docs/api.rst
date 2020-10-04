@@ -9,9 +9,9 @@ For the rest of the documentation we assume that you imported the module as foll
         >>> import johnnycanencrypt as jce
 
 
-.. function:: newkey(password, userid)
+.. function:: create_newkey(password, userid)
 
-        Use the `newkey` function in the module to create a new keypair. It takes two arguments as str, a password, and userid.
+        Use the `create_newkey` function in the module to create a new keypair. It takes two arguments as str, a password, and userid.
         By default it creates the key with RSA4096, and returns a tuple of public,secret key as str. Raises `FileNotFound` error
         if the key file can not be accessed.
 

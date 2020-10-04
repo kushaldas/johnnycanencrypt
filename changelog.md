@@ -10,6 +10,7 @@
 ### Fixed
 
 - #14 decrypt when the data was encrypted for multiple recipients.
+- Fixes documentation for `create_newkey` function name.
 
 ## [0.2.0] - 2020-07-15
 
