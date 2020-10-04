@@ -274,12 +274,20 @@ fn parse_cert_file(py: Python, certpath: String) -> PyResult<(PyObject, String, 
 /// This function takes a password and an userid as strings, returns a tuple of public and private
 /// key and the fingerprint in hex. Remember to save the keys for future use.
 #[pyfunction]
-#[text_signature = "(password, userid)"]
-fn create_newkey(password: String, userid: String) -> PyResult<(String, String, String)> {
+#[text_signature = "(password, userid, cipher)"]
+fn create_newkey(password: String, userid: String, cipher: String) -> PyResult<(String, String, String)> {
+    // Default we create RSA4k keys
+    let mut ciphervalue = CipherSuite::RSA4k;
+    if cipher == String::from("RSA2k") {
+        ciphervalue = CipherSuite::RSA4k;
+    } else if cipher == String::from("Cv25519") {
+
+        ciphervalue = CipherSuite::Cv25519;
+    }
     let (cert, _) = CertBuilder::new()
         .add_storage_encryption_subkey()
         .add_signing_subkey()
-        .set_cipher_suite(CipherSuite::RSA4k)
+        .set_cipher_suite(ciphervalue)
         .set_password(Some(openpgp::crypto::Password::from(password)))
         .add_userid(userid)
         .generate()
