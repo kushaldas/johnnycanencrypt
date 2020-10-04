@@ -1,8 +1,14 @@
-from .johnnycanencrypt import Johnny, create_newkey, encrypt_bytes_to_file, parse_cert_file
+from .johnnycanencrypt import (
+    Johnny,
+    create_newkey,
+    encrypt_bytes_to_file,
+    parse_cert_file,
+)
 from .exceptions import KeyNotFoundError
 
 import os
 import shutil
+
 
 class Key:
     "Returns a Key object."
@@ -40,7 +46,9 @@ class KeyStore:
         if not keytype:
             self.fingerprints_cache[fingerprint] = Key(fullpath, fingerprint, "public")
         else:
-            self.secret_fingerprints_cache[fingerprint] = Key(fullpath, fingerprint, "secret")
+            self.secret_fingerprints_cache[fingerprint] = Key(
+                fullpath, fingerprint, "secret"
+            )
 
     def import_cert(self, keypath: str, onplace=False):
         """Imports a given cert from the given path.
@@ -76,9 +84,13 @@ class KeyStore:
             if fingerprint in self.secret_fingerprints_cache:
                 return self.secret_fingerprints_cache[fingerprint]
 
-        raise KeyNotFoundError(F"The key for {fingerprint} in not found in the keystore.")
+        raise KeyNotFoundError(
+            f"The key for {fingerprint} in not found in the keystore."
+        )
 
-    def create_newkey(self, password: str, uid: str = "", ciphersuite: str= "RSA4k") -> Key:
+    def create_newkey(
+        self, password: str, uid: str = "", ciphersuite: str = "RSA4k"
+    ) -> Key:
         """Returns a public `Key` object after creating a new key in the store
 
         :param password: The password for the key as str.

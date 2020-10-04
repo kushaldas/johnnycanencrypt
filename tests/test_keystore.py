@@ -3,11 +3,14 @@ import tempfile
 import johnnycanencrypt as jce
 import pytest
 
+
 def setup_module(module):
     module.tmpdirname = tempfile.TemporaryDirectory()
 
+
 def teardown_module(module):
     del module.tmpdirname
+
 
 def test_correct_keystore_path():
     ks = jce.KeyStore("tests/files/store")
@@ -17,10 +20,12 @@ def test_nonexisting_keystore_path():
     with pytest.raises(OSError):
         ks = jce.KeyStore("tests/files2/")
 
+
 def test_no_such_key():
     with pytest.raises(jce.KeyNotFoundError):
         ks = jce.KeyStore("tests/files/store")
         key = ks.get_key("BB2D3F20233286371C3123D5209940B9669ED677")
+
 
 def test_keystore_lifecycle():
     ks = jce.KeyStore(tmpdirname.name)
@@ -42,8 +47,9 @@ def test_keystore_lifecycle():
     ks.import_cert("tests/files/store/hellopublic.asc")
     ks.import_cert("tests/files/store/secret.asc")
     # Now check the numbers of keys in the store
-    assert (4,2) == ks.details()
+    assert (4, 2) == ks.details()
+
 
 def test_keystore_details():
     ks = jce.KeyStore("./tests/files/store")
-    assert (3,2) == ks.details()
+    assert (3, 2) == ks.details()
