@@ -236,18 +236,18 @@ fn create_newkey(password: String, userid: String) -> PyResult<(String, String)>
     ))
 }
 
-/// This function takes a list of certs, and encrypts the given data in bytes to an output
+/// This function takes a list of public key paths, and encrypts the given data in bytes to an output
 /// file. You can also pass boolen flag armor for armored output.
 #[pyfunction]
-#[text_signature = "(certpaths, data, output, armor=False)"]
+#[text_signature = "(publickeys, data, output, armor=False)"]
 fn encrypt_bytes_to_file(
-    certpaths: Vec<String>,
+    publickeys: Vec<String>,
     data: Vec<u8>,
     output: Vec<u8>,
     armor: Option<bool>,
 ) -> PyResult<bool> {
     let mut certs = Vec::new();
-    for fpath in certpaths {
+    for fpath in publickeys {
         if !std::fs::metadata(fpath.clone()).is_ok() {
             return Err(FileNotFoundError::py_err(format!(
                 "{} is not found.",
