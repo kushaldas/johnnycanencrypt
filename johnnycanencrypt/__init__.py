@@ -18,6 +18,9 @@ class Key:
         self.keytype = keytype
         self.fingerprint = fingerprint
 
+    def __repr__(self):
+        return f"<Key fingerprint={self.fingerprint} keytype={self.keytype}>"
+
 
 class KeyStore:
     """Returns `KeyStore` class object, takes the directory path as string.
@@ -30,7 +33,9 @@ class KeyStore:
         self.path = fullpath
         # These are our caches
         self.fingerprints_cache = {}
-        self.secret_fingerprints_cache = {}
+        self.values_cache = {}
+        self.emails_cache = {}
+        self.names_cache = {}
         # TODO: Create a proper searchable structure in future based on UIDs
         for filepath in os.listdir(self.path):
             fullpath = os.path.join(self.path, filepath)
@@ -40,15 +45,23 @@ class KeyStore:
                 except Exception as e:
                     # TODO: Handle parsing error here
                     pass
-                self.add_key_to_cache(fullpath, fingerprint, keytype)
+                self.add_key_to_cache(fullpath, uids, fingerprint, keytype)
 
-    def add_key_to_cache(self, fullpath, fingerprint, keytype):
+    def add_key_to_cache(self, fullpath, uids, fingerprint, keytype):
+        "Populates the internal cache of the store"
+        keys = self.fingerprints_cache.get(
+            fingerprint, {"public": None, "secret": None}
+        )
         if not keytype:
-            self.fingerprints_cache[fingerprint] = Key(fullpath, fingerprint, "public")
+            key = Key(fullpath, fingerprint, "public")
+            keys["public"]= key
+            self.fingerprints_cache[fingerprint] = keys
         else:
-            self.secret_fingerprints_cache[fingerprint] = Key(
-                fullpath, fingerprint, "secret"
-            )
+            key = Key(fullpath, fingerprint, "secret")
+            keys["secret"]= key
+            self.fingerprints_cache[fingerprint] = keys
+
+        # TODO: Now for each of the uid, add to the right dictionary
 
     def import_cert(self, keypath: str, onplace=False):
         """Imports a given cert from the given path.
@@ -65,11 +78,18 @@ class KeyStore:
             shutil.copy(keypath, finalpath)
         else:
             finalpath = keypath
-        self.add_key_to_cache(finalpath, fingerprint, keytype)
+        self.add_key_to_cache(finalpath, uids, fingerprint, keytype)
 
     def details(self):
         "Returns tuple of (number_of_public, number_of_secret_keys)"
-        return len(self.fingerprints_cache), len(self.secret_fingerprints_cache)
+        public = 0
+        secret = 0
+        for value in self.fingerprints_cache.values():
+            if value["public"]:
+                public += 1
+            if value["secret"]:
+                secret += 1
+        return public, secret
 
     def get_key(self, fingerprint: str = "", keytype: str = "public") -> Key:
         """Finds an existing public key based on the fingerprint. If the key can not be found on disk, then raises OSError.
@@ -77,15 +97,22 @@ class KeyStore:
         :param fingerprint: The fingerprint as str.
         :param keytype: str value either public or secret.
         """
-        if keytype == "public":
-            if fingerprint in self.fingerprints_cache:
-                return self.fingerprints_cache[fingerprint]
+        if fingerprint in self.fingerprints_cache:
+            key = self.fingerprints_cache[fingerprint]
         else:
-            if fingerprint in self.secret_fingerprints_cache:
-                return self.secret_fingerprints_cache[fingerprint]
+            raise KeyNotFoundError(
+                f"The key for {fingerprint} in not found in the keystore."
+            )
+
+        if keytype == "public":
+            if key["public"]:
+                return key["public"]
+        else:
+            if key["secret"]:
+                return key["secret"]
 
         raise KeyNotFoundError(
-            f"The key for {fingerprint} in not found in the keystore."
+            f"The {keytype} key for {fingerprint} in not found in the keystore."
         )
 
     def create_newkey(
