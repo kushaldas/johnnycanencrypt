@@ -1,6 +1,7 @@
 use pyo3::exceptions::*;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
+use pyo3::types::{PyDict, PyList};
 use pyo3::wrap_pyfunction;
 
 use std::collections::HashMap;
@@ -211,6 +212,64 @@ fn sign_bytes_detached_internal(
 
     Ok(String::from_utf8(result).unwrap())
 }
+
+
+#[pyfunction]
+#[text_signature = "(certpath)"]
+fn parse_cert_file(py: Python, certpath: String) -> PyResult<(PyObject, String, bool)> {
+    let cert = openpgp::Cert::from_file(certpath).unwrap();
+    let plist = PyList::empty(py);
+    for ua in cert.userids() {
+        let pd = PyDict::new(py);
+        //println!("  {}", String::from_utf8_lossy(ua.value()));
+        pd.set_item("value", String::from_utf8_lossy(ua.value())).unwrap();
+        // If we have a name part in the UID
+        match ua.name() {
+            Ok(value) => {match value {
+                Some(name) => {
+                    pd.set_item("name", name).unwrap();
+                },
+                _ => (),
+            }},
+            Err(_) => (),
+        }
+        // If we have a comment part in the UID
+        match ua.comment() {
+            Ok(value) => {match value {
+                Some(comment) => {
+                    pd.set_item("comment", comment).unwrap();
+                },
+                _ => (),
+            }},
+            Err(_) => (),
+        }
+        // If we have a email part in the UID
+        match ua.email() {
+            Ok(value) => {match value {
+                Some(email) => {
+                    pd.set_item("email", email).unwrap();
+                },
+                _ => (),
+            }},
+            Err(_) => (),
+        }
+        // If we have a URI part in the UID
+        match ua.uri() {
+            Ok(value) => {match value {
+                Some(uri) => {
+                    pd.set_item("uri", uri).unwrap();
+                },
+                _ => (),
+            }},
+            Err(_) => (),
+        }
+        plist.append(pd).unwrap();
+
+    }
+
+    Ok((plist.into(), cert.fingerprint().to_hex(), cert.is_tsk()))
+}
+
 
 /// This function takes a password and an userid as strings, returns a tuple of public and private
 /// key and the fingerprint in hex. Remember to save the keys for future use.
@@ -548,6 +607,7 @@ impl Johnny {
 /// A Python module implemented in Rust.
 fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(create_newkey))?;
+    m.add_wrapped(wrap_pyfunction!(parse_cert_file))?;
     m.add_wrapped(wrap_pyfunction!(encrypt_bytes_to_file))?;
     m.add_class::<Johnny>()?;
     Ok(())
