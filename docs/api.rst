@@ -23,6 +23,18 @@ For the rest of the documentation we assume that you imported the module as foll
         .. note:: Remember to save both the public and serect keys in a file to use in future.
 
 
+.. function:: encrypt_bytes_to_file(publickeys, data, output, armor=False)
+
+        This function takes a list of public key file paths, and encrypts the given data in bytes to an output
+        file. You can also pass boolen flag armor for armored output in the file.
+
+        ::
+
+                    >>> jce.encrypt_bytes_to_file(["tests/files/public.asc", "tests/files/hellopublic.asc"], b"Hello clear text", b"/tmp/encrypted_text.asc", armor=True)
+
+
+        .. note:: Use this function if you have to encrypt for multiple recipents.
+
 .. class:: Johnny(filepath)
 
         It creates an object of type `Johnny`, you can provide path to the either public key, or the private key based on the operation
