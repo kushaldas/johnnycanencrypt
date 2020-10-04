@@ -212,7 +212,10 @@ fn sign_bytes_detached_internal(
     Ok(String::from_utf8(result).unwrap())
 }
 
+/// This function takes a password and an userid as strings, returns a tuple of public and private
+/// key. Remember to save the keys for future use.
 #[pyfunction]
+#[text_signature = "(password, userid)"]
 fn create_newkey(password: String, userid: String) -> PyResult<(String, String)> {
     let (cert, _) = CertBuilder::new()
         .add_storage_encryption_subkey()
