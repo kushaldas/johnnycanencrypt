@@ -37,7 +37,7 @@ class KeyStore:
             if fullpath[-4:] in [".asc", ".pub", ".sec"]:
                 try:
                     uids, fingerprint, keytype = parse_cert_file(fullpath)
-                except:
+                except Exception as e:
                     # TODO: Handle parsing error here
                     pass
                 self.add_key_to_cache(fullpath, fingerprint, keytype)

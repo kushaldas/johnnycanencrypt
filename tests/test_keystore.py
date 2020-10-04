@@ -52,4 +52,4 @@ def test_keystore_lifecycle():
 
 def test_keystore_details():
     ks = jce.KeyStore("./tests/files/store")
-    assert (3, 2) == ks.details()
+    assert (4, 2) == ks.details()
