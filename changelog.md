@@ -1,5 +1,16 @@
 # Changlelog
 
+## unreleased
+
+### Added
+
+- `encrypt_bytes_to_file` can encrypt data for multiple recipients and saves to a file.
+- Function signature to the `create_newkey` function.
+
+### Fixed
+
+- #14 decrypt when the data was encrypted for multiple recipients.
+
 ## [0.2.0] - 2020-07-15
 
 ### Added
