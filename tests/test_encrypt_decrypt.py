@@ -22,7 +22,7 @@ def verify_files(inputfile, decrypted_output):
     assert original_text == decrypted_text
 
 
-def test_encryption_of_multiple_keys():
+def test_encryption_of_multiple_keys_to_files():
     "Encrypt bytes to a file using multiple keys"
     output = "/tmp/multiple-enc.asc"
     if os.path.exists(output):
