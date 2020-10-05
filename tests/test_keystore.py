@@ -7,6 +7,24 @@ import pytest
 DATA = "Kushal loves 🦀"
 
 
+def clean_outputfiles(output, decrypted_output):
+    # Remove any existing test files
+    if os.path.exists(output):
+        os.remove(output)
+    if os.path.exists(decrypted_output):
+        os.remove(decrypted_output)
+
+
+def verify_files(inputfile, decrypted_output):
+    # read both the files
+    with open(inputfile) as f:
+        original_text = f.read()
+
+    with open(decrypted_output) as f:
+        decrypted_text = f.read()
+    assert original_text == decrypted_text
+
+
 def setup_module(module):
     module.tmpdirname = tempfile.TemporaryDirectory()
 
@@ -208,3 +226,37 @@ def test_ks_encrypt_decrypt_bytes_to_file_multiple_recipients():
         "utf-8"
     )
     assert DATA == decrypted_text
+
+
+def test_ks_encrypt_decrypt_file():
+    "Encrypts and decrypt some bytes"
+    inputfile = "tests/files/text.txt"
+    output = "/tmp/text-encrypted.pgp"
+    decrypted_output = "/tmp/text.txt"
+    clean_outputfiles(output, decrypted_output)
+
+    ks = jce.KeyStore("tests/files/store")
+    public_key = ks.get_key("6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99")
+    assert ks.encrypt_file(public_key, inputfile, output)
+    secret_key = ks.get_key("6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99", "secret")
+    ks.decrypt_file(secret_key, output, decrypted_output, password="redhat")
+    verify_files(inputfile, decrypted_output)
+
+
+def test_ks_encrypt_decrypt_file_multiple_recipients():
+    "Encrypts and decrypt some bytes"
+    inputfile = "tests/files/text.txt"
+    output = "/tmp/text-encrypted.pgp"
+    decrypted_output = "/tmp/text.txt"
+    clean_outputfiles(output, decrypted_output)
+
+    ks = jce.KeyStore("tests/files/store")
+    key1 = ks.get_key("6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99")
+    key2 = ks.get_key("BB2D3F20233286371C3123D5209940B9669ED621")
+    encrypted = ks.encrypt_file([key1, key2], inputfile, output)
+    secret_key1 = ks.get_key("6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99", "secret")
+    ks.decrypt_file(secret_key1, output, decrypted_output, password="redhat")
+    verify_files(inputfile, decrypted_output)
+    secret_key2 = ks.get_key("BB2D3F20233286371C3123D5209940B9669ED621", "secret")
+    ks.decrypt_file(secret_key2, output, decrypted_output, password="redhat")
+    verify_files(inputfile, decrypted_output)

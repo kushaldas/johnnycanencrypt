@@ -300,3 +300,62 @@ class KeyStore:
 
         jp = Johnny(k.keypath)
         return jp.decrypt_bytes(data, password)
+
+    def encrypt_file(self, keys, inputfilepath, outputfilepath, armor=True):
+        """Encrypts the given data with the list of keys and writes in the output file.
+
+        :param keys: List of fingerprints or Key objects
+        :param inputfilepath: Path of the input file to be encrypted
+        :param outputfilepath: output file path
+        :param armor: Default is True, for armored output.
+        """
+        if not os.path.exists(inputfilepath):
+            raise FileNotFoundError(f"{inputfilepath} can not be found.")
+
+        if type(keys) != list:
+            finalkeys = [
+                keys,
+            ]
+        else:
+            finalkeys = keys
+        final_key_paths = self._find_key_paths(finalkeys)
+
+        if type(inputfilepath) == str:
+            inputfile = inputfilepath.encode("utf-8")
+        else:
+            inputfile = inputfilepath
+
+        # For encryption to a file
+        if type(outputfilepath) == str:
+            encrypted_file = outputfilepath.encode("utf-8")
+        else:
+            encrypted_file = outputfilepath
+
+        encrypt_file_internal(final_key_paths, inputfile, encrypted_file, armor)
+        return True
+
+    def decrypt_file(self, key, encrypted_path, outputfile, password=""):
+        """Decryptes the given file to the output path.
+
+        :param key: Fingerprint or secret Key object
+        :param encrypted_path:: Path of the encrypted file
+        :param outputfile: Decrypted output file path as str
+        :param password: Password for the secret key
+        """
+        if type(key) == str:  # Means we have a fingerprint
+            k = self.get_key(key, keytype="secret")
+        else:
+            k = key
+
+        if type(encrypted_path) == str:
+            inputfile = encrypted_path.encode("utf-8")
+        else:
+            inputfile = encrypted_path
+
+        if type(outputfile) == str:
+            outputpath = outputfile.encode("utf-8")
+        else:
+            outputpath = outputfile
+
+        jp = Johnny(k.keypath)
+        return jp.decrypt_file(inputfile, outputpath, password)
