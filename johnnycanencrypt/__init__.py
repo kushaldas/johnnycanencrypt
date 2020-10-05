@@ -54,14 +54,25 @@ class KeyStore:
         )
         if not keytype:
             key = Key(fullpath, fingerprint, "public")
-            keys["public"]= key
+            keys["public"] = key
             self.fingerprints_cache[fingerprint] = keys
         else:
             key = Key(fullpath, fingerprint, "secret")
-            keys["secret"]= key
+            keys["secret"] = key
             self.fingerprints_cache[fingerprint] = keys
 
         # TODO: Now for each of the uid, add to the right dictionary
+
+    def __contains__(self, other):
+        """Checks if a Key object of fingerprint str exists in the keystore or not.
+
+        :param other: Either fingerprint as str or `Key` object.
+        :returns: boolean result
+        """
+        if type(other) == str:
+            return other in self.fingerprints_cache
+        elif type(other) == Key:
+            return other.fingerprint in self.fingerprints_cache
 
     def import_cert(self, keypath: str, onplace=False):
         """Imports a given cert from the given path.

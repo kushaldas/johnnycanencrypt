@@ -50,6 +50,22 @@ def test_keystore_lifecycle():
     assert (4, 2) == ks.details()
 
 
+def test_keystore_contains_key():
+    "verifies __contains__ method for keystore"
+    ks = jce.KeyStore(tmpdirname.name)
+    keypath = "tests/files/store/secret.asc"
+    ks.import_cert(keypath)
+    _, fingerprint, keytype = jce.parse_cert_file(keypath)
+    k = jce.Key(keypath, fingerprint, keytype)
+
+    # First only the fingerprint
+    assert fingerprint in ks
+    # Next the Key object
+    assert k in ks
+    # This should be false
+    assert not "1111111" in ks
+
+
 def test_keystore_details():
     ks = jce.KeyStore("./tests/files/store")
     assert (4, 2) == ks.details()
