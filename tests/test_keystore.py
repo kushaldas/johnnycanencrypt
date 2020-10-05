@@ -49,6 +49,8 @@ def test_keystore_lifecycle():
     # Now check the numbers of keys in the store
     assert (4, 2) == ks.details()
 
+    ks.delete_key("BB2D3F20233286371C3123D5209940B9669ED621")
+
 
 def test_keystore_contains_key():
     "verifies __contains__ method for keystore"
@@ -69,6 +71,45 @@ def test_keystore_contains_key():
 def test_keystore_details():
     ks = jce.KeyStore("./tests/files/store")
     assert (4, 2) == ks.details()
+
+
+def test_key_deletion():
+    tempdir = tempfile.TemporaryDirectory()
+    ks = jce.KeyStore(tempdir.name)
+    ks.import_cert("tests/files/store/public.asc")
+    ks.import_cert("tests/files/store/pgp_keys.asc")
+    ks.import_cert("tests/files/store/hellopublic.asc")
+    ks.import_cert("tests/files/store/hellosecret.asc")
+    ks.import_cert("tests/files/store/secret.asc")
+    assert (3, 2) == ks.details()
+
+    # Now let us delete one public key
+    filepath = os.path.join(
+        tempdir.name, "BB2D3F20233286371C3123D5209940B9669ED621.pub"
+    )
+    assert os.path.exists(filepath)
+    ks.delete_key("BB2D3F20233286371C3123D5209940B9669ED621", whichkey="public")
+    assert (2, 2) == ks.details()
+    assert not os.path.exists(filepath)
+
+    # The secret file should exists
+    filepath = os.path.join(
+        tempdir.name, "BB2D3F20233286371C3123D5209940B9669ED621.sec"
+    )
+    assert os.path.exists(filepath)
+    # Now let us delete one secret key
+    ks.delete_key("BB2D3F20233286371C3123D5209940B9669ED621", whichkey="secret")
+    assert (2, 1) == ks.details()
+    assert not os.path.exists(filepath)
+
+    # Now delete both public and secret
+    ks.delete_key("6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99")
+    assert (1, 0) == ks.details()
+    for extension in ["pub", "sec"]:
+        filepath = os.path.join(
+            tempdir.name, f"6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99.{extension}"
+        )
+        assert not os.path.exists(filepath)
 
 
 def test_key_equality():

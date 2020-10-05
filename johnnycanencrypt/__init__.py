@@ -25,6 +25,7 @@ class Key:
         """Two keys are same when fingerprint and keytype matches"""
         return self.fingerprint == value.fingerprint and self.keytype == value.keytype
 
+
 class KeyStore:
     """Returns `KeyStore` class object, takes the directory path as string.
     """
@@ -156,3 +157,30 @@ class KeyStore:
         self.import_cert(key_filename, onplace=True)
 
         return key
+
+    def delete_key(self, fingerprint: str, whichkey="both"):
+        """Deletes a given key based on the fingerprint.
+
+        :param fingerprint: str representation of the fingerprint
+        :praram whichkey: By default it deletes both secret and public key, accepts, public, or secret as other arguments.
+        """
+        if not fingerprint in self:
+            raise KeyNotFoundError(
+                "The key for the given fingerprint={fingerprint} is not found in the keystore"
+            )
+
+        keys = self.fingerprints_cache[fingerprint]
+        # First we remove from disk
+        if whichkey == "public":
+            k = keys["public"]
+            os.remove(k.keypath)
+            keys["public"] = None
+        elif whichkey == "secret":
+            k = keys["secret"]
+            os.remove(k.keypath)
+            keys["secret"] = None
+        else:
+            for k in keys.values():
+                os.remove(k.keypath)
+            # Now from the cache
+            del self.fingerprints_cache[fingerprint]
