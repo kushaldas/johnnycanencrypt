@@ -3,7 +3,7 @@ from .johnnycanencrypt import (
     create_newkey,
     encrypt_bytes_to_file,
     encrypt_bytes_to_bytes,
-    encrypt_file,
+    encrypt_file_internal,
     parse_cert_file,
 )
 from .exceptions import KeyNotFoundError

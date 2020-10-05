@@ -52,7 +52,7 @@ def test_encryption_of_multiple_keys_of_a_file():
     decrypted_output = "/tmp/text.txt"
     clean_outputfiles(output, decrypted_output)
 
-    jce.encrypt_file(
+    jce.encrypt_file_internal(
         ["tests/files/public.asc", "tests/files/hellopublic.asc"],
         inputfile.encode("utf-8"),
         output.encode("utf-8"),

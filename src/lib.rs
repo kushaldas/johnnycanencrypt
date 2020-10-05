@@ -394,7 +394,7 @@ fn encrypt_bytes_to_file(
 /// file. You can also pass boolen flag armor for armored output.
 #[pyfunction]
 #[text_signature = "(publickeys, filepath, output, armor=False)"]
-fn encrypt_file(
+fn encrypt_file_internal(
     publickeys: Vec<String>,
     filepath: Vec<u8>,
     output: Vec<u8>,
@@ -775,7 +775,7 @@ fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(parse_cert_file))?;
     m.add_wrapped(wrap_pyfunction!(encrypt_bytes_to_file))?;
     m.add_wrapped(wrap_pyfunction!(encrypt_bytes_to_bytes))?;
-    m.add_wrapped(wrap_pyfunction!(encrypt_file))?;
+    m.add_wrapped(wrap_pyfunction!(encrypt_file_internal))?;
     m.add_class::<Johnny>()?;
     Ok(())
 }
