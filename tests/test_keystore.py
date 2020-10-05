@@ -69,3 +69,22 @@ def test_keystore_contains_key():
 def test_keystore_details():
     ks = jce.KeyStore("./tests/files/store")
     assert (4, 2) == ks.details()
+
+
+def test_key_equality():
+    ks = jce.KeyStore("tests/files/store")
+    key_from_store = ks.get_key("6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99")
+    key_from_disk = jce.Key(
+        "./tests/files/store/hellopublic.asc",
+        "6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99",
+        "public",
+    )
+    assert key_from_store == key_from_disk
+
+
+def test_key_inequality():
+    "public key and secret key are not equal"
+    ks = jce.KeyStore("tests/files/store")
+    key_from_store = ks.get_key("6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99")
+    key_from_store2 = ks.get_key("6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99", "secret")
+    assert not key_from_store == key_from_store2

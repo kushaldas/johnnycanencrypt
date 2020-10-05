@@ -21,6 +21,9 @@ class Key:
     def __repr__(self):
         return f"<Key fingerprint={self.fingerprint} keytype={self.keytype}>"
 
+    def __eq__(self, value):
+        """Two keys are same when fingerprint and keytype matches"""
+        return self.fingerprint == value.fingerprint and self.keytype == value.keytype
 
 class KeyStore:
     """Returns `KeyStore` class object, takes the directory path as string.
