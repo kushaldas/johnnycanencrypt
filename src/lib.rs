@@ -390,6 +390,92 @@ fn encrypt_bytes_to_file(
     Ok(true)
 }
 
+/// This function takes a list of public key paths, and encrypts the given filepath to an output
+/// file. You can also pass boolen flag armor for armored output.
+#[pyfunction]
+#[text_signature = "(publickeys, filepath, output, armor=False)"]
+fn encrypt_file(
+    publickeys: Vec<String>,
+    filepath: Vec<u8>,
+    output: Vec<u8>,
+    armor: Option<bool>,
+) -> PyResult<bool> {
+    let mut certs = Vec::new();
+    for fpath in publickeys {
+        if !std::fs::metadata(fpath.clone()).is_ok() {
+            return Err(FileNotFoundError::py_err(format!(
+                "{} is not found.",
+                fpath
+            )));
+        }
+        certs.push(openpgp::Cert::from_file(&fpath).unwrap());
+    }
+    let mode = KeyFlags::default().set_storage_encryption(true);
+
+    let p = &P::new();
+    let recipients = certs.iter().flat_map(|cert| {
+        cert.keys()
+            .with_policy(p, None)
+            .alive()
+            .revoked(false)
+            .key_flags(&mode)
+    });
+
+    let mut input = File::open(str::from_utf8(&filepath[..]).unwrap()).unwrap();
+    let mut outfile = File::create(str::from_utf8(&output[..]).unwrap()).unwrap();
+    // TODO: Find better ways to write this code
+    match armor {
+        // For armored output file.
+        Some(true) => {
+            let mut sink = armor::Writer::new(&mut outfile, armor::Kind::Message).unwrap();
+            // Stream an OpenPGP message.
+            let message = Message::new(&mut sink);
+
+            // We want to encrypt a literal data packet.
+            let encryptor = Encryptor::for_recipients(message, recipients)
+                .build()
+                .expect("Failed to create encryptor");
+
+            let mut literal_writer = LiteralWriter::new(encryptor)
+                .build()
+                .expect("Failed to create literal writer");
+
+            // Copy stdin to our writer stack to encrypt the data.
+            io::copy(&mut input, &mut literal_writer).expect("Failed to encrypt");
+            //literal_writer.write_all(&data).unwrap();
+
+            // Finally, finalize the OpenPGP message by tearing down the
+            // writer stack.
+            literal_writer.finalize().unwrap();
+
+            // Finalize the armor writer.
+            sink.finalize().expect("Failed to write data");
+        }
+        _ => {
+            let message = Message::new(&mut outfile);
+
+            // We want to encrypt a literal data packet.
+            let encryptor = Encryptor::for_recipients(message, recipients)
+                .build()
+                .expect("Failed to create encryptor");
+
+            let mut literal_writer = LiteralWriter::new(encryptor)
+                .build()
+                .expect("Failed to create literal writer");
+
+            // Copy stdin to our writer stack to encrypt the data.
+            io::copy(&mut input, &mut literal_writer).expect("Failed to encrypt");
+            //literal_writer.write_all(&data).unwrap();
+
+            // Finally, finalize the OpenPGP message by tearing down the
+            // writer stack.
+            literal_writer.finalize().unwrap();
+        }
+    }
+
+    Ok(true)
+}
+
 /// This function takes a list of public key paths, and encrypts the given data in bytes and returns it.
 /// You can also pass boolen flag armor for armored output.
 #[pyfunction]
@@ -689,6 +775,7 @@ fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(parse_cert_file))?;
     m.add_wrapped(wrap_pyfunction!(encrypt_bytes_to_file))?;
     m.add_wrapped(wrap_pyfunction!(encrypt_bytes_to_bytes))?;
+    m.add_wrapped(wrap_pyfunction!(encrypt_file))?;
     m.add_class::<Johnny>()?;
     Ok(())
 }

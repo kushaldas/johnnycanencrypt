@@ -45,6 +45,39 @@ def test_encryption_of_multiple_keys_to_files():
     result = jp.decrypt_bytes(enc, "redhat")
     assert DATA == result.decode("utf-8")
 
+def test_encryption_of_multiple_keys_of_a_file():
+    "Encrypt bytes to a file using multiple keys"
+    inputfile = "tests/files/text.txt"
+    output = "/tmp/text-encrypted.pgp"
+    decrypted_output = "/tmp/text.txt"
+    clean_outputfiles(output, decrypted_output)
+
+    jce.encrypt_file(
+        ["tests/files/public.asc", "tests/files/hellopublic.asc"],
+        inputfile.encode("utf-8"),
+        output.encode("utf-8"),
+        armor=True,
+    )
+    assert os.path.exists(output)
+    # Now let us decrypt it via second secret key
+    jp = jce.Johnny("tests/files/hellosecret.asc")
+    assert jp.decrypt_file(
+        output.encode("utf-8"), decrypted_output.encode("utf-8"), "redhat"
+    )
+    verify_files(inputfile, decrypted_output)
+
+    # Now remove it for next step
+    os.remove(decrypted_output)
+
+    # Via first secret key
+    jp = jce.Johnny("tests/files/secret.asc")
+    assert jp.decrypt_file(
+        output.encode("utf-8"), decrypted_output.encode("utf-8"), "redhat"
+    )
+    verify_files(inputfile, decrypted_output)
+
+
+
 
 def test_encryption_of_multiple_keys_to_bytes():
     "Encrypt bytes using multiple keys"
