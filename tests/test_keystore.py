@@ -50,7 +50,7 @@ def test_keystore_lifecycle():
     assert (4, 2) == ks.details()
 
     ks.delete_key("BB2D3F20233286371C3123D5209940B9669ED621")
-
+    assert (3, 1) == ks.details()
 
 def test_keystore_contains_key():
     "verifies __contains__ method for keystore"
