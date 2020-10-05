@@ -10,6 +10,14 @@ import os
 import shutil
 
 
+def _delete_key_file(filepath):
+    """Removes a file from disk"""
+    try:
+        os.remove(filepath)
+    except FileNotFoundError:  # No issues if not found
+        pass
+
+
 class Key:
     "Returns a Key object."
 
@@ -173,14 +181,14 @@ class KeyStore:
         # First we remove from disk
         if whichkey == "public":
             k = keys["public"]
-            os.remove(k.keypath)
+            _delete_key_file(k.keypath)
             keys["public"] = None
         elif whichkey == "secret":
             k = keys["secret"]
-            os.remove(k.keypath)
+            _delete_key_file(k.keypath)
             keys["secret"] = None
         else:
             for k in keys.values():
-                os.remove(k.keypath)
+                _delete_key_file(k.keypath)
             # Now from the cache
             del self.fingerprints_cache[fingerprint]
