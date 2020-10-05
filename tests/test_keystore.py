@@ -52,6 +52,19 @@ def test_keystore_lifecycle():
     ks.delete_key("BB2D3F20233286371C3123D5209940B9669ED621")
     assert (3, 1) == ks.details()
 
+    # Now verify email cache
+    key_via_fingerprint = ks.get_key("A85FF376759C994A8A1168D8D8219C8C43F6C5E1")
+    keys_via_emails = ks.get_keys(email="kushaldas@gmail.com")
+    assert len(keys_via_emails) == 1
+    assert key_via_fingerprint == keys_via_emails[0]
+
+    # Now verify name cache
+    key_via_fingerprint = ks.get_key("6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99")
+    keys_via_names = ks.get_keys(name="test key")
+    assert len(keys_via_names) == 1
+    assert key_via_fingerprint == keys_via_names[0]
+
+
 def test_keystore_contains_key():
     "verifies __contains__ method for keystore"
     ks = jce.KeyStore(tmpdirname.name)

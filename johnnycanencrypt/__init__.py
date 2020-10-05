@@ -68,13 +68,28 @@ class KeyStore:
         if not keytype:
             key = Key(fullpath, fingerprint, "public")
             keys["public"] = key
-            self.fingerprints_cache[fingerprint] = keys
         else:
             key = Key(fullpath, fingerprint, "secret")
             keys["secret"] = key
-            self.fingerprints_cache[fingerprint] = keys
+        # Now set the fingerprint cache
+        self.fingerprints_cache[fingerprint] = keys
 
         # TODO: Now for each of the uid, add to the right dictionary
+        for uid in uids:
+            for uid_keyname, cache in [
+                ("value", self.values_cache),
+                ("email", self.emails_cache),
+                ("name", self.names_cache),
+            ]:
+                if uid_keyname in uid and uid[uid_keyname]:
+                    value = uid[uid_keyname]
+                    keys = cache.get(value, {"public": [], "secret": []})
+                    if not keytype:
+                        keys["public"].append(key)
+                    else:
+                        keys["secret"].append(key)
+                    # Now set the values cache
+                    cache[value] = keys
 
     def __contains__(self, other):
         """Checks if a Key object of fingerprint str exists in the keystore or not.
@@ -138,6 +153,39 @@ class KeyStore:
         raise KeyNotFoundError(
             f"The {keytype} key for {fingerprint} in not found in the keystore."
         )
+
+    def get_keys(
+        self, email: str = "", name: str = "", value: str = "", keytype: str = "public"
+    ) -> Key:
+        """Finds an existing public key based on the email, or name or value (in this order). If the key can not be found on disk, then raises OSError.
+
+        :param email: The email as str.
+        :param name: The name as str.
+        :param value: The value as str.
+        :param keytype: str value either public or secret.
+
+        :returns: A list of keys or empty list.
+        """
+        if email:
+            search_item, cache = email, self.emails_cache
+
+        if name:
+            search_item, cache = name, self.names_cache
+
+        if value:
+            search_item, cache = value, self.values_cache
+        # Now let us search
+        if search_item in cache:
+            keys = cache[search_item]
+        else:
+            raise KeyNotFoundError(
+                f"The key for {search_item} in not found in the keystore."
+            )
+
+        if keytype == "public":
+            return keys["public"]
+        else:
+            return keys["secret"]
 
     def create_newkey(
         self, password: str, uid: str = "", ciphersuite: str = "RSA4k"
