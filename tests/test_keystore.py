@@ -4,6 +4,9 @@ import johnnycanencrypt as jce
 import pytest
 
 
+DATA = "Kushal loves 🦀"
+
+
 def setup_module(module):
     module.tmpdirname = tempfile.TemporaryDirectory()
 
@@ -142,3 +145,66 @@ def test_key_inequality():
     key_from_store = ks.get_key("6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99")
     key_from_store2 = ks.get_key("6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99", "secret")
     assert not key_from_store == key_from_store2
+
+
+def test_ks_encrypt_decrypt_bytes():
+    "Encrypts and decrypt some bytes"
+    ks = jce.KeyStore("tests/files/store")
+    public_key = ks.get_key("6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99")
+    encrypted = ks.encrypt_bytes(public_key, DATA)
+    assert encrypted.startswith(b"-----BEGIN PGP MESSAGE-----\n")
+    secret_key = ks.get_key("6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99", "secret")
+    decrypted_text = ks.decrypt_bytes(secret_key, encrypted, password="redhat").decode(
+        "utf-8"
+    )
+    assert DATA == decrypted_text
+
+
+def test_ks_encrypt_decrypt_bytes_multiple_recipients():
+    "Encrypts and decrypt some bytes"
+    ks = jce.KeyStore("tests/files/store")
+    key1 = ks.get_key("6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99")
+    key2 = ks.get_key("BB2D3F20233286371C3123D5209940B9669ED621")
+    encrypted = ks.encrypt_bytes([key1, key2], DATA)
+    assert encrypted.startswith(b"-----BEGIN PGP MESSAGE-----\n")
+    secret_key1 = ks.get_key("6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99", "secret")
+    decrypted_text = ks.decrypt_bytes(secret_key1, encrypted, password="redhat").decode(
+        "utf-8"
+    )
+    assert DATA == decrypted_text
+    secret_key2 = ks.get_key("BB2D3F20233286371C3123D5209940B9669ED621", "secret")
+    decrypted_text = ks.decrypt_bytes(secret_key2, encrypted, password="redhat").decode(
+        "utf-8"
+    )
+    assert DATA == decrypted_text
+
+
+def test_ks_encrypt_decrypt_bytes_to_file():
+    "Encrypts and decrypt some bytes"
+    outputfile = os.path.join(tmpdirname.name, "encrypted.asc")
+    ks = jce.KeyStore("tests/files/store")
+    secret_key = ks.get_key("6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99")
+    assert ks.encrypt_bytes(secret_key, DATA, outputfile=outputfile)
+    with open(outputfile, "rb") as fobj:
+        encrypted = fobj.read()
+    secret_key = ks.get_key("6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99", "secret")
+    decrypted_text = ks.decrypt_bytes(secret_key, encrypted, password="redhat").decode(
+        "utf-8"
+    )
+    assert DATA == decrypted_text
+
+
+def test_ks_encrypt_decrypt_bytes_to_file_multiple_recipients():
+    "Encrypts and decrypt some bytes"
+    outputfile = os.path.join(tmpdirname.name, "encrypted.asc")
+    ks = jce.KeyStore("tests/files/store")
+    key1 = ks.get_key("6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99")
+    key2 = ks.get_key("BB2D3F20233286371C3123D5209940B9669ED621")
+    assert ks.encrypt_bytes([key1, key2], DATA, outputfile=outputfile)
+    with open(outputfile, "rb") as fobj:
+        encrypted = fobj.read()
+    secret_key = ks.get_key("6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99", "secret")
+    decrypted_text = ks.decrypt_bytes(secret_key, encrypted, password="redhat").decode(
+        "utf-8"
+    )
+    assert DATA == decrypted_text

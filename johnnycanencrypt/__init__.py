@@ -242,3 +242,61 @@ class KeyStore:
                 _delete_key_file(k.keypath)
             # Now from the cache
             del self.fingerprints_cache[fingerprint]
+
+    def _find_key_paths(self, keys):
+        "To find all the key paths"
+        final_key_paths = []
+        for k in keys:
+            if type(k) == str:  # Means fingerprint
+                key = self.get_key(k)
+                final_key_paths.append(key.keypath)
+            else:
+                final_key_paths.append(k.keypath)
+        return final_key_paths
+
+    def encrypt_bytes(self, keys, data, outputfile="", armor=True):
+        """Encrypts the given data with the list of keys and returns the output.
+
+        :param keys: List of fingerprints or Key objects
+        :param data: data to be encrtypted, either str or bytes
+        :param outputfile: If provided the output will be wriiten in the location.
+        :param armor: Default is True, for armored output.
+        """
+        if type(keys) != list:
+            finalkeys = [
+                keys,
+            ]
+        else:
+            finalkeys = keys
+        final_key_paths = self._find_key_paths(finalkeys)
+        # Check if we return data
+        if type(data) == str:
+            finaldata = data.encode("utf-8")
+        else:
+            finaldata = data
+        if not outputfile:
+            return encrypt_bytes_to_bytes(final_key_paths, finaldata, armor)
+
+        # For encryption to a file
+        if type(outputfile) == str:
+            encrypted_file = outputfile.encode("utf-8")
+        else:
+            encrypted_file = outputfile
+
+        encrypt_bytes_to_file(final_key_paths, finaldata, encrypted_file, armor)
+        return True
+
+    def decrypt_bytes(self, key, data, password=""):
+        """Decryptes the given bytes and returns plain text bytes.
+
+        :param key: Fingerprint or secret Key object
+        :param data: Encrypted data in bytes.
+        :param password: Password for the secret key
+        """
+        if type(key) == str:  # Means we have a fingerprint
+            k = self.get_key(key, keytype="secret")
+        else:
+            k = key
+
+        jp = Johnny(k.keypath)
+        return jp.decrypt_bytes(data, password)
