@@ -1,5 +1,5 @@
 import os
-import johnnycanencrypt as jce
+import johnnycanencrypt.johnnycanencrypt as jce
 
 DATA = "Kushal loves 🦀"
 
