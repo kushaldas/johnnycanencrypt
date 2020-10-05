@@ -46,6 +46,23 @@ def test_encryption_of_multiple_keys_to_files():
     assert DATA == result.decode("utf-8")
 
 
+def test_encryption_of_multiple_keys_to_bytes():
+    "Encrypt bytes using multiple keys"
+    encrypted = jce.encrypt_bytes_to_bytes(
+        ["tests/files/public.asc", "tests/files/hellopublic.asc"],
+        DATA.encode("utf-8"),
+        armor=True,
+    )
+    # Now let us decrypt it via first secret key
+    jp = jce.Johnny("tests/files/hellosecret.asc")
+    result = jp.decrypt_bytes(encrypted, "redhat")
+    assert DATA == result.decode("utf-8")
+
+    jp = jce.Johnny("tests/files/secret.asc")
+    result = jp.decrypt_bytes(encrypted, "redhat")
+    assert DATA == result.decode("utf-8")
+
+
 def test_encrypt_decrypt_bytes():
     "Tests raw bytes as output"
     j = jce.Johnny("tests/files/public.asc")
