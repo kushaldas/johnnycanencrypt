@@ -399,3 +399,63 @@ class KeyStore:
             data = data.encode("utf-8")
         jp = Johnny(k.keypath)
         return jp.verify_bytes(data, signature.encode("utf-8"))
+
+    def sign_file(self, key, filepath, password, write=False):
+        """Signs the given data with the key. It also writes filename.asc in the same directory of the file as the signature if write value is True.
+
+        :param key: Fingerprint or secret Key object
+        :param filepath: str value of the path to the file.
+        :param password: Password of the secret key file.
+        :param wrtie: boolean value (default False), determines if we should write the signature to a file.
+
+        :returns: The signature as string
+        """
+        if type(key) == str:  # Means we have a fingerprint
+            k = self.get_key(key, keytype="secret")
+        else:
+            k = key
+
+        if type(filepath) == str:
+            filepath_in_bytes = filepath.encode("utf-8")
+        else:
+            filepath_in_bytes = filepath
+        jp = Johnny(k.keypath)
+        signature = jp.sign_file_detached(filepath_in_bytes, password)
+
+        # Now check if we have to write the file on disk
+        if write:
+            sig_file_name = filepath + ".asc"
+            with open(sig_file_name, "w") as fobj:
+                fobj.write(signature)
+
+        return signature
+
+    def verify_file(self, key, filepath, signature_path):
+        """Verifies the given filepath based on the signature file.
+
+        :param key: Fingerprint or public Key object
+        :param filepath: File to be verified.
+        :param signature_path: Path to the signature file.
+
+        :returns: Boolean
+        """
+        if type(key) == str:  # Means we have a fingerprint
+            k = self.get_key(key, keytype="public")
+        else:
+            k = key
+
+        if not os.path.exists(signature_path):
+            raise FileNotFoundError(
+                f"The signature file at {signature_path} is missing."
+            )
+        if not os.path.exists(filepath):
+            raise FileNotFoundError(f"The file at {filepath} is missing.")
+
+        # Let us read the signature
+        with open(signature_path, "rb") as fobj:
+            signature_in_bytes = fobj.read()
+
+        if type(filepath) == str:
+            filepath = filepath.encode("utf-8")
+        jp = Johnny(k.keypath)
+        return jp.verify_file(filepath, signature_in_bytes)

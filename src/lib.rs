@@ -736,8 +736,9 @@ impl Johnny {
         sign_bytes_detached_internal(&self.cert, &mut localdata, password)
     }
 
-    pub fn sign_file_detached(&self, filepath: String, password: String) -> PyResult<String> {
-        let mut localdata = File::open(filepath).unwrap();
+    pub fn sign_file_detached(&self, filepath: Vec<u8>, password: String) -> PyResult<String> {
+        let file = Path::new(str::from_utf8(&filepath[..]).unwrap());
+        let mut localdata = File::open(file).unwrap();
         sign_bytes_detached_internal(&self.cert, &mut localdata, password)
     }
 

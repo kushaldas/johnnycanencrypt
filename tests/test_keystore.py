@@ -1,4 +1,5 @@
 import os
+import shutil
 import tempfile
 import johnnycanencrypt as jce
 import pytest
@@ -258,3 +259,15 @@ def test_ks_sign_data_fails():
     signed = ks.sign(key, "hello", "redhat")
     assert signed.startswith("-----BEGIN PGP SIGNATURE-----\n")
     assert not ks.verify(key, "hello2", signed)
+
+
+def test_ks_sign_verify_file():
+    inputfile = "tests/files/text.txt"
+    tempdir = tempfile.TemporaryDirectory()
+    shutil.copy(inputfile, tempdir.name)
+    ks = jce.KeyStore("tests/files/store")
+    key = "6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99"
+    file_to_be_signed = os.path.join(tempdir.name, "text.txt")
+    signed = ks.sign_file(key, file_to_be_signed, "redhat", write=True)
+    assert signed.startswith("-----BEGIN PGP SIGNATURE-----\n")
+    assert ks.verify_file(key, file_to_be_signed, file_to_be_signed + ".asc")
