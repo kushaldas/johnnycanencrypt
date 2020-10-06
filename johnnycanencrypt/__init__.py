@@ -103,7 +103,7 @@ class KeyStore:
         elif type(other) == Key:
             return other.fingerprint in self.fingerprints_cache
 
-    def import_cert(self, keypath: str, onplace=False):
+    def import_cert(self, keypath: str, onplace=False) -> Key:
         """Imports a given cert from the given path.
 
         :param path: Path to the pgp key file.
@@ -119,6 +119,7 @@ class KeyStore:
         else:
             finalpath = keypath
         self.add_key_to_cache(finalpath, uids, fingerprint, keytype)
+        return self.get_key(fingerprint, keytype)
 
     def details(self):
         "Returns tuple of (number_of_public, number_of_secret_keys)"
