@@ -170,11 +170,13 @@ class KeyStore:
         if email:
             search_item, cache = email, self.emails_cache
 
-        if name:
+        elif name:
             search_item, cache = name, self.names_cache
 
-        if value:
+        elif value:
             search_item, cache = value, self.values_cache
+        else:
+            raise RuntimeError("We need at least one of the email/name/value.")
         # Now let us search
         if search_item in cache:
             keys = cache[search_item]
