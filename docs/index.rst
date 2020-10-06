@@ -15,6 +15,7 @@ is written.
    :caption: Contents:
 
    build
+   introduction
    api
    rustimplementation
 
