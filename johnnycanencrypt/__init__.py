@@ -257,7 +257,7 @@ class KeyStore:
                 final_key_paths.append(k.keypath)
         return final_key_paths
 
-    def encrypt_bytes(self, keys, data, outputfile="", armor=True):
+    def encrypt(self, keys, data, outputfile="", armor=True):
         """Encrypts the given data with the list of keys and returns the output.
 
         :param keys: List of fingerprints or Key objects
@@ -289,8 +289,8 @@ class KeyStore:
         encrypt_bytes_to_file(final_key_paths, finaldata, encrypted_file, armor)
         return True
 
-    def decrypt_bytes(self, key, data, password=""):
-        """Decryptes the given bytes and returns plain text bytes.
+    def decrypt(self, key, data, password=""):
+        """Decrypts the given bytes and returns plain text bytes.
 
         :param key: Fingerprint or secret Key object
         :param data: Encrypted data in bytes.

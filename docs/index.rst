@@ -7,8 +7,8 @@ Welcome to Johnny Can Encrypt's documentation!
 ==============================================
 
 This is a Python module providing encryption and decryption operations based on OpenPGP. It
-uses `sequoia-pgp <https://sequoia-pgp.org>`_ project for the actual operations. This module
-is written.
+uses `sequoia-pgp <https://sequoia-pgp.org>`_ project for the actual operations. This does not
+depend on the existing `gpg` tooling.
 
 .. toctree::
    :maxdepth: 2

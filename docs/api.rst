@@ -38,7 +38,7 @@ For the rest of the documentation we assume that you imported the module as foll
                         >>> ks = jce.KeyStore("/home/user/.pgpkeys")
                         >>> newkey = ks.create_newkey("supersecretpassphrasefromdiceware", "test key1 <email@example.com>", "RSA4k")
 
-        .. method:: encrypt_bytes(keys, data, outputfile="", armor=True) -> bytes:
+        .. method:: encrypt(keys, data, outputfile="", armor=True) -> bytes:
 
                 Encrypts the given data (either as str or bytes) via the list of keys or fingerprints. You can also just pass one single key or
                 fingerprint. If you provide *outputfile* argument with a path, the encrypted output will be written to that path. By default the
@@ -49,7 +49,7 @@ For the rest of the documentation we assume that you imported the module as foll
                         >>> ks = jce.KeyStore("tests/files/store")
                         >>> key1 = ks.get_key("6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99")
                         >>> key2 = ks.get_key("BB2D3F20233286371C3123D5209940B9669ED621")
-                        >>> encrypted = ks.encrypt_bytes([key1, key2], "Encrypted this string")
+                        >>> encrypted = ks.encrypt([key1, key2], "Encrypted this string")
                         >>> assert encrypted.startswith(b"-----BEGIN PGP MESSAGE-----\n")
 
         .. method:: encrypt_file(self, keys, inputfilepath, outputfilepath, armor=True) -> bool:
@@ -63,14 +63,14 @@ For the rest of the documentation we assume that you imported the module as foll
                         >>> key2 = ks.get_key("BB2D3F20233286371C3123D5209940B9669ED621")
                         >>> assert ks.encrypt_file([key1, key2], "/tmp/data.txt", "/tmp/data.txt.asc")
 
-        .. method:: decrypt_bytes(key, data, password="") -> bytes: 
+        .. method:: decrypt(key, data, password="") -> bytes: 
 
                 Returns the decrypted bytes from the given data and the secret key. You can either pass fingerprint or a secret `Key` object
                 as the *key* argument.
 
                 ::
 
-                        >>> plain_bytes = ks.decrypt_bytes(secret_key2, encrypted_bytes, password=password)
+                        >>> plain_bytes = ks.decrypt(secret_key2, encrypted_bytes, password=password)
 
         .. method:: decrypt_file(key, encrypted_path, outputfile, password=""):
 
