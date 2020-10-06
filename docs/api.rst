@@ -10,16 +10,6 @@ For the rest of the documentation we assume that you imported the module as foll
 
 
 
-.. class:: Key(keypath: str, fingerprint: str, keytype: Union["public", "secret"])
-
-        Returns a Key object based on the keypath and fingerprint. The keytype value decides if the key object is a `public` or `secret` key. It does
-        not contain the actual key, but points to the right file path on the disk.
-
-        You can compare two key object with `==` operator.
-
-        For most of the use cases you don't have to create one manually, but you can retrive one from the `KeyStore`.
-
-
 
 .. class:: KeyStore(path: str) -> None:
 
@@ -144,5 +134,16 @@ For the rest of the documentation we assume that you imported the module as foll
         .. method:: verify_file(key, filepath, signature_path) -> bool:
 
                 Verifies the given filepath using the public key, and signature string, returns **True** or **False** as result. 
+
+
+.. class:: Key(keypath: str, fingerprint: str, keytype: Union["public", "secret"])
+
+        Returns a Key object based on the keypath and fingerprint. The keytype value decides if the key object is a `public` or `secret` key. It does
+        not contain the actual key, but points to the right file path on the disk.
+
+        You can compare two key object with `==` operator.
+
+        For most of the use cases you don't have to create one manually, but you can retrive one from the `KeyStore`.
+
 
 
