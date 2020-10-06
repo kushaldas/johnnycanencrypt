@@ -119,7 +119,7 @@ class KeyStore:
         else:
             finalpath = keypath
         self.add_key_to_cache(finalpath, uids, fingerprint, keytype)
-        return self.get_key(fingerprint, keytype)
+        return self.get_key(fingerprint, "secret" if keytype else "public")
 
     def details(self):
         "Returns tuple of (number_of_public, number_of_secret_keys)"
