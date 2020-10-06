@@ -24,7 +24,7 @@ For the rest of the documentation we assume that you imported the module as foll
 
         ::
 
-                >>> ks = jce.KeyStore("/home/user/.pgpkeys")
+                >>> ks = jce.KeyStore("/var/lib/myamazingapp")
                 >>> "HEXFINGERPRINT" in ks
 
 
@@ -35,7 +35,7 @@ For the rest of the documentation we assume that you imported the module as foll
 
                 ::
 
-                        >>> ks = jce.KeyStore("/home/user/.pgpkeys")
+                        >>> ks = jce.KeyStore("/var/lib/myamazingapp")
                         >>> newkey = ks.create_newkey("supersecretpassphrasefromdiceware", "test key1 <email@example.com>", "RSA4k")
 
         .. method:: encrypt(keys, data, outputfile="", armor=True) -> bytes:
