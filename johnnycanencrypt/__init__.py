@@ -359,3 +359,41 @@ class KeyStore:
 
         jp = Johnny(k.keypath)
         return jp.decrypt_file(inputfile, outputpath, password)
+
+    def sign(self, key, data, password):
+        """Signs the given data with the key.
+
+        :param key: Fingerprint or secret Key object
+        :param data: Data to be signed.
+        :param password: Password of the secret key file.
+
+        :returns: The signature as string
+        """
+        if type(key) == str:  # Means we have a fingerprint
+            k = self.get_key(key, keytype="secret")
+        else:
+            k = key
+
+        if type(data) == str:
+            data = data.encode("utf-8")
+        jp = Johnny(k.keypath)
+        return jp.sign_bytes_detached(data, password)
+
+    def verify(self, key, data, signature):
+        """Verifies the given data and the signature
+
+        :param key: Fingerprint or public Key object
+        :param data: Data to be signed.
+        :param signature: Signature text
+
+        :returns: Boolean
+        """
+        if type(key) == str:  # Means we have a fingerprint
+            k = self.get_key(key, keytype="public")
+        else:
+            k = key
+
+        if type(data) == str:
+            data = data.encode("utf-8")
+        jp = Johnny(k.keypath)
+        return jp.verify_bytes(data, signature.encode("utf-8"))

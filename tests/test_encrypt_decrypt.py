@@ -45,6 +45,7 @@ def test_encryption_of_multiple_keys_to_files():
     result = jp.decrypt_bytes(enc, "redhat")
     assert DATA == result.decode("utf-8")
 
+
 def test_encryption_of_multiple_keys_of_a_file():
     "Encrypt bytes to a file using multiple keys"
     inputfile = "tests/files/text.txt"
@@ -75,8 +76,6 @@ def test_encryption_of_multiple_keys_of_a_file():
         output.encode("utf-8"), decrypted_output.encode("utf-8"), "redhat"
     )
     verify_files(inputfile, decrypted_output)
-
-
 
 
 def test_encryption_of_multiple_keys_to_bytes():

@@ -3,26 +3,10 @@ import tempfile
 import johnnycanencrypt as jce
 import pytest
 
+from .utils import clean_outputfiles, verify_files
+
 
 DATA = "Kushal loves 🦀"
-
-
-def clean_outputfiles(output, decrypted_output):
-    # Remove any existing test files
-    if os.path.exists(output):
-        os.remove(output)
-    if os.path.exists(decrypted_output):
-        os.remove(decrypted_output)
-
-
-def verify_files(inputfile, decrypted_output):
-    # read both the files
-    with open(inputfile) as f:
-        original_text = f.read()
-
-    with open(decrypted_output) as f:
-        decrypted_text = f.read()
-    assert original_text == decrypted_text
 
 
 def setup_module(module):
@@ -228,12 +212,11 @@ def test_ks_encrypt_decrypt_bytes_to_file_multiple_recipients():
     assert DATA == decrypted_text
 
 
-def test_ks_encrypt_decrypt_file():
+def test_ks_encrypt_decrypt_file(encrypt_decrypt_file):
     "Encrypts and decrypt some bytes"
     inputfile = "tests/files/text.txt"
     output = "/tmp/text-encrypted.pgp"
     decrypted_output = "/tmp/text.txt"
-    clean_outputfiles(output, decrypted_output)
 
     ks = jce.KeyStore("tests/files/store")
     public_key = ks.get_key("6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99")
@@ -243,12 +226,11 @@ def test_ks_encrypt_decrypt_file():
     verify_files(inputfile, decrypted_output)
 
 
-def test_ks_encrypt_decrypt_file_multiple_recipients():
+def test_ks_encrypt_decrypt_file_multiple_recipients(encrypt_decrypt_file):
     "Encrypts and decrypt some bytes"
     inputfile = "tests/files/text.txt"
     output = "/tmp/text-encrypted.pgp"
     decrypted_output = "/tmp/text.txt"
-    clean_outputfiles(output, decrypted_output)
 
     ks = jce.KeyStore("tests/files/store")
     key1 = ks.get_key("6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99")
@@ -260,3 +242,19 @@ def test_ks_encrypt_decrypt_file_multiple_recipients():
     secret_key2 = ks.get_key("BB2D3F20233286371C3123D5209940B9669ED621", "secret")
     ks.decrypt_file(secret_key2, output, decrypted_output, password="redhat")
     verify_files(inputfile, decrypted_output)
+
+
+def test_ks_sign_data():
+    ks = jce.KeyStore("tests/files/store")
+    key = "6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99"
+    signed = ks.sign(key, "hello", "redhat")
+    assert signed.startswith("-----BEGIN PGP SIGNATURE-----\n")
+    assert ks.verify(key, "hello", signed)
+
+
+def test_ks_sign_data_fails():
+    ks = jce.KeyStore("tests/files/store")
+    key = "6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99"
+    signed = ks.sign(key, "hello", "redhat")
+    assert signed.startswith("-----BEGIN PGP SIGNATURE-----\n")
+    assert not ks.verify(key, "hello2", signed)
