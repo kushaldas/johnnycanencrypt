@@ -21,7 +21,15 @@ Only to build and test locally, you should execute
 
         maturin develop
 
-## How to run the tests?
+
+To build a wheel use the following command.
+
+::
+
+        maturin build --manylinux=off
+
+How to run the tests?
+----------------------
 
 After you did the `maturin develop` as mentioned above, execute the following command.
 

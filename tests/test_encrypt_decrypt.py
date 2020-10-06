@@ -1,5 +1,5 @@
 import os
-import johnnycanencrypt as jce
+import johnnycanencrypt.johnnycanencrypt as jce
 
 DATA = "Kushal loves 🦀"
 
@@ -22,7 +22,7 @@ def verify_files(inputfile, decrypted_output):
     assert original_text == decrypted_text
 
 
-def test_encryption_of_multiple_keys():
+def test_encryption_of_multiple_keys_to_files():
     "Encrypt bytes to a file using multiple keys"
     output = "/tmp/multiple-enc.asc"
     if os.path.exists(output):
@@ -43,6 +43,55 @@ def test_encryption_of_multiple_keys():
 
     jp = jce.Johnny("tests/files/secret.asc")
     result = jp.decrypt_bytes(enc, "redhat")
+    assert DATA == result.decode("utf-8")
+
+
+def test_encryption_of_multiple_keys_of_a_file():
+    "Encrypt bytes to a file using multiple keys"
+    inputfile = "tests/files/text.txt"
+    output = "/tmp/text-encrypted.pgp"
+    decrypted_output = "/tmp/text.txt"
+    clean_outputfiles(output, decrypted_output)
+
+    jce.encrypt_file_internal(
+        ["tests/files/public.asc", "tests/files/hellopublic.asc"],
+        inputfile.encode("utf-8"),
+        output.encode("utf-8"),
+        armor=True,
+    )
+    assert os.path.exists(output)
+    # Now let us decrypt it via second secret key
+    jp = jce.Johnny("tests/files/hellosecret.asc")
+    assert jp.decrypt_file(
+        output.encode("utf-8"), decrypted_output.encode("utf-8"), "redhat"
+    )
+    verify_files(inputfile, decrypted_output)
+
+    # Now remove it for next step
+    os.remove(decrypted_output)
+
+    # Via first secret key
+    jp = jce.Johnny("tests/files/secret.asc")
+    assert jp.decrypt_file(
+        output.encode("utf-8"), decrypted_output.encode("utf-8"), "redhat"
+    )
+    verify_files(inputfile, decrypted_output)
+
+
+def test_encryption_of_multiple_keys_to_bytes():
+    "Encrypt bytes using multiple keys"
+    encrypted = jce.encrypt_bytes_to_bytes(
+        ["tests/files/public.asc", "tests/files/hellopublic.asc"],
+        DATA.encode("utf-8"),
+        armor=True,
+    )
+    # Now let us decrypt it via first secret key
+    jp = jce.Johnny("tests/files/hellosecret.asc")
+    result = jp.decrypt_bytes(encrypted, "redhat")
+    assert DATA == result.decode("utf-8")
+
+    jp = jce.Johnny("tests/files/secret.asc")
+    result = jp.decrypt_bytes(encrypted, "redhat")
     assert DATA == result.decode("utf-8")
 
 

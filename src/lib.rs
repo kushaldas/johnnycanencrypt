@@ -1,6 +1,7 @@
 use pyo3::exceptions::*;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
+use pyo3::types::{PyDict, PyList};
 use pyo3::wrap_pyfunction;
 
 use std::collections::HashMap;
@@ -212,15 +213,82 @@ fn sign_bytes_detached_internal(
     Ok(String::from_utf8(result).unwrap())
 }
 
-/// This function takes a password and an userid as strings, returns a tuple of public and private
-/// key. Remember to save the keys for future use.
 #[pyfunction]
-#[text_signature = "(password, userid)"]
-fn create_newkey(password: String, userid: String) -> PyResult<(String, String)> {
+#[text_signature = "(certpath)"]
+fn parse_cert_file(py: Python, certpath: String) -> PyResult<(PyObject, String, bool)> {
+    let cert = openpgp::Cert::from_file(certpath).unwrap();
+    let plist = PyList::empty(py);
+    for ua in cert.userids() {
+        let pd = PyDict::new(py);
+        //println!("  {}", String::from_utf8_lossy(ua.value()));
+        pd.set_item("value", String::from_utf8_lossy(ua.value()))
+            .unwrap();
+        // If we have a name part in the UID
+        match ua.name() {
+            Ok(value) => match value {
+                Some(name) => {
+                    pd.set_item("name", name).unwrap();
+                }
+                _ => (),
+            },
+            Err(_) => (),
+        }
+        // If we have a comment part in the UID
+        match ua.comment() {
+            Ok(value) => match value {
+                Some(comment) => {
+                    pd.set_item("comment", comment).unwrap();
+                }
+                _ => (),
+            },
+            Err(_) => (),
+        }
+        // If we have a email part in the UID
+        match ua.email() {
+            Ok(value) => match value {
+                Some(email) => {
+                    pd.set_item("email", email).unwrap();
+                }
+                _ => (),
+            },
+            Err(_) => (),
+        }
+        // If we have a URI part in the UID
+        match ua.uri() {
+            Ok(value) => match value {
+                Some(uri) => {
+                    pd.set_item("uri", uri).unwrap();
+                }
+                _ => (),
+            },
+            Err(_) => (),
+        }
+        plist.append(pd).unwrap();
+    }
+
+    Ok((plist.into(), cert.fingerprint().to_hex(), cert.is_tsk()))
+}
+
+/// This function takes a password and an userid as strings, returns a tuple of public and private
+/// key and the fingerprint in hex. Remember to save the keys for future use.
+#[pyfunction]
+#[text_signature = "(password, userid, cipher)"]
+fn create_newkey(
+    password: String,
+    userid: String,
+    cipher: String,
+) -> PyResult<(String, String, String)> {
+    // Default we create RSA4k keys
+    let mut ciphervalue = CipherSuite::RSA4k;
+    if cipher == String::from("RSA2k") {
+        ciphervalue = CipherSuite::RSA4k;
+    } else if cipher == String::from("Cv25519") {
+        ciphervalue = CipherSuite::Cv25519;
+    }
     let (cert, _) = CertBuilder::new()
         .add_storage_encryption_subkey()
         .add_signing_subkey()
-        .set_cipher_suite(CipherSuite::RSA4k)
+        .set_cipher_suite(ciphervalue)
         .set_password(Some(openpgp::crypto::Password::from(password)))
         .add_userid(userid)
         .generate()
@@ -236,6 +304,7 @@ fn create_newkey(password: String, userid: String) -> PyResult<(String, String)>
     Ok((
         String::from_utf8(armored).unwrap(),
         String::from_utf8(buf).unwrap(),
+        cert.fingerprint().to_hex(),
     ))
 }
 
@@ -319,6 +388,162 @@ fn encrypt_bytes_to_file(
     }
 
     Ok(true)
+}
+
+/// This function takes a list of public key paths, and encrypts the given filepath to an output
+/// file. You can also pass boolen flag armor for armored output.
+#[pyfunction]
+#[text_signature = "(publickeys, filepath, output, armor=False)"]
+fn encrypt_file_internal(
+    publickeys: Vec<String>,
+    filepath: Vec<u8>,
+    output: Vec<u8>,
+    armor: Option<bool>,
+) -> PyResult<bool> {
+    let mut certs = Vec::new();
+    for fpath in publickeys {
+        if !std::fs::metadata(fpath.clone()).is_ok() {
+            return Err(FileNotFoundError::py_err(format!(
+                "{} is not found.",
+                fpath
+            )));
+        }
+        certs.push(openpgp::Cert::from_file(&fpath).unwrap());
+    }
+    let mode = KeyFlags::default().set_storage_encryption(true);
+
+    let p = &P::new();
+    let recipients = certs.iter().flat_map(|cert| {
+        cert.keys()
+            .with_policy(p, None)
+            .alive()
+            .revoked(false)
+            .key_flags(&mode)
+    });
+
+    let mut input = File::open(str::from_utf8(&filepath[..]).unwrap()).unwrap();
+    let mut outfile = File::create(str::from_utf8(&output[..]).unwrap()).unwrap();
+    // TODO: Find better ways to write this code
+    match armor {
+        // For armored output file.
+        Some(true) => {
+            let mut sink = armor::Writer::new(&mut outfile, armor::Kind::Message).unwrap();
+            // Stream an OpenPGP message.
+            let message = Message::new(&mut sink);
+
+            // We want to encrypt a literal data packet.
+            let encryptor = Encryptor::for_recipients(message, recipients)
+                .build()
+                .expect("Failed to create encryptor");
+
+            let mut literal_writer = LiteralWriter::new(encryptor)
+                .build()
+                .expect("Failed to create literal writer");
+
+            // Copy stdin to our writer stack to encrypt the data.
+            io::copy(&mut input, &mut literal_writer).expect("Failed to encrypt");
+            //literal_writer.write_all(&data).unwrap();
+
+            // Finally, finalize the OpenPGP message by tearing down the
+            // writer stack.
+            literal_writer.finalize().unwrap();
+
+            // Finalize the armor writer.
+            sink.finalize().expect("Failed to write data");
+        }
+        _ => {
+            let message = Message::new(&mut outfile);
+
+            // We want to encrypt a literal data packet.
+            let encryptor = Encryptor::for_recipients(message, recipients)
+                .build()
+                .expect("Failed to create encryptor");
+
+            let mut literal_writer = LiteralWriter::new(encryptor)
+                .build()
+                .expect("Failed to create literal writer");
+
+            // Copy stdin to our writer stack to encrypt the data.
+            io::copy(&mut input, &mut literal_writer).expect("Failed to encrypt");
+            //literal_writer.write_all(&data).unwrap();
+
+            // Finally, finalize the OpenPGP message by tearing down the
+            // writer stack.
+            literal_writer.finalize().unwrap();
+        }
+    }
+
+    Ok(true)
+}
+
+/// This function takes a list of public key paths, and encrypts the given data in bytes and returns it.
+/// You can also pass boolen flag armor for armored output.
+#[pyfunction]
+#[text_signature = "(publickeys, data, armor=False)"]
+fn encrypt_bytes_to_bytes(
+    py: Python,
+    publickeys: Vec<String>,
+    data: Vec<u8>,
+    armor: Option<bool>,
+) -> PyResult<PyObject> {
+    let mut certs = Vec::new();
+    for fpath in publickeys {
+        if !std::fs::metadata(fpath.clone()).is_ok() {
+            return Err(FileNotFoundError::py_err(format!(
+                "{} is not found.",
+                fpath
+            )));
+        }
+        certs.push(openpgp::Cert::from_file(&fpath).unwrap());
+    }
+    let mode = KeyFlags::default().set_storage_encryption(true);
+
+    let p = &P::new();
+    let recipients = certs.iter().flat_map(|cert| {
+        cert.keys()
+            .with_policy(p, None)
+            .alive()
+            .revoked(false)
+            .key_flags(&mode)
+    });
+    // TODO: Find better way to do this in rust
+    let mut result = Vec::new();
+    let mut result2 = Vec::new();
+    let mut sink = armor::Writer::new(&mut result2, armor::Kind::Message)?;
+    // Stream an OpenPGP message.
+    let message = match armor {
+        Some(true) => Message::new(&mut sink),
+        _ => Message::new(&mut result),
+    };
+    // We want to encrypt a literal data packet.
+    let encryptor = Encryptor::for_recipients(message, recipients)
+        .build()
+        .expect("Failed to create encryptor");
+
+    let mut literal_writer = LiteralWriter::new(encryptor)
+        .build()
+        .expect("Failed to create literal writer");
+
+    // Copy stdin to our writer stack to encrypt the data.
+    // io::copy(&mut data, &mut literal_writer).expect("Failed to encrypt");
+    literal_writer.write_all(&data).unwrap();
+
+    // Finally, finalize the OpenPGP message by tearing down the
+    // writer stack.
+    literal_writer.finalize().unwrap();
+
+    match armor {
+        Some(true) => {
+            // Finalize the armor writer.
+            sink.finalize().expect("Failed to write data");
+            let res = PyBytes::new(py, &result2);
+            return Ok(res.into());
+        }
+        _ => {
+            let res = PyBytes::new(py, &result);
+            return Ok(res.into());
+        }
+    }
 }
 
 #[pyclass]
@@ -511,8 +736,9 @@ impl Johnny {
         sign_bytes_detached_internal(&self.cert, &mut localdata, password)
     }
 
-    pub fn sign_file_detached(&self, filepath: String, password: String) -> PyResult<String> {
-        let mut localdata = File::open(filepath).unwrap();
+    pub fn sign_file_detached(&self, filepath: Vec<u8>, password: String) -> PyResult<String> {
+        let file = Path::new(str::from_utf8(&filepath[..]).unwrap());
+        let mut localdata = File::open(file).unwrap();
         sign_bytes_detached_internal(&self.cert, &mut localdata, password)
     }
 
@@ -547,7 +773,10 @@ impl Johnny {
 /// A Python module implemented in Rust.
 fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(create_newkey))?;
+    m.add_wrapped(wrap_pyfunction!(parse_cert_file))?;
     m.add_wrapped(wrap_pyfunction!(encrypt_bytes_to_file))?;
+    m.add_wrapped(wrap_pyfunction!(encrypt_bytes_to_bytes))?;
+    m.add_wrapped(wrap_pyfunction!(encrypt_file_internal))?;
     m.add_class::<Johnny>()?;
     Ok(())
 }

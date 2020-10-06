@@ -9,96 +9,140 @@ For the rest of the documentation we assume that you imported the module as foll
         >>> import johnnycanencrypt as jce
 
 
-.. function:: create_newkey(password, userid)
 
-        Use the `create_newkey` function in the module to create a new keypair. It takes two arguments as str, a password, and userid.
-        By default it creates the key with RSA4096, and returns a tuple of public,secret key as str. Raises `FileNotFound` error
-        if the key file can not be accessed.
+.. class:: Key(keypath: str, fingerprint: str, keytype: Union["public", "secret"])
+
+        Returns a Key object based on the keypath and fingerprint. The keytype value decides if the key object is a `public` or `secret` key. It does
+        not contain the actual key, but points to the right file path on the disk.
+
+        You can compare two key object with `==` operator.
+
+        For most of the use cases you don't have to create one manually, but you can retrive one from the `KeyStore`.
+
+
+
+.. class:: KeyStore(path: str)
+
+        Returns a KeyStore object. This is the primary class of the module, and all high level usage is available via methods of this class.
+        It takes a path to the directory where it stores/reads the keys. Please make sure that only the **user** has read/write capability
+        to this path.
+
+        The keys are represented inside the directory as either "fingerprint.pub" or "fingerprint.sec" file based on if it is a public or secret part
+        of the key.
+
+        If you can check for existance of any fingerprint (str) or `Key` object in the via `in` opertor.
 
         ::
 
-                >>> public, secret = jce.newkey("my super secret password using diceware", "test <test@example.com>")
+                >>> ks = jce.KeyStore("/home/user/.pgpkeys")
+                >>> "HEXFINGERPRINT" in ks
 
 
-        .. note:: Remember to save both the public and serect keys in a file to use in future.
+        .. method:: create_newkey(password: str, uid: str = "", ciphersuite: str = "RSA4k"):
 
-
-.. function:: encrypt_bytes_to_file(publickeys, data, output, armor=False)
-
-        This function takes a list of public key file paths, and encrypts the given data in bytes to an output
-        file. You can also pass boolen flag armor for armored output in the file.
-
-        ::
-
-                    >>> jce.encrypt_bytes_to_file(["tests/files/public.asc", "tests/files/hellopublic.asc"], b"Hello clear text", b"/tmp/encrypted_text.asc", armor=True)
-
-
-        .. note:: Use this function if you have to encrypt for multiple recipents.
-
-.. class:: Johnny(filepath)
-
-        It creates an object of type `Johnny`, you can provide path to the either public key, or the private key based on the operation
-        you want to do.
-
-        .. method:: encrypt_bytes(data: bytes, armor=False)
-
-                This method encrypts the given bytes and returns the encrypted bytes. If you pass `armor=True` to the method, then the
-                returned value will be ascii armored bytes.
+                Returns the public part of the newly created `Key` in the store directory. You can mention ciphersuite as *RSA2k* or *RSA4k*,
+                or *Cv25519*, while *RSA4k* is the default.
 
                 ::
 
-                            >>> j = jce.Johnny("tests/files/public.asc")
-                            >>> enc = j.encrypt_bytes(b"mysecret", armor=True)
+                        >>> ks = jce.KeyStore("/home/user/.pgpkeys")
+                        >>> newkey = ks.create_newkey("supersecretpassphrasefromdiceware", "test key1 <email@example.com>", "RSA4k")
 
+        .. method:: encrypt_bytes(keys, data, outputfile="", armor=True):
 
-        .. method:: encrypt_file(inputfile: bytes, output: bytes, armor=False)
-
-                This method encrypts the given inputfile and writes the raw encrypted bytes to the output path. If you pass `armor=True` to the method, then the
-                output file will be written as ascii armored.
-
-                ::
-
-                            >>> j = jce.Johnny("tests/files/public.asc")
-                            >>> enc = j.encrypt_file(b"blueleaks.tar.gz", b"notblueleaks.tar.gz.pgp", armor=True)
-
-
-        .. method:: decrypt_bytes(data: bytes, password: str)
-
-                Decrypts the given bytes based on the secret key and given password. If you try to decrypt while just using the public key,
-                then it will raise `AttributeError`.
+                Encrypts the given data (either as str or bytes) via the list of keys or fingerprints. You can also just pass one single key or
+                fingerprint. If you provide *outputfile* argument with a path, the encrypted output will be written to that path. By default the
+                encrypted output is armored, but by passing *armor=False* you can get raw bytes returned.
 
                 ::
 
-                        >>> jp = jce.Johnny("tests/files/secret.asc")
-                        >>> result = jp.decrypt_bytes(enc, "redhat")
+                        >>> ks = jce.KeyStore("tests/files/store")
+                        >>> key1 = ks.get_key("6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99")
+                        >>> key2 = ks.get_key("BB2D3F20233286371C3123D5209940B9669ED621")
+                        >>> encrypted = ks.encrypt_bytes([key1, key2], "Encrypted this string")
+                        >>> assert encrypted.startswith(b"-----BEGIN PGP MESSAGE-----\n")
 
+        .. method:: encrypt_file(self, keys, inputfilepath, outputfilepath, armor=True):
 
-        .. method:: decrypt_file(inputfile: bytes, output: bytes, password: str)
-
-                Decrypts the inputfile path  (in bytes) and wrties the decrypted data to the `output` file. Both the filepaths to be given as bytes.
-
-                ::
-
-                        >>> jp = jce.Johnny("tests/files/secret.asc")
-                        >>> result = jp.decrypt_file(b"notblueleaks.tar.gz.pgp", "blueleaks.tar.gz", "redhat")
-
-
-        .. method:: sign_bytes_detached(data: bytes, pasword: str)
-
-                Signs the given bytes and returns the detached ascii armored signature as bytes.
+                Returns `True` after encrypting the give *inputfilepath* to the *outputfilepath*.
 
                 ::
 
-                        >>> j = jce.Johnny("tests/files/secret.asc")
-                        >>> signature = j.sign_bytes_detached(b"mysecret", "redhat")
+                        >>> ks = jce.KeyStore("tests/files/store")
+                        >>> key1 = ks.get_key("6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99")
+                        >>> key2 = ks.get_key("BB2D3F20233286371C3123D5209940B9669ED621")
+                        >>> assert ks.encrypt_file([key1, key2], "/tmp/data.txt", "/tmp/data.txt.asc")
 
-                .. note:: Remember to save the signature somewhere on disk.
+        .. method:: decrypt_bytes(key, data, password=""): 
 
-        .. method:: verify_bytes(data: bytes, signature: bytes)
-
-                Verifies if the signature is correct for the given data (as bytes). Returns `True` or `False`.
+                Returns the decrypted bytes from the given data and the secret key. You can either pass fingerprint or a secret `Key` object
+                as the *key* argument.
 
                 ::
 
-                        >>> j = jce.Johnny("tests/files/secret.asc")
-                        >>> j.verify_bytes(encrypted_bytes, signature)
+                        >>> plain_bytes = ks.decrypt_bytes(secret_key2, encrypted_bytes, password=password)
+
+        .. method:: decrypt_file(key, encrypted_path, outputfile, password=""):
+
+                Decryptes the given *encrypted_path* and wrties the output to the *outputfile* path (both given as str).
+
+                ::
+
+                        >>> ks.decrypt_file(secret_key1, "/tmp/data.txt.asc", "/tmp/plain.txt", password=password)
+
+        .. method:: delete_key(fingerprint: str, whichkey: Union["both", "public", "secret""]="both"):
+
+                Deletes the given key based on the fingerprint argument, by default it removes both the public and secret key. If you only want to remove
+                the public or secret part, then pass *public* or *secret* to the **whichkey** argument.
+
+                ::
+
+                        >>> ks.delete_key("BB2D3F20233286371C3123D5209940B9669ED621")
+
+        .. method:: details()
+
+                Returns a tuple containing the total number of public and secret keys available in the KeyStore.
+
+        .. method:: get_key(fingerprint: str = "", keytype: Union["public", "secret"] = "public") -> Key:
+
+                Returns a key from the keystore based on the fingerprint and keytype. By default it returns the public key part.
+                Raises **KeyNotFoundError** if no such key available in the keystore.
+
+        .. method:: get_keys(email: str = "", name: str = "", value: str = "", keytype: str = "public") -> List[Key]:
+
+                Returns a list of keys based on either email or name or value of the UIDs in the key (searchs on one of the terms first come basis).
+
+                ::
+
+                        >>> keys_via_names = ks.get_keys(name="test key")
+                        >>> keys_via_email = ks.get_keys(email="email@example.com")
+
+        .. method:: import_cert(keypath: str, onplace=False) -> Key:
+
+                Imports a pgp key file from a path on the system. If the key is already in the correct format, and in the keystore directory,
+                then you can *onplace=True*, otherwise it will be copied into the keystore directory. The method returns the newly import
+                `Key` object to the caller.
+
+                ::
+
+                        >>> key = ks.import_cert("tests/files/store/public.asc")
+                        >>> print(key)
+
+        .. method:: sign(key, data, password):
+
+                Signs the given *data* using the secret key. Returns the armored signature string.
+
+        .. method:: sign_file(self, key, filepath, password, write=False):
+
+                Returns the armored signature of the *filepath* argument using the secret key (either fingerprint or secret `Key` object).
+                If you pass *write=True*, it will also write the armored signature to a file named as *filepath.asc* 
+
+        .. method:: verify(key, data, signature):
+
+                Verifies the given *data* using the public key, and signature string, returns **True** or **False** as result. 
+
+        .. method:: verify_file(key, filepath, signature_path):
+
+                Verifies the given filepath using the public key, and signature string, returns **True** or **False** as result. 
+
+

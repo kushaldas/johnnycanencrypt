@@ -16,6 +16,7 @@ is written.
 
    build
    api
+   rustimplementation
 
 
 Indices and tables
