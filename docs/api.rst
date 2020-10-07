@@ -120,7 +120,7 @@ For the rest of the documentation we assume that you imported the module as foll
 
         .. method:: sign(key, data, password) -> str:
 
-                Signs the given *data* using the secret key. Returns the armored signature string.
+                Signs the given *data* (can be either str or bytes) using the secret key. Returns the armored signature string.
 
         .. method:: sign_file(key, filepath, password, write=False) -> str:
 
