@@ -63,3 +63,30 @@ Encrypting and decrypting some bytes for a given fingerprint
         >>> text = ks.decrypt(secret_key, enc, "redhat")
         >>> print(text)
         b'Sequoia is amazing.'
+
+
+Verify Tor Browser download using the signature and public key
+---------------------------------------------------------------
+
+In this example we will download the Tor Browser 10.0, and the signature and the public key using **wget**, and then verify via our module.
+
+::
+
+        wget https://www.torproject.org/dist/torbrowser/10.0/tor-browser-linux64-10.0_en-US.tar.xz
+        wget https://www.torproject.org/dist/torbrowser/10.0/tor-browser-linux64-10.0_en-US.tar.xz.asc
+        KEYURL=https://openpgpkey.torproject.org/.well-known/openpgpkey/torproject.org/hu/kounek7zrdx745qydx6p59t9mqjpuhdf
+        wget $KEYURL -O kounek7zrdx745qydx6p59t9mqjpuhdf.pub
+
+
+Now let us import the key and verify.
+
+::
+
+        >>> torkey = ks.import_cert("./kounek7zrdx745qydx6p59t9mqjpuhdf.pub")
+        >>> torkey
+        <Key fingerprint=EF6E286DDA85EA2A4BA7DE684E2C6E8793298290 keytype=public>
+        >>> filepath="./tor-browser-linux64-10.0_en-US.tar.xz"
+        >>> signaturepath="./tor-browser-linux64-10.0_en-US.tar.xz.asc"
+        >>> ks.verify_file(torkey, filepath, signaturepath)
+        True
+
