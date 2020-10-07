@@ -52,7 +52,7 @@ For the rest of the documentation we assume that you imported the module as foll
                         >>> encrypted = ks.encrypt([key1, key2], "Encrypted this string")
                         >>> assert encrypted.startswith(b"-----BEGIN PGP MESSAGE-----\n")
 
-        .. method:: encrypt_file(self, keys, inputfilepath, outputfilepath, armor=True) -> bool:
+        .. method:: encrypt_file(keys, inputfilepath, outputfilepath, armor=True) -> bool:
 
                 Returns `True` after encrypting the give *inputfilepath* to the *outputfilepath*.
 
@@ -89,7 +89,7 @@ For the rest of the documentation we assume that you imported the module as foll
 
                         >>> ks.delete_key("BB2D3F20233286371C3123D5209940B9669ED621")
 
-        .. method:: details()
+        .. method:: details() -> Tuple[int, int]:
 
                 Returns a tuple containing the total number of public and secret keys available in the KeyStore.
 
@@ -122,7 +122,7 @@ For the rest of the documentation we assume that you imported the module as foll
 
                 Signs the given *data* using the secret key. Returns the armored signature string.
 
-        .. method:: sign_file(self, key, filepath, password, write=False) -> str:
+        .. method:: sign_file(key, filepath, password, write=False) -> str:
 
                 Returns the armored signature of the *filepath* argument using the secret key (either fingerprint or secret `Key` object).
                 If you pass *write=True*, it will also write the armored signature to a file named as *filepath.asc* 
