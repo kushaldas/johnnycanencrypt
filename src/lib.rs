@@ -184,7 +184,7 @@ fn sign_bytes_detached_internal(
     let mut keys = get_keys(cert, password);
 
     if keys.len() == 0 {
-        return Err(AttributeError::py_err("No signing key is present."));
+        return Err(PyAttributeError::new_err("No signing key is present."));
     }
 
     let mut result = Vec::new();
@@ -321,7 +321,7 @@ fn encrypt_bytes_to_file(
     let mut certs = Vec::new();
     for fpath in publickeys {
         if !std::fs::metadata(fpath.clone()).is_ok() {
-            return Err(FileNotFoundError::py_err(format!(
+            return Err(PyFileNotFoundError::new_err(format!(
                 "{} is not found.",
                 fpath
             )));
@@ -403,7 +403,7 @@ fn encrypt_file_internal(
     let mut certs = Vec::new();
     for fpath in publickeys {
         if !std::fs::metadata(fpath.clone()).is_ok() {
-            return Err(FileNotFoundError::py_err(format!(
+            return Err(PyFileNotFoundError::new_err(format!(
                 "{} is not found.",
                 fpath
             )));
@@ -489,7 +489,7 @@ fn encrypt_bytes_to_bytes(
     let mut certs = Vec::new();
     for fpath in publickeys {
         if !std::fs::metadata(fpath.clone()).is_ok() {
-            return Err(FileNotFoundError::py_err(format!(
+            return Err(PyFileNotFoundError::new_err(format!(
                 "{} is not found.",
                 fpath
             )));
@@ -559,7 +559,7 @@ impl Johnny {
     #[new]
     fn new(filepath: String) -> PyResult<Self> {
         if !std::fs::metadata(filepath.clone()).is_ok() {
-            return Err(FileNotFoundError::py_err(format!(
+            return Err(PyFileNotFoundError::new_err(format!(
                 "{} is not found.",
                 filepath
             )));
