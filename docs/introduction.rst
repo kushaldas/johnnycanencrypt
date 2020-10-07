@@ -42,6 +42,14 @@ Now, if we check the directory from the shell, we will find the keys imported th
 .. note:: This keystore directory is very much application specific. As a developer you should choose which directory on the system you will use
         as the key store. `SecureDrop <https://securedrop.org>`_ uses **/var/lib/securedrop/store** as their key storage (via gpg's python binding).
 
+
+KeyStore path for the applicaitons which can run per user
+----------------------------------------------------------
+
+If you are writing a desktop application or any other tool which can have per user configuration, you should look into
+the `base dir spec <https://specifications.freedesktop.org/basedir-spec/latest/>`_. If your application name is **myapplication**, then the store
+path can be like: **$XDG_DATA_HOME/myapplication**.
+
 Encrypting and decrypting some bytes for a given fingerprint
 -------------------------------------------------------------
 
