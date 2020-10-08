@@ -328,7 +328,7 @@ fn encrypt_bytes_to_file(
         }
         certs.push(openpgp::Cert::from_file(&fpath).unwrap());
     }
-    let mode = KeyFlags::default().set_storage_encryption(true);
+    let mode = KeyFlags::empty().set_storage_encryption();
 
     let p = &P::new();
     let recipients = certs.iter().flat_map(|cert| {
@@ -410,7 +410,7 @@ fn encrypt_file_internal(
         }
         certs.push(openpgp::Cert::from_file(&fpath).unwrap());
     }
-    let mode = KeyFlags::default().set_storage_encryption(true);
+    let mode = KeyFlags::empty().set_storage_encryption();
 
     let p = &P::new();
     let recipients = certs.iter().flat_map(|cert| {
@@ -496,7 +496,7 @@ fn encrypt_bytes_to_bytes(
         }
         certs.push(openpgp::Cert::from_file(&fpath).unwrap());
     }
-    let mode = KeyFlags::default().set_storage_encryption(true);
+    let mode = KeyFlags::empty().set_storage_encryption();
 
     let p = &P::new();
     let recipients = certs.iter().flat_map(|cert| {
@@ -574,7 +574,7 @@ impl Johnny {
         data: Vec<u8>,
         armor: Option<bool>,
     ) -> PyResult<PyObject> {
-        let mode = KeyFlags::default().set_storage_encryption(true);
+        let mode = KeyFlags::empty().set_storage_encryption();
         let p = &P::new();
         let recipients = self
             .cert
@@ -648,7 +648,7 @@ impl Johnny {
         output: Vec<u8>,
         armor: Option<bool>,
     ) -> PyResult<bool> {
-        let mode = KeyFlags::default().set_storage_encryption(true);
+        let mode = KeyFlags::empty().set_storage_encryption();
         let p = &P::new();
         let recipients = self
             .cert
