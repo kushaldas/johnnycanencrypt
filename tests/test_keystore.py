@@ -38,6 +38,7 @@ def test_keystore_lifecycle():
     newkey = ks.create_newkey("redhat", "test key1 <email@example.com>", "RSA4k")
     # the default key must be of public
     assert newkey.keytype == "public"
+    # The key should have proper UIDs
     fingerprint = newkey.fingerprint
     # Keys should be on disk
     assert os.path.exists(os.path.join(tmpdirname.name, f"{fingerprint}.pub"))
@@ -90,6 +91,13 @@ def test_keystore_contains_key():
 def test_keystore_details():
     ks = jce.KeyStore("./tests/files/store")
     assert (4, 2) == ks.details()
+
+
+def test_keystore_key_uids():
+    ks = jce.KeyStore("./tests/files/store")
+    key = ks.get_key("A85FF376759C994A8A1168D8D8219C8C43F6C5E1")
+    assert "kushal@fedoraproject.org" == key.uids[0]["email"]
+    assert "mail@kushaldas.in" == key.uids[-1]["email"]
 
 
 def test_key_deletion():

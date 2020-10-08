@@ -10,6 +10,7 @@ from .exceptions import KeyNotFoundError
 
 import os
 import shutil
+from typing import Dict
 
 
 def _delete_key_file(filepath):
@@ -23,10 +24,17 @@ def _delete_key_file(filepath):
 class Key:
     "Returns a Key object."
 
-    def __init__(self, keypath: str, fingerprint: str, keytype="public"):
+    def __init__(
+        self,
+        keypath: str,
+        fingerprint: str,
+        uids: Dict[str, str] = {},
+        keytype="public",
+    ):
         self.keypath = keypath
         self.keytype = keytype
         self.fingerprint = fingerprint
+        self.uids = uids
 
     def __repr__(self):
         return f"<Key fingerprint={self.fingerprint} keytype={self.keytype}>"
@@ -67,10 +75,10 @@ class KeyStore:
             fingerprint, {"public": None, "secret": None}
         )
         if not keytype:
-            key = Key(fullpath, fingerprint, "public")
+            key = Key(fullpath, fingerprint, uids, "public")
             keys["public"] = key
         else:
-            key = Key(fullpath, fingerprint, "secret")
+            key = Key(fullpath, fingerprint, uids, "secret")
             keys["secret"] = key
         # Now set the fingerprint cache
         self.fingerprints_cache[fingerprint] = keys
@@ -206,9 +214,7 @@ class KeyStore:
         with open(key_filename, "w") as fobj:
             fobj.write(public)
 
-        self.import_cert(key_filename, onplace=True)
-
-        key = Key(key_filename, fingerprint)
+        key = self.import_cert(key_filename, onplace=True)
 
         # Now save the secret key
         key_filename = os.path.join(self.path, f"{fingerprint}.sec")
