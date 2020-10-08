@@ -24,7 +24,13 @@ def _delete_key_file(filepath):
 class Key:
     "Returns a Key object."
 
-    def __init__(self, keypath: str, fingerprint: str, uids: Dict[str,str] = {}, keytype="public"):
+    def __init__(
+        self,
+        keypath: str,
+        fingerprint: str,
+        uids: Dict[str, str] = {},
+        keytype="public",
+    ):
         self.keypath = keypath
         self.keytype = keytype
         self.fingerprint = fingerprint
