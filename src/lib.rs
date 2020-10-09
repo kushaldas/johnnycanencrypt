@@ -3,6 +3,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use pyo3::types::{PyDict, PyList};
 use pyo3::wrap_pyfunction;
+use pyo3::create_exception;
 
 use std::collections::HashMap;
 use std::fs::File;
@@ -34,6 +35,8 @@ use crate::openpgp::serialize::MarshalInto;
 use crate::openpgp::types::KeyFlags;
 use crate::openpgp::types::SymmetricAlgorithm;
 use openpgp::cert::prelude::*;
+
+create_exception!(johnnycanencrypt, CryptoError, PyException);
 
 struct Helper {
     keys: HashMap<openpgp::KeyID, KeyPair>,
@@ -348,9 +351,13 @@ fn encrypt_bytes_to_file(
             let message = Message::new(&mut sink);
 
             // We want to encrypt a literal data packet.
-            let encryptor = Encryptor::for_recipients(message, recipients)
+            let encryptor = match Encryptor::for_recipients(message, recipients)
                 .build()
-                .expect("Failed to create encryptor");
+                {
+                    Ok(value) => value,
+                    Err(_) => {return Err(CryptoError::new_err("Can not encrypt."));},
+
+                };
 
             let mut literal_writer = LiteralWriter::new(encryptor)
                 .build()
@@ -632,11 +639,21 @@ impl Johnny {
         let dec = DecryptorBuilder::from_reader(reader);
         let dec2 = match dec {
             Ok(dec) => dec,
-            Err(msg) => panic!(msg),
+            Err(msg) => {
+                return Err(PySystemError::new_err(format!(
+                    "Can not create decryptor: {}",
+                    msg
+                )))
+            }
         };
         let mut decryptor = match dec2.with_policy(p, None, Helper::new(p, &self.cert, &password)) {
             Ok(decr) => decr,
-            Err(msg) => panic!(msg),
+            Err(msg) => {
+                return Err(PyValueError::new_err(format!(
+                    "Failed to decrypt: {}",
+                    msg
+                )))
+            }
         };
         std::io::copy(&mut decryptor, &mut result).unwrap();
         let res = PyBytes::new(py, &result);
@@ -777,6 +794,7 @@ fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(encrypt_bytes_to_file))?;
     m.add_wrapped(wrap_pyfunction!(encrypt_bytes_to_bytes))?;
     m.add_wrapped(wrap_pyfunction!(encrypt_file_internal))?;
+    m.add("CryptoError", _py.get_type::<CryptoError>())?;
     m.add_class::<Johnny>()?;
     Ok(())
 }
