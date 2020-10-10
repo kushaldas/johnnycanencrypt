@@ -1,9 +1,9 @@
+use pyo3::create_exception;
 use pyo3::exceptions::*;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
-use pyo3::types::{PyDict, PyList};
+use pyo3::types::{PyDateTime, PyDict, PyList};
 use pyo3::wrap_pyfunction;
-use pyo3::create_exception;
 
 use std::collections::HashMap;
 use std::fs::File;
@@ -34,8 +34,10 @@ use crate::openpgp::serialize::Marshal;
 use crate::openpgp::serialize::MarshalInto;
 use crate::openpgp::types::KeyFlags;
 use crate::openpgp::types::SymmetricAlgorithm;
+use chrono::prelude::*;
 use openpgp::cert::prelude::*;
 
+// Our CryptoError exception
 create_exception!(johnnycanencrypt, CryptoError, PyException);
 
 struct Helper {
@@ -218,8 +220,22 @@ fn sign_bytes_detached_internal(
 
 #[pyfunction]
 #[text_signature = "(certpath)"]
-fn parse_cert_file(py: Python, certpath: String) -> PyResult<(PyObject, String, bool)> {
+fn parse_cert_file(py: Python, certpath: String) -> PyResult<(PyObject, String, bool, PyObject)> {
+    let p = &P::new();
     let cert = openpgp::Cert::from_file(certpath).unwrap();
+    let expirationtime = match cert
+        .primary_key()
+        .with_policy(p, None)
+        .unwrap()
+        .key_expiration_time()
+    {
+        Some(etime) => {
+            let dt: DateTime<Utc> = DateTime::from(etime);
+            let pd = Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None).unwrap());
+            pd
+        }
+        _ => None,
+    };
     let plist = PyList::empty(py);
     for ua in cert.userids() {
         let pd = PyDict::new(py);
@@ -269,7 +285,7 @@ fn parse_cert_file(py: Python, certpath: String) -> PyResult<(PyObject, String, 
         plist.append(pd).unwrap();
     }
 
-    Ok((plist.into(), cert.fingerprint().to_hex(), cert.is_tsk()))
+    Ok((plist.into(), cert.fingerprint().to_hex(), cert.is_tsk(), expirationtime.to_object(py)))
 }
 
 /// This function takes a password and an userid as strings, returns a tuple of public and private
@@ -351,13 +367,12 @@ fn encrypt_bytes_to_file(
             let message = Message::new(&mut sink);
 
             // We want to encrypt a literal data packet.
-            let encryptor = match Encryptor::for_recipients(message, recipients)
-                .build()
-                {
-                    Ok(value) => value,
-                    Err(_) => {return Err(CryptoError::new_err("Can not encrypt."));},
-
-                };
+            let encryptor = match Encryptor::for_recipients(message, recipients).build() {
+                Ok(value) => value,
+                Err(_) => {
+                    return Err(CryptoError::new_err("Can not encrypt."));
+                }
+            };
 
             let mut literal_writer = LiteralWriter::new(encryptor)
                 .build()
@@ -648,12 +663,7 @@ impl Johnny {
         };
         let mut decryptor = match dec2.with_policy(p, None, Helper::new(p, &self.cert, &password)) {
             Ok(decr) => decr,
-            Err(msg) => {
-                return Err(PyValueError::new_err(format!(
-                    "Failed to decrypt: {}",
-                    msg
-                )))
-            }
+            Err(msg) => return Err(PyValueError::new_err(format!("Failed to decrypt: {}", msg))),
         };
         std::io::copy(&mut decryptor, &mut result).unwrap();
         let res = PyBytes::new(py, &result);
