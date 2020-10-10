@@ -332,20 +332,14 @@ fn create_newkey(
 #[pyfunction]
 #[text_signature = "(publickeys, data, output, armor=False)"]
 fn encrypt_bytes_to_file(
-    publickeys: Vec<String>,
+    publickeys: Vec<Vec<u8>>,
     data: Vec<u8>,
     output: Vec<u8>,
     armor: Option<bool>,
 ) -> PyResult<bool> {
     let mut certs = Vec::new();
-    for fpath in publickeys {
-        if !std::fs::metadata(fpath.clone()).is_ok() {
-            return Err(PyFileNotFoundError::new_err(format!(
-                "{} is not found.",
-                fpath
-            )));
-        }
-        certs.push(openpgp::Cert::from_file(&fpath).unwrap());
+    for certdata in publickeys {
+        certs.push(openpgp::Cert::from_bytes(&certdata).unwrap());
     }
     let mode = KeyFlags::empty().set_storage_encryption();
 
@@ -417,21 +411,16 @@ fn encrypt_bytes_to_file(
 #[pyfunction]
 #[text_signature = "(publickeys, filepath, output, armor=False)"]
 fn encrypt_file_internal(
-    publickeys: Vec<String>,
+    publickeys: Vec<Vec<u8>>,
     filepath: Vec<u8>,
     output: Vec<u8>,
     armor: Option<bool>,
 ) -> PyResult<bool> {
     let mut certs = Vec::new();
-    for fpath in publickeys {
-        if !std::fs::metadata(fpath.clone()).is_ok() {
-            return Err(PyFileNotFoundError::new_err(format!(
-                "{} is not found.",
-                fpath
-            )));
-        }
-        certs.push(openpgp::Cert::from_file(&fpath).unwrap());
+    for certdata in publickeys {
+        certs.push(openpgp::Cert::from_bytes(&certdata).unwrap());
     }
+
     let mode = KeyFlags::empty().set_storage_encryption();
 
     let p = &P::new();
@@ -504,20 +493,15 @@ fn encrypt_file_internal(
 #[text_signature = "(publickeys, data, armor=False)"]
 fn encrypt_bytes_to_bytes(
     py: Python,
-    publickeys: Vec<String>,
+    publickeys: Vec<Vec<u8>>,
     data: Vec<u8>,
     armor: Option<bool>,
 ) -> PyResult<PyObject> {
     let mut certs = Vec::new();
-    for fpath in publickeys {
-        if !std::fs::metadata(fpath.clone()).is_ok() {
-            return Err(PyFileNotFoundError::new_err(format!(
-                "{} is not found.",
-                fpath
-            )));
-        }
-        certs.push(openpgp::Cert::from_file(&fpath).unwrap());
+    for certdata in publickeys {
+        certs.push(openpgp::Cert::from_bytes(&certdata).unwrap());
     }
+
     let mode = KeyFlags::empty().set_storage_encryption();
 
     let p = &P::new();
@@ -571,23 +555,15 @@ fn encrypt_bytes_to_bytes(
 #[pyclass]
 #[derive(Debug)]
 struct Johnny {
-    #[pyo3(get, set)]
-    filepath: String,
     cert: openpgp::cert::Cert,
 }
 
 #[pymethods]
 impl Johnny {
     #[new]
-    fn new(filepath: String) -> PyResult<Self> {
-        if !std::fs::metadata(filepath.clone()).is_ok() {
-            return Err(PyFileNotFoundError::new_err(format!(
-                "{} is not found.",
-                filepath
-            )));
-        }
-        let cert = openpgp::Cert::from_file(&filepath).unwrap();
-        Ok(Johnny { filepath, cert })
+    fn new(certdata: Vec<u8>) -> PyResult<Self> {
+        let cert = openpgp::Cert::from_bytes(&certdata).unwrap();
+        Ok(Johnny { cert })
     }
 
     pub fn encrypt_bytes(
