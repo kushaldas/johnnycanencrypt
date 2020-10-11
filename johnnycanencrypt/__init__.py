@@ -29,6 +29,7 @@ class Key:
         uids: Dict[str, str] = {},
         keytype=0,
         expirationtime=None,
+        creationtime=None,
     ):
         self.keyvalue = keyvalue
         self.keytype = keytype
@@ -36,6 +37,9 @@ class Key:
         self.uids = uids
         self.expirationtime = (
             datetime.fromtimestamp(float(expirationtime)) if expirationtime else None
+        )
+        self.creationtime = (
+            datetime.fromtimestamp(float(creationtime)) if creationtime else None
         )
 
     def __repr__(self):
@@ -63,10 +67,11 @@ class KeyStore:
                 cursor.executescript(createdb)
 
     def add_key_to_cache(
-        self, fullpath, uids, fingerprint, keytype, expirationtime=None
+        self, fullpath, uids, fingerprint, keytype, expirationtime=None, creationtime=None
     ):
         "Populates the internal cache of the store"
         etime = str(expirationtime.timestamp()) if expirationtime else ""
+        ctime = str(creationtime.timestamp()) if creationtime else ""
         con = sqlite3.connect(self.dbpath)
         con.row_factory = sqlite3.Row
         ktype = 1 if keytype else 0
@@ -81,18 +86,18 @@ class KeyStore:
             if fromdb:  # Means a key is there in the db
                 if fromdb["keytype"] == 0 and keytype:  # Means secret key, we should insert
                     sql = (
-                        "UPDATE keys SET keyvalue=?, keytype=?, expiration=? WHERE id=?"
+                        "UPDATE keys SET keyvalue=?, keytype=?, expiration=?, creation=? WHERE id=?"
                     )
                     key_id = fromdb["id"]
-                    cursor.execute(sql, (cert, ktype, etime, key_id))
+                    cursor.execute(sql, (cert, ktype, etime, ctime, key_id))
                 else:
                     # raise Exception("Key already exists")
                     pass
                 return
             else:
                 # Now insert the new key
-                sql = "INSERT INTO keys (keyvalue, fingerprint, keytype, expiration) VALUES(?, ?, ?, ?)"
-                cursor.execute(sql, (cert, fingerprint, ktype, etime))
+                sql = "INSERT INTO keys (keyvalue, fingerprint, keytype, expiration, creation) VALUES(?, ?, ?, ?, ?)"
+                cursor.execute(sql, (cert, fingerprint, ktype, etime, ctime))
                 key_id = cursor.lastrowid
 
             # TODO: Now for each of the uid, add to the right dictionary
@@ -138,9 +143,9 @@ class KeyStore:
         :param path: Path to the pgp key file.
         :param onplace: Default value is False, if True means the keyfile is in the right directory
         """
-        uids, fingerprint, keytype, expirationtime = parse_cert_file(keypath)
+        uids, fingerprint, keytype, expirationtime, creationtime = parse_cert_file(keypath)
 
-        self.add_key_to_cache(keypath, uids, fingerprint, keytype, expirationtime)
+        self.add_key_to_cache(keypath, uids, fingerprint, keytype, expirationtime, creationtime)
         return self.get_key(fingerprint)
 
     def details(self):
@@ -182,7 +187,8 @@ class KeyStore:
                 cert = result[1]
                 fingerprint = result[2]
                 expirationtime = result[3]
-                keytype = result[4]
+                creationtime = result[4]
+                keytype = result[5]
 
                 # Now get the uids
                 sql = "SELECT id, value FROM uidvalues WHERE key_id=?"
@@ -198,7 +204,7 @@ class KeyStore:
                         {"value": row[1], "email": email, "name": name, "uri": uri}
                     )
 
-                return Key(cert, fingerprint, uids, keytype, expirationtime)
+                return Key(cert, fingerprint, uids, keytype, expirationtime, creationtime)
 
             raise KeyNotFoundError(
                 f"The key for {fingerprint} in not found in the keystore."
@@ -281,15 +287,27 @@ class KeyStore:
 
 
     def create_newkey(
-        self, password: str, uid: str = "", ciphersuite: str = "RSA4k"
+        self, password: str, uid: str = "", ciphersuite: str = "RSA4k",
+        creation = None, expiration = None
     ) -> Key:
         """Returns a public `Key` object after creating a new key in the store
 
         :param password: The password for the key as str.
         :param uid: The text for the uid value as str.
         :param ciphersuite: Default RSA4k, other values are RSA2k, Cv25519
+        :param creation: datetime.datetime, default datetime.now() (via rust)
+        :param expiration: datetime.datetime, default 0 (Never)
         """
-        public, secret, fingerprint = create_newkey(password, uid, ciphersuite)
+        if creation:
+            ctime = creation.timestamp()
+        else:
+            ctime = 0
+
+        if expiration:
+            etime = expiration.timestamp()
+        else:
+            etime = 0
+        public, secret, fingerprint = create_newkey(password, uid, ciphersuite, int(ctime), int(etime))
         # Now save the secret key
         key_filename = os.path.join(self.path, f"{fingerprint}.sec")
         with open(key_filename, "w") as fobj:

@@ -11,6 +11,7 @@ use std::io;
 use std::io::Write;
 use std::path::Path;
 use std::str;
+use std::time::{Duration, SystemTime};
 
 extern crate anyhow;
 
@@ -64,10 +65,7 @@ impl Helper {
                 }
                 false => {
                     // When the secret is not encrypted
-                    ka.key()
-                        .clone()
-                        .into_keypair()
-                        .unwrap()
+                    ka.key().clone().into_keypair().unwrap()
                 }
             };
             keys.insert(ka.key().keyid(), keypair.clone());
@@ -231,11 +229,34 @@ fn sign_bytes_detached_internal(
     Ok(String::from_utf8(result).unwrap())
 }
 
+fn find_creation_time(cert: openpgp::Cert) -> Option<f64> {
+    for packet in cert.clone().into_packets() {
+        match packet {
+            openpgp::Packet::PublicKey(k) => {
+                let dt: DateTime<Utc> = DateTime::from(k.creation_time());
+                return Some(dt.timestamp() as f64);
+            }
+            _ => (),
+        };
+    }
+
+    None
+}
+
 #[pyfunction]
 #[text_signature = "(certpath)"]
-fn parse_cert_file(py: Python, certpath: String) -> PyResult<(PyObject, String, bool, PyObject)> {
+fn parse_cert_file(
+    py: Python,
+    certpath: String,
+) -> PyResult<(PyObject, String, bool, PyObject, PyObject)> {
     let p = &NP::new();
     let cert = openpgp::Cert::from_file(certpath).unwrap();
+
+    let creationtime = match find_creation_time(cert.clone()) {
+        Some(ctime) => Some(PyDateTime::from_timestamp(py, ctime, None).unwrap()),
+        None => None,
+    };
+
     let expirationtime = match cert
         .primary_key()
         .with_policy(p, None)
@@ -303,6 +324,7 @@ fn parse_cert_file(py: Python, certpath: String) -> PyResult<(PyObject, String, 
         cert.fingerprint().to_hex(),
         cert.is_tsk(),
         expirationtime.to_object(py),
+        creationtime.to_object(py),
     ))
 }
 
@@ -314,6 +336,8 @@ fn create_newkey(
     password: String,
     userid: String,
     cipher: String,
+    creation: i64,
+    expiration: i64,
 ) -> PyResult<(String, String, String)> {
     // Default we create RSA4k keys
     let mut ciphervalue = CipherSuite::RSA4k;
@@ -322,14 +346,33 @@ fn create_newkey(
     } else if cipher == String::from("Cv25519") {
         ciphervalue = CipherSuite::Cv25519;
     }
-    let (cert, _) = CertBuilder::new()
+    let crtbuilder = CertBuilder::new()
         .add_storage_encryption_subkey()
         .add_signing_subkey()
         .set_cipher_suite(ciphervalue)
         .set_password(Some(openpgp::crypto::Password::from(password)))
-        .add_userid(userid)
-        .generate()
-        .unwrap();
+        .add_userid(userid);
+
+    let crtbuilder = match creation {
+        0 => crtbuilder,
+        _ => {
+            let cdt = DateTime::<Utc>::from_utc(
+                NaiveDateTime::from_timestamp_opt(creation, 0).unwrap(),
+                Utc,
+            );
+            crtbuilder.set_creation_time(SystemTime::from(cdt))
+        }
+    };
+
+    let crtbuilder = match expiration {
+        0 => crtbuilder,
+        _ => {
+            let validity = Duration::new(expiration as u64 - creation as u64, 0);
+            crtbuilder.set_validity_period(validity)
+        }
+    };
+
+    let (cert, _) = crtbuilder.generate().unwrap();
     let mut buf = Vec::new();
     let mut buffer = Vec::new();
 

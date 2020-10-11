@@ -1,4 +1,5 @@
 import os
+import datetime
 import shutil
 import tempfile
 import johnnycanencrypt as jce
@@ -67,7 +68,7 @@ def test_keystore_contains_key():
     ks = jce.KeyStore(tmpdirname.name)
     keypath = "tests/files/store/secret.asc"
     k = ks.import_cert(keypath)
-    _, fingerprint, keytype, exp = jce.parse_cert_file(keypath)
+    _, fingerprint, keytype, exp, ctime = jce.parse_cert_file(keypath)
 
     # First only the fingerprint
     assert fingerprint in ks
@@ -235,3 +236,32 @@ def test_ks_sign_verify_file():
     signed = ks.sign_file(key, file_to_be_signed, "redhat", write=True)
     assert signed.startswith("-----BEGIN PGP SIGNATURE-----\n")
     assert ks.verify_file(key, file_to_be_signed, file_to_be_signed + ".asc")
+
+
+def test_ks_creation_expiration_time():
+    """
+    Tests via Kushal's key and a new key
+    """
+    # These two are known values from kushal
+    etime = datetime.datetime(2020, 10, 16, 20, 53, 47)
+    ctime= datetime.datetime(2017, 10, 17, 20, 53, 47)
+    tmpdir = tempfile.TemporaryDirectory()
+    # First let us check from the file
+    keypath = "tests/files/store/pgp_keys.asc"
+    ks = jce.KeyStore(tmpdir.name)
+    k = ks.import_cert(keypath)
+    assert etime == k.expirationtime
+    assert ctime == k.creationtime
+
+    # now with a new key and creation time
+    ctime= datetime.datetime(2010, 10, 10, 20, 53, 47)
+    newk = ks.create_newkey("redhat", "Another test key", creation=ctime)
+    assert ctime == newk.creationtime
+    assert not newk.expirationtime
+
+    # Now both creation and expirationtime
+    ctime= datetime.datetime(2008, 10, 10, 20, 53, 47)
+    etime= datetime.datetime(2025, 12, 15, 20, 53, 47)
+    newk = ks.create_newkey("redhat", "Another test key", creation=ctime, expiration=etime)
+    assert ctime == newk.creationtime
+    assert etime == newk.expirationtime

@@ -4,6 +4,7 @@ CREATE TABLE keys (
 	keyvalue BLOB NOT NULL,
 	fingerprint TEXT NOT NULL,
 	expiration TEXT,
+	creation TEXT,
 	keytype INTEGER
 );
 
