@@ -137,10 +137,12 @@ class KeyStore:
             fingerprint = other
         elif type(other) == Key:
             fingerprint = other.fingerprint
-        if self.get_key(fingerprint):
-            return True
-        else:
+        try:
+            if self.get_key(fingerprint):
+                return True
+        except KeyNotFoundError:
             return False
+        return False
 
     def import_cert(self, keypath: str, onplace=False) -> Key:
         """Imports a given cert from the given path.
@@ -178,54 +180,70 @@ class KeyStore:
 
         :param fingerprint: The fingerprint as str.
         """
-        return self._internal_get_key(fingerprint)
+        return self._internal_get_key(fingerprint)[0]
 
-    def _internal_get_key(self, fingerprint="", key_id=None):
+    def _internal_get_key(self, fingerprint="", key_id=None, allkeys=False):
         con = sqlite3.connect(self.dbpath)
         con.row_factory = sqlite3.Row
+        finalresult = []
         with con:
             cursor = con.cursor()
             if fingerprint:
                 sql = "SELECT * FROM keys WHERE fingerprint=?"
                 cursor.execute(sql, (fingerprint,))
-            else:
+            elif key_id:
                 sql = "SELECT * FROM keys WHERE id=?"
                 cursor.execute(sql, (key_id,))
-            result = cursor.fetchone()
-            if result:
-                key_id = result["id"]
-                cert = result["keyvalue"]
-                fingerprint = result["fingerprint"]
-                expirationtime = result["expiration"]
-                creationtime = result["creation"]
-                keytype = result["keytype"]
+            else:  # means get all keys
+                sql = "SELECT * FROM keys"
+                cursor.execute(sql)
+            rows = cursor.fetchall()
+            for result in rows:
+                if result:
+                    key_id = result["id"]
+                    cert = result["keyvalue"]
+                    fingerprint = result["fingerprint"]
+                    expirationtime = result["expiration"]
+                    creationtime = result["creation"]
+                    keytype = result["keytype"]
 
-                # Now get the uids
-                sql = "SELECT id, value FROM uidvalues WHERE key_id=?"
-                cursor.execute(sql, (key_id,))
-                rows = cursor.fetchall()
-                uids = []
-                for row in rows:
-                    value_id = row["id"]
-                    email = self._get_one_row_from_table(cursor, "uidemails", value_id)
-                    name = self._get_one_row_from_table(cursor, "uidnames", value_id)
-                    uri = self._get_one_row_from_table(cursor, "uiduris", value_id)
-                    uids.append(
-                        {
-                            "value": row["value"],
-                            "email": email,
-                            "name": name,
-                            "uri": uri,
-                        }
+                    # Now get the uids
+                    sql = "SELECT id, value FROM uidvalues WHERE key_id=?"
+                    cursor.execute(sql, (key_id,))
+                    rows = cursor.fetchall()
+                    uids = []
+                    for row in rows:
+                        value_id = row["id"]
+                        email = self._get_one_row_from_table(
+                            cursor, "uidemails", value_id
+                        )
+                        name = self._get_one_row_from_table(
+                            cursor, "uidnames", value_id
+                        )
+                        uri = self._get_one_row_from_table(cursor, "uiduris", value_id)
+                        uids.append(
+                            {
+                                "value": row["value"],
+                                "email": email,
+                                "name": name,
+                                "uri": uri,
+                            }
+                        )
+
+                    finalresult.append(
+                        Key(
+                            cert,
+                            fingerprint,
+                            uids,
+                            keytype,
+                            expirationtime,
+                            creationtime,
+                        )
                     )
+            if finalresult:
+                return finalresult
 
-                return Key(
-                    cert, fingerprint, uids, keytype, expirationtime, creationtime
-                )
-
-            raise KeyNotFoundError(
-                f"The key for {fingerprint} in not found in the keystore."
-            )
+            raise KeyNotFoundError(f"The key(s) not found in the keystore.")
 
     def _get_one_row_from_table(self, cursor, tablename, value_id):
         "Internal function to select different uid items"
@@ -236,6 +254,10 @@ class KeyStore:
             return result["value"]
         else:
             return ""
+
+    def get_all_keys(self):
+        "Returns a list of keys"
+        return self._internal_get_key(allkeys=True)
 
     def get_keys(self, qvalue: str, qtype: str = "email") -> Key:
         """Finds an existing public key based on the email, or name or value (in this order). If the key can not be found on disk, then raises OSError.
@@ -261,7 +283,7 @@ class KeyStore:
                 rows = cursor.fetchall()
                 for row in rows:
                     key_id = row["key_id"]
-                    key = self._internal_get_key(key_id=key_id)
+                    key = self._internal_get_key(key_id=key_id)[0]
                     if not key.fingerprint in unique_fingerprints:
                         unique_fingerprints[key.fingerprint] = True
                         results.append(key)
@@ -271,7 +293,7 @@ class KeyStore:
                 rows = cursor.fetchall()
                 for row in rows:
                     key_id = row["key_id"]
-                    key = self._internal_get_key(key_id=key_id)
+                    key = self._internal_get_key(key_id=key_id)[0]
                     if not key.fingerprint in unique_fingerprints:
                         unique_fingerprints[key.fingerprint] = True
                         results.append(key)
@@ -281,7 +303,7 @@ class KeyStore:
                 rows = cursor.fetchall()
                 for row in rows:
                     key_id = row["key_id"]
-                    key = self._internal_get_key(key_id=key_id)
+                    key = self._internal_get_key(key_id=key_id)[0]
                     if not key.fingerprint in unique_fingerprints:
                         unique_fingerprints[key.fingerprint] = True
                         results.append(key)
@@ -291,7 +313,7 @@ class KeyStore:
                 rows = cursor.fetchall()
                 for row in rows:
                     key_id = row["key_id"]
-                    key = self._internal_get_key(key_id=key_id)
+                    key = self._internal_get_key(key_id=key_id)[0]
                     if not key.fingerprint in unique_fingerprints:
                         unique_fingerprints[key.fingerprint] = True
                         results.append(key)

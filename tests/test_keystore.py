@@ -76,8 +76,7 @@ def test_keystore_contains_key():
     # Next the Key object
     assert k in ks
     # This should be false
-    with pytest.raises(jce.KeyNotFoundError):
-        "1111111" in ks
+    assert not "1111111" in ks
 
 
 def test_keystore_details():
@@ -268,3 +267,10 @@ def test_ks_creation_expiration_time():
     )
     assert ctime == newk.creationtime
     assert etime == newk.expirationtime
+
+
+def test_get_all_keys():
+    ks = jce.KeyStore("./tests/files/store")
+    keys = ks.get_all_keys()
+    assert 3 == len(keys)
+    # TODO: add more checks here in future
