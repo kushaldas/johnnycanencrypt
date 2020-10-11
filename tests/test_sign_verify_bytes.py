@@ -1,5 +1,7 @@
 import pytest
+
 import johnnycanencrypt.johnnycanencrypt as jce
+
 from .utils import _get_cert_data
 
 DATA = "Kushal loves 🦀"

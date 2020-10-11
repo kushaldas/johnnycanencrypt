@@ -1,5 +1,7 @@
 import os
+
 import johnnycanencrypt.johnnycanencrypt as jce
+
 from .utils import _get_cert_data
 
 DATA = "Kushal loves 🦀"
@@ -22,6 +24,7 @@ def verify_files(inputfile, decrypted_output):
         decrypted_text = f.read()
     assert original_text == decrypted_text
 
+
 def test_encryption_of_multiple_keys_to_files():
     "Encrypt bytes to a file using multiple keys"
     output = "/tmp/multiple-enc.asc"
@@ -31,10 +34,7 @@ def test_encryption_of_multiple_keys_to_files():
     for keyfilename in ["tests/files/public.asc", "tests/files/hellopublic.asc"]:
         certs.append(_get_cert_data(keyfilename))
     jce.encrypt_bytes_to_file(
-        certs,
-        DATA.encode("utf-8"),
-        output.encode("utf-8"),
-        armor=True,
+        certs, DATA.encode("utf-8"), output.encode("utf-8"), armor=True,
     )
     assert os.path.exists(output)
     # Now let us decrypt it via first secret key
@@ -60,10 +60,7 @@ def test_encryption_of_multiple_keys_of_a_file():
         certs.append(_get_cert_data(keyfilename))
 
     jce.encrypt_file_internal(
-        certs,
-        inputfile.encode("utf-8"),
-        output.encode("utf-8"),
-        armor=True,
+        certs, inputfile.encode("utf-8"), output.encode("utf-8"), armor=True,
     )
     assert os.path.exists(output)
     # Now let us decrypt it via second secret key
@@ -89,11 +86,7 @@ def test_encryption_of_multiple_keys_to_bytes():
     certs = []
     for keyfilename in ["tests/files/public.asc", "tests/files/hellopublic.asc"]:
         certs.append(_get_cert_data(keyfilename))
-    encrypted = jce.encrypt_bytes_to_bytes(
-        certs,
-        DATA.encode("utf-8"),
-        armor=True,
-    )
+    encrypted = jce.encrypt_bytes_to_bytes(certs, DATA.encode("utf-8"), armor=True,)
     # Now let us decrypt it via first secret key
     jp = jce.Johnny(_get_cert_data("tests/files/hellosecret.asc"))
     result = jp.decrypt_bytes(encrypted, "redhat")

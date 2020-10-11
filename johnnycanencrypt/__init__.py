@@ -1,22 +1,21 @@
-from .johnnycanencrypt import (
-    Johnny,
-    create_newkey,
-    encrypt_bytes_to_file,
-    encrypt_bytes_to_bytes,
-    encrypt_file_internal,
-    parse_cert_file,
-    CryptoError,
-)
-from .exceptions import KeyNotFoundError
-from .utils import createdb, _get_cert_data
-
 import os
 import shutil
-from typing import Dict
 import sqlite3
 from datetime import datetime
 from pprint import pprint
+from typing import Dict
 
+from .exceptions import KeyNotFoundError
+from .johnnycanencrypt import (
+    CryptoError,
+    Johnny,
+    create_newkey,
+    encrypt_bytes_to_bytes,
+    encrypt_bytes_to_file,
+    encrypt_file_internal,
+    parse_cert_file,
+)
+from .utils import _get_cert_data, createdb
 
 
 class Key:
@@ -67,7 +66,13 @@ class KeyStore:
                 cursor.executescript(createdb)
 
     def add_key_to_cache(
-        self, fullpath, uids, fingerprint, keytype, expirationtime=None, creationtime=None
+        self,
+        fullpath,
+        uids,
+        fingerprint,
+        keytype,
+        expirationtime=None,
+        creationtime=None,
     ):
         "Populates the internal cache of the store"
         etime = str(expirationtime.timestamp()) if expirationtime else ""
@@ -84,10 +89,10 @@ class KeyStore:
             cursor.execute(sql, (fingerprint,))
             fromdb = cursor.fetchone()
             if fromdb:  # Means a key is there in the db
-                if fromdb["keytype"] == 0 and keytype:  # Means secret key, we should insert
-                    sql = (
-                        "UPDATE keys SET keyvalue=?, keytype=?, expiration=?, creation=? WHERE id=?"
-                    )
+                if (
+                    fromdb["keytype"] == 0 and keytype
+                ):  # Means secret key, we should insert
+                    sql = "UPDATE keys SET keyvalue=?, keytype=?, expiration=?, creation=? WHERE id=?"
                     key_id = fromdb["id"]
                     cursor.execute(sql, (cert, ktype, etime, ctime, key_id))
                 else:
@@ -143,9 +148,13 @@ class KeyStore:
         :param path: Path to the pgp key file.
         :param onplace: Default value is False, if True means the keyfile is in the right directory
         """
-        uids, fingerprint, keytype, expirationtime, creationtime = parse_cert_file(keypath)
+        uids, fingerprint, keytype, expirationtime, creationtime = parse_cert_file(
+            keypath
+        )
 
-        self.add_key_to_cache(keypath, uids, fingerprint, keytype, expirationtime, creationtime)
+        self.add_key_to_cache(
+            keypath, uids, fingerprint, keytype, expirationtime, creationtime
+        )
         return self.get_key(fingerprint)
 
     def details(self):
@@ -204,7 +213,9 @@ class KeyStore:
                         {"value": row[1], "email": email, "name": name, "uri": uri}
                     )
 
-                return Key(cert, fingerprint, uids, keytype, expirationtime, creationtime)
+                return Key(
+                    cert, fingerprint, uids, keytype, expirationtime, creationtime
+                )
 
             raise KeyNotFoundError(
                 f"The key for {fingerprint} in not found in the keystore."
@@ -220,11 +231,7 @@ class KeyStore:
         else:
             return ""
 
-    def get_keys(
-        self,
-        qvalue: str,
-        qtype: str = "email"
-    ) -> Key:
+    def get_keys(self, qvalue: str, qtype: str = "email") -> Key:
         """Finds an existing public key based on the email, or name or value (in this order). If the key can not be found on disk, then raises OSError.
 
         :param qvalue: Query text
@@ -284,11 +291,13 @@ class KeyStore:
                         results.append(key)
         return results
 
-
-
     def create_newkey(
-        self, password: str, uid: str = "", ciphersuite: str = "RSA4k",
-        creation = None, expiration = None
+        self,
+        password: str,
+        uid: str = "",
+        ciphersuite: str = "RSA4k",
+        creation=None,
+        expiration=None,
     ) -> Key:
         """Returns a public `Key` object after creating a new key in the store
 
@@ -307,7 +316,9 @@ class KeyStore:
             etime = expiration.timestamp()
         else:
             etime = 0
-        public, secret, fingerprint = create_newkey(password, uid, ciphersuite, int(ctime), int(etime))
+        public, secret, fingerprint = create_newkey(
+            password, uid, ciphersuite, int(ctime), int(etime)
+        )
         # Now save the secret key
         key_filename = os.path.join(self.path, f"{fingerprint}.sec")
         with open(key_filename, "w") as fobj:
@@ -325,14 +336,13 @@ class KeyStore:
         :praram whichkey: By default it deletes both secret and public key, accepts, public, or secret as other arguments.
         """
         # if not fingerprint in self:
-            # raise KeyNotFoundError(
-                # "The key for the given fingerprint={fingerprint} is not found in the keystore"
-            # )
+        # raise KeyNotFoundError(
+        # "The key for the given fingerprint={fingerprint} is not found in the keystore"
+        # )
         con = sqlite3.connect(self.dbpath)
         with con:
             cursor = con.cursor()
-            cursor.execute("DELETE FROM keys where fingerprint=?", (fingerprint, ))
-
+            cursor.execute("DELETE FROM keys where fingerprint=?", (fingerprint,))
 
     def _find_keys(self, keys):
         "To find all the key paths"

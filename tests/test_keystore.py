@@ -1,12 +1,13 @@
-import os
 import datetime
+import os
 import shutil
 import tempfile
-import johnnycanencrypt as jce
+
 import pytest
 
-from .utils import clean_outputfiles, verify_files
+import johnnycanencrypt as jce
 
+from .utils import clean_outputfiles, verify_files
 
 DATA = "Kushal loves 🦀"
 
@@ -244,7 +245,7 @@ def test_ks_creation_expiration_time():
     """
     # These two are known values from kushal
     etime = datetime.datetime(2020, 10, 16, 20, 53, 47)
-    ctime= datetime.datetime(2017, 10, 17, 20, 53, 47)
+    ctime = datetime.datetime(2017, 10, 17, 20, 53, 47)
     tmpdir = tempfile.TemporaryDirectory()
     # First let us check from the file
     keypath = "tests/files/store/pgp_keys.asc"
@@ -254,14 +255,16 @@ def test_ks_creation_expiration_time():
     assert ctime == k.creationtime
 
     # now with a new key and creation time
-    ctime= datetime.datetime(2010, 10, 10, 20, 53, 47)
+    ctime = datetime.datetime(2010, 10, 10, 20, 53, 47)
     newk = ks.create_newkey("redhat", "Another test key", creation=ctime)
     assert ctime == newk.creationtime
     assert not newk.expirationtime
 
     # Now both creation and expirationtime
-    ctime= datetime.datetime(2008, 10, 10, 20, 53, 47)
-    etime= datetime.datetime(2025, 12, 15, 20, 53, 47)
-    newk = ks.create_newkey("redhat", "Another test key", creation=ctime, expiration=etime)
+    ctime = datetime.datetime(2008, 10, 10, 20, 53, 47)
+    etime = datetime.datetime(2025, 12, 15, 20, 53, 47)
+    newk = ks.create_newkey(
+        "redhat", "Another test key", creation=ctime, expiration=etime
+    )
     assert ctime == newk.creationtime
     assert etime == newk.expirationtime

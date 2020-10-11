@@ -1,5 +1,6 @@
 import os
 
+
 def _get_cert_data(filepath):
     "Returns the filepath content as bytes"
     with open(filepath, "rb") as fobj:
