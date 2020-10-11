@@ -51,15 +51,26 @@ impl Helper {
         let mut keys = HashMap::new();
 
         for ka in cert.keys().with_policy(p, None).secret() {
-            keys.insert(
-                ka.key().keyid(),
-                ka.key()
-                    .clone()
-                    .decrypt_secret(&openpgp::crypto::Password::from(pass))
-                    .unwrap()
-                    .into_keypair()
-                    .unwrap(),
-            );
+            // To find the secret keypair
+            let keypair = match ka.key().clone().secret().is_encrypted() {
+                true => {
+                    // When the secret is encrypted with a password
+                    ka.key()
+                        .clone()
+                        .decrypt_secret(&openpgp::crypto::Password::from(pass))
+                        .unwrap()
+                        .into_keypair()
+                        .unwrap()
+                }
+                false => {
+                    // When the secret is not encrypted
+                    ka.key()
+                        .clone()
+                        .into_keypair()
+                        .unwrap()
+                }
+            };
+            keys.insert(ka.key().keyid(), keypair.clone());
         }
         Helper { keys }
     }
@@ -79,6 +90,7 @@ impl DecryptionHelper for Helper {
         // Try each PKESK until we succeed.
         for pkesk in pkesks {
             let keyid = pkesk.recipient();
+            dbg!(keyid.to_hex());
             // If the keyid is not present, we should just skip to next pkesk
             let keypair = match self.keys.get_mut(&keyid) {
                 Some(keypair) => keypair,
@@ -155,7 +167,8 @@ impl VerificationHelper for VHelper {
 
 // To create key pairs; from the given Cert
 fn get_keys(cert: &openpgp::cert::Cert, password: String) -> Vec<openpgp::crypto::KeyPair> {
-    let p = &P::new();
+    let p = &NP::new();
+
     let mut keys = Vec::new();
     for key in cert
         .keys()
@@ -221,7 +234,7 @@ fn sign_bytes_detached_internal(
 #[pyfunction]
 #[text_signature = "(certpath)"]
 fn parse_cert_file(py: Python, certpath: String) -> PyResult<(PyObject, String, bool, PyObject)> {
-    let p = &P::new();
+    let p = &NP::new();
     let cert = openpgp::Cert::from_file(certpath).unwrap();
     let expirationtime = match cert
         .primary_key()
@@ -285,7 +298,12 @@ fn parse_cert_file(py: Python, certpath: String) -> PyResult<(PyObject, String, 
         plist.append(pd).unwrap();
     }
 
-    Ok((plist.into(), cert.fingerprint().to_hex(), cert.is_tsk(), expirationtime.to_object(py)))
+    Ok((
+        plist.into(),
+        cert.fingerprint().to_hex(),
+        cert.is_tsk(),
+        expirationtime.to_object(py),
+    ))
 }
 
 /// This function takes a password and an userid as strings, returns a tuple of public and private
@@ -343,7 +361,7 @@ fn encrypt_bytes_to_file(
     }
     let mode = KeyFlags::empty().set_storage_encryption();
 
-    let p = &P::new();
+    let p = &NP::new();
     let recipients = certs.iter().flat_map(|cert| {
         cert.keys()
             .with_policy(p, None)
@@ -504,7 +522,7 @@ fn encrypt_bytes_to_bytes(
 
     let mode = KeyFlags::empty().set_storage_encryption();
 
-    let p = &P::new();
+    let p = &NP::new();
     let recipients = certs.iter().flat_map(|cert| {
         cert.keys()
             .with_policy(p, None)
@@ -573,7 +591,7 @@ impl Johnny {
         armor: Option<bool>,
     ) -> PyResult<PyObject> {
         let mode = KeyFlags::empty().set_storage_encryption();
-        let p = &P::new();
+        let p = &NP::new();
         let recipients = self
             .cert
             .keys()
