@@ -182,6 +182,7 @@ class KeyStore:
 
     def _internal_get_key(self, fingerprint="", key_id=None):
         con = sqlite3.connect(self.dbpath)
+        con.row_factory = sqlite3.Row
         with con:
             cursor = con.cursor()
             if fingerprint:
@@ -192,12 +193,12 @@ class KeyStore:
                 cursor.execute(sql, (key_id,))
             result = cursor.fetchone()
             if result:
-                key_id = result[0]
-                cert = result[1]
-                fingerprint = result[2]
-                expirationtime = result[3]
-                creationtime = result[4]
-                keytype = result[5]
+                key_id = result["id"]
+                cert = result["keyvalue"]
+                fingerprint = result["fingerprint"]
+                expirationtime = result["expiration"]
+                creationtime = result["creation"]
+                keytype = result["keytype"]
 
                 # Now get the uids
                 sql = "SELECT id, value FROM uidvalues WHERE key_id=?"
@@ -205,12 +206,17 @@ class KeyStore:
                 rows = cursor.fetchall()
                 uids = []
                 for row in rows:
-                    value_id = row[0]
+                    value_id = row["id"]
                     email = self._get_one_row_from_table(cursor, "uidemails", value_id)
                     name = self._get_one_row_from_table(cursor, "uidnames", value_id)
                     uri = self._get_one_row_from_table(cursor, "uiduris", value_id)
                     uids.append(
-                        {"value": row[1], "email": email, "name": name, "uri": uri}
+                        {
+                            "value": row["value"],
+                            "email": email,
+                            "name": name,
+                            "uri": uri,
+                        }
                     )
 
                 return Key(
@@ -227,7 +233,7 @@ class KeyStore:
         cursor.execute(sql)
         result = cursor.fetchone()
         if result:
-            return result[0]
+            return result["value"]
         else:
             return ""
 
