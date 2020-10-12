@@ -250,13 +250,13 @@ def test_ks_creation_expiration_time():
     keypath = "tests/files/store/pgp_keys.asc"
     ks = jce.KeyStore(tmpdir.name)
     k = ks.import_cert(keypath)
-    assert etime == k.expirationtime
-    assert ctime == k.creationtime
+    assert etime.date() == k.expirationtime.date()
+    assert ctime.date() == k.creationtime.date()
 
     # now with a new key and creation time
     ctime = datetime.datetime(2010, 10, 10, 20, 53, 47)
     newk = ks.create_newkey("redhat", "Another test key", creation=ctime)
-    assert ctime == newk.creationtime
+    assert ctime.date() == newk.creationtime.date()
     assert not newk.expirationtime
 
     # Now both creation and expirationtime
@@ -265,8 +265,8 @@ def test_ks_creation_expiration_time():
     newk = ks.create_newkey(
         "redhat", "Another test key", creation=ctime, expiration=etime
     )
-    assert ctime == newk.creationtime
-    assert etime == newk.expirationtime
+    assert ctime.date() == newk.creationtime.date()
+    assert etime.date() == newk.expirationtime.date()
 
 
 def test_get_all_keys():

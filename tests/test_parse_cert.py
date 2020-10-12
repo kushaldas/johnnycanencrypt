@@ -16,5 +16,5 @@ def test_parse_cert_file():
     uids, fingerprint, keytype, expirationtime, creationtime = rustjce.parse_cert_file(
         keypath
     )
-    assert etime == expirationtime
-    assert ctime == creationtime
+    assert etime.date() == expirationtime.date()
+    assert ctime.date() == creationtime.date()
