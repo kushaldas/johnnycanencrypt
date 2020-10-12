@@ -244,6 +244,14 @@ fn find_creation_time(cert: openpgp::Cert) -> Option<f64> {
 }
 
 #[pyfunction]
+#[text_signature = "(certdata)"]
+fn get_pub_key(py: Python, certdata: Vec<u8>) -> PyResult<String> {
+    let cert = openpgp::Cert::from_bytes(&certdata).unwrap();
+    let armored = cert.armored().to_vec().unwrap();
+    Ok(String::from_utf8(armored).unwrap())
+}
+
+#[pyfunction]
 #[text_signature = "(certpath)"]
 fn parse_cert_file(
     py: Python,
@@ -837,6 +845,7 @@ impl Johnny {
 /// A Python module implemented in Rust.
 fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(create_newkey))?;
+    m.add_wrapped(wrap_pyfunction!(get_pub_key))?;
     m.add_wrapped(wrap_pyfunction!(parse_cert_file))?;
     m.add_wrapped(wrap_pyfunction!(encrypt_bytes_to_file))?;
     m.add_wrapped(wrap_pyfunction!(encrypt_bytes_to_bytes))?;

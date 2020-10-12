@@ -274,3 +274,18 @@ def test_get_all_keys():
     keys = ks.get_all_keys()
     assert 3 == len(keys)
     # TODO: add more checks here in future
+
+
+def test_get_pub_key():
+    """Verifies that we export only the public key part from any key
+
+    """
+    ks = jce.KeyStore("./tests/files/store")
+    fingerprint = "6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99"
+    key = ks.get_key(fingerprint)
+    # verify that the key is a secret
+    key.keytype == 1
+
+    # now get the public key
+    pub_key = key.get_pub_key()
+    assert pub_key.startswith("-----BEGIN PGP PUBLIC KEY BLOCK-----")

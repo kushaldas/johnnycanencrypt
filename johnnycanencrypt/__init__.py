@@ -14,6 +14,7 @@ from .johnnycanencrypt import (
     encrypt_bytes_to_file,
     encrypt_file_internal,
     parse_cert_file,
+    get_pub_key,
 )
 from .utils import _get_cert_data, createdb
 
@@ -47,6 +48,10 @@ class Key:
     def __eq__(self, value):
         """Two keys are same when fingerprint and keytype matches"""
         return self.fingerprint == value.fingerprint and self.keytype == value.keytype
+
+    def get_pub_key(self) -> str:
+        "Returns the public key part as string"
+        return get_pub_key(self.keyvalue)
 
 
 class KeyStore:
