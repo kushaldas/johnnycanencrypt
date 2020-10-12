@@ -1,24 +1,22 @@
-from .johnnycanencrypt import (
-    Johnny,
-    create_newkey,
-    encrypt_bytes_to_file,
-    encrypt_bytes_to_bytes,
-    encrypt_file_internal,
-    parse_cert_file,
-)
-from .exceptions import KeyNotFoundError
-
 import os
 import shutil
+import sqlite3
+from datetime import datetime
+from pprint import pprint
 from typing import Dict
 
-
-def _delete_key_file(filepath):
-    """Removes a file from disk"""
-    try:
-        os.remove(filepath)
-    except FileNotFoundError:  # No issues if not found
-        pass
+from .exceptions import KeyNotFoundError
+from .johnnycanencrypt import (
+    CryptoError,
+    Johnny,
+    create_newkey,
+    encrypt_bytes_to_bytes,
+    encrypt_bytes_to_file,
+    encrypt_file_internal,
+    parse_cert_file,
+    get_pub_key,
+)
+from .utils import _get_cert_data, createdb
 
 
 class Key:
@@ -26,15 +24,23 @@ class Key:
 
     def __init__(
         self,
-        keypath: str,
+        keyvalue: bytes,
         fingerprint: str,
         uids: Dict[str, str] = {},
-        keytype="public",
+        keytype=0,
+        expirationtime=None,
+        creationtime=None,
     ):
-        self.keypath = keypath
+        self.keyvalue = keyvalue
         self.keytype = keytype
         self.fingerprint = fingerprint
         self.uids = uids
+        self.expirationtime = (
+            datetime.fromtimestamp(float(expirationtime)) if expirationtime else None
+        )
+        self.creationtime = (
+            datetime.fromtimestamp(float(creationtime)) if creationtime else None
+        )
 
     def __repr__(self):
         return f"<Key fingerprint={self.fingerprint} keytype={self.keytype}>"
@@ -42,6 +48,10 @@ class Key:
     def __eq__(self, value):
         """Two keys are same when fingerprint and keytype matches"""
         return self.fingerprint == value.fingerprint and self.keytype == value.keytype
+
+    def get_pub_key(self) -> str:
+        "Returns the public key part as string"
+        return get_pub_key(self.keyvalue)
 
 
 class KeyStore:
@@ -52,53 +62,74 @@ class KeyStore:
         fullpath = os.path.abspath(path)
         if not os.path.exists(fullpath):
             raise OSError(f"The {fullpath} does not exist.")
+        self.dbpath = os.path.join(fullpath, "jce.db")
         self.path = fullpath
-        # These are our caches
-        self.fingerprints_cache = {}
-        self.values_cache = {}
-        self.emails_cache = {}
-        self.names_cache = {}
-        # TODO: Create a proper searchable structure in future based on UIDs
-        for filepath in os.listdir(self.path):
-            fullpath = os.path.join(self.path, filepath)
-            if fullpath[-4:] in [".asc", ".pub", ".sec"]:
-                try:
-                    uids, fingerprint, keytype = parse_cert_file(fullpath)
-                except Exception as e:
-                    # TODO: Handle parsing error here
-                    pass
-                self.add_key_to_cache(fullpath, uids, fingerprint, keytype)
+        if not os.path.exists(self.dbpath):
+            con = sqlite3.connect(self.dbpath)
+            with con:
+                cursor = con.cursor()
+                cursor.executescript(createdb)
 
-    def add_key_to_cache(self, fullpath, uids, fingerprint, keytype):
+    def add_key_to_cache(
+        self,
+        fullpath,
+        uids,
+        fingerprint,
+        keytype,
+        expirationtime=None,
+        creationtime=None,
+    ):
         "Populates the internal cache of the store"
-        keys = self.fingerprints_cache.get(
-            fingerprint, {"public": None, "secret": None}
-        )
-        if not keytype:
-            key = Key(fullpath, fingerprint, uids, "public")
-            keys["public"] = key
-        else:
-            key = Key(fullpath, fingerprint, uids, "secret")
-            keys["secret"] = key
-        # Now set the fingerprint cache
-        self.fingerprints_cache[fingerprint] = keys
+        etime = str(expirationtime.timestamp()) if expirationtime else ""
+        ctime = str(creationtime.timestamp()) if creationtime else ""
+        con = sqlite3.connect(self.dbpath)
+        con.row_factory = sqlite3.Row
+        ktype = 1 if keytype else 0
+        with con:
+            with open(fullpath, "rb") as fobj:
+                cert = fobj.read()
+            cursor = con.cursor()
+            # First let us check if a key already exists
+            sql = "SELECT * FROM keys where fingerprint=?"
+            cursor.execute(sql, (fingerprint,))
+            fromdb = cursor.fetchone()
+            if fromdb:  # Means a key is there in the db
+                if (
+                    fromdb["keytype"] == 0 and keytype
+                ):  # Means secret key, we should insert
+                    sql = "UPDATE keys SET keyvalue=?, keytype=?, expiration=?, creation=? WHERE id=?"
+                    key_id = fromdb["id"]
+                    cursor.execute(sql, (cert, ktype, etime, ctime, key_id))
+                else:
+                    # raise Exception("Key already exists")
+                    pass
+                return
+            else:
+                # Now insert the new key
+                sql = "INSERT INTO keys (keyvalue, fingerprint, keytype, expiration, creation) VALUES(?, ?, ?, ?, ?)"
+                cursor.execute(sql, (cert, fingerprint, ktype, etime, ctime))
+                key_id = cursor.lastrowid
 
-        # TODO: Now for each of the uid, add to the right dictionary
-        for uid in uids:
-            for uid_keyname, cache in [
-                ("value", self.values_cache),
-                ("email", self.emails_cache),
-                ("name", self.names_cache),
-            ]:
-                if uid_keyname in uid and uid[uid_keyname]:
-                    value = uid[uid_keyname]
-                    keys = cache.get(value, {"public": [], "secret": []})
-                    if not keytype:
-                        keys["public"].append(key)
-                    else:
-                        keys["secret"].append(key)
-                    # Now set the values cache
-                    cache[value] = keys
+            # TODO: Now for each of the uid, add to the right dictionary
+            for uid_keyname in ["name", "value", "email", "uri"]:
+                tablename = f"uid{uid_keyname}s"
+                # First delete all old ones
+                cursor.execute(f"DELETE from {tablename} where key_id=?", (key_id,))
+            for uid in uids:
+                # First we will insert the value
+                if "value" in uid and uid["value"]:
+                    sql = f"INSERT INTO uidvalues (value, key_id) values (?, ?)"
+                    cursor.execute(sql, (uid["value"], key_id))
+                    value_id = cursor.lastrowid
+                else:
+                    # If no value, then we can skip the rest
+                    continue
+                for uid_keyname in ["name", "email", "uri"]:
+                    if uid_keyname in uid and uid[uid_keyname]:
+                        tablename = f"uid{uid_keyname}s"
+                        value = uid[uid_keyname]
+                        sql = f"INSERT INTO {tablename} (value, key_id, value_id) values (?, ?, ?)"
+                        cursor.execute(sql, (value, key_id, value_id))
 
     def __contains__(self, other):
         """Checks if a Key object of fingerprint str exists in the keystore or not.
@@ -106,10 +137,17 @@ class KeyStore:
         :param other: Either fingerprint as str or `Key` object.
         :returns: boolean result
         """
+        fingerprint = ""
         if type(other) == str:
-            return other in self.fingerprints_cache
+            fingerprint = other
         elif type(other) == Key:
-            return other.fingerprint in self.fingerprints_cache
+            fingerprint = other.fingerprint
+        try:
+            if self.get_key(fingerprint):
+                return True
+        except KeyNotFoundError:
+            return False
+        return False
 
     def import_cert(self, keypath: str, onplace=False) -> Key:
         """Imports a given cert from the given path.
@@ -117,151 +155,238 @@ class KeyStore:
         :param path: Path to the pgp key file.
         :param onplace: Default value is False, if True means the keyfile is in the right directory
         """
-        uids, fingerprint, keytype = parse_cert_file(keypath)
+        uids, fingerprint, keytype, expirationtime, creationtime = parse_cert_file(
+            keypath
+        )
 
-        if not onplace:
-            # Here we should copy the key into our store
-            finalpath = os.path.join(self.path, f"{fingerprint}")
-            finalpath += ".sec" if keytype else ".pub"
-            shutil.copy(keypath, finalpath)
-        else:
-            finalpath = keypath
-        self.add_key_to_cache(finalpath, uids, fingerprint, keytype)
-        return self.get_key(fingerprint, "secret" if keytype else "public")
+        self.add_key_to_cache(
+            keypath, uids, fingerprint, keytype, expirationtime, creationtime
+        )
+        return self.get_key(fingerprint)
 
     def details(self):
         "Returns tuple of (number_of_public, number_of_secret_keys)"
         public = 0
         secret = 0
-        for value in self.fingerprints_cache.values():
-            if value["public"]:
-                public += 1
-            if value["secret"]:
-                secret += 1
+        con = sqlite3.connect(self.dbpath)
+        with con:
+            cursor = con.cursor()
+            cursor.execute("SELECT id, fingerprint, keytype from keys")
+            rows = cursor.fetchall()
+            for row in rows:
+                if row[2]:
+                    secret += 1
+                else:
+                    public += 1
         return public, secret
 
-    def get_key(self, fingerprint: str = "", keytype: str = "public") -> Key:
+    def get_key(self, fingerprint: str = "") -> Key:
         """Finds an existing public key based on the fingerprint. If the key can not be found on disk, then raises OSError.
 
         :param fingerprint: The fingerprint as str.
-        :param keytype: str value either public or secret.
         """
-        if fingerprint in self.fingerprints_cache:
-            key = self.fingerprints_cache[fingerprint]
+        return self._internal_get_key(fingerprint)[0]
+
+    def _internal_get_key(self, fingerprint="", key_id=None, allkeys=False):
+        con = sqlite3.connect(self.dbpath)
+        con.row_factory = sqlite3.Row
+        finalresult = []
+        with con:
+            cursor = con.cursor()
+            if fingerprint:
+                sql = "SELECT * FROM keys WHERE fingerprint=?"
+                cursor.execute(sql, (fingerprint,))
+            elif key_id:
+                sql = "SELECT * FROM keys WHERE id=?"
+                cursor.execute(sql, (key_id,))
+            else:  # means get all keys
+                sql = "SELECT * FROM keys"
+                cursor.execute(sql)
+            rows = cursor.fetchall()
+            for result in rows:
+                if result:
+                    key_id = result["id"]
+                    cert = result["keyvalue"]
+                    fingerprint = result["fingerprint"]
+                    expirationtime = result["expiration"]
+                    creationtime = result["creation"]
+                    keytype = result["keytype"]
+
+                    # Now get the uids
+                    sql = "SELECT id, value FROM uidvalues WHERE key_id=?"
+                    cursor.execute(sql, (key_id,))
+                    rows = cursor.fetchall()
+                    uids = []
+                    for row in rows:
+                        value_id = row["id"]
+                        email = self._get_one_row_from_table(
+                            cursor, "uidemails", value_id
+                        )
+                        name = self._get_one_row_from_table(
+                            cursor, "uidnames", value_id
+                        )
+                        uri = self._get_one_row_from_table(cursor, "uiduris", value_id)
+                        uids.append(
+                            {
+                                "value": row["value"],
+                                "email": email,
+                                "name": name,
+                                "uri": uri,
+                            }
+                        )
+
+                    finalresult.append(
+                        Key(
+                            cert,
+                            fingerprint,
+                            uids,
+                            keytype,
+                            expirationtime,
+                            creationtime,
+                        )
+                    )
+            if finalresult:
+                return finalresult
+
+            raise KeyNotFoundError(f"The key(s) not found in the keystore.")
+
+    def _get_one_row_from_table(self, cursor, tablename, value_id):
+        "Internal function to select different uid items"
+        sql = f"SELECT value FROM {tablename} where value_id={value_id}"
+        cursor.execute(sql)
+        result = cursor.fetchone()
+        if result:
+            return result["value"]
         else:
-            raise KeyNotFoundError(
-                f"The key for {fingerprint} in not found in the keystore."
-            )
+            return ""
 
-        if keytype == "public":
-            if key["public"]:
-                return key["public"]
-        else:
-            if key["secret"]:
-                return key["secret"]
+    def get_all_keys(self):
+        "Returns a list of keys"
+        return self._internal_get_key(allkeys=True)
 
-        raise KeyNotFoundError(
-            f"The {keytype} key for {fingerprint} in not found in the keystore."
-        )
-
-    def get_keys(
-        self, email: str = "", name: str = "", value: str = "", keytype: str = "public"
-    ) -> Key:
+    def get_keys(self, qvalue: str, qtype: str = "email") -> Key:
         """Finds an existing public key based on the email, or name or value (in this order). If the key can not be found on disk, then raises OSError.
 
-        :param email: The email as str.
-        :param name: The name as str.
-        :param value: The value as str.
-        :param keytype: str value either public or secret.
+        :param qvalue: Query text
+        :param qtype: The type of the query, default email, other values are value, name or uri.
 
         :returns: A list of keys or empty list.
         """
-        if email:
-            search_item, cache = email, self.emails_cache
+        if not qtype in ["email", "value", "uri", "name"]:
+            raise CryptoError("We need at least one of the email/name/value/uri.")
 
-        elif name:
-            search_item, cache = name, self.names_cache
-
-        elif value:
-            search_item, cache = value, self.values_cache
-        else:
-            raise RuntimeError("We need at least one of the email/name/value.")
-        # Now let us search
-        if search_item in cache:
-            keys = cache[search_item]
-        else:
-            raise KeyNotFoundError(
-                f"The key for {search_item} in not found in the keystore."
-            )
-
-        if keytype == "public":
-            return keys["public"]
-        else:
-            return keys["secret"]
+        results = []
+        unique_fingerprints = {}
+        # TODO: Now let us search
+        con = sqlite3.connect(self.dbpath)
+        con.row_factory = sqlite3.Row
+        with con:
+            cursor = con.cursor()
+            if qtype == "value":
+                sql = "SELECT id, key_id FROM uidvalues where value=?"
+                cursor.execute(sql, (qvalue,))
+                rows = cursor.fetchall()
+                for row in rows:
+                    key_id = row["key_id"]
+                    key = self._internal_get_key(key_id=key_id)[0]
+                    if not key.fingerprint in unique_fingerprints:
+                        unique_fingerprints[key.fingerprint] = True
+                        results.append(key)
+            elif qtype == "email":
+                sql = "SELECT id, key_id FROM uidemails where value=?"
+                cursor.execute(sql, (qvalue,))
+                rows = cursor.fetchall()
+                for row in rows:
+                    key_id = row["key_id"]
+                    key = self._internal_get_key(key_id=key_id)[0]
+                    if not key.fingerprint in unique_fingerprints:
+                        unique_fingerprints[key.fingerprint] = True
+                        results.append(key)
+            elif qtype == "name":
+                sql = "SELECT id, key_id FROM uidenames where value=?"
+                cursor.execute(sql, (qvalue,))
+                rows = cursor.fetchall()
+                for row in rows:
+                    key_id = row["key_id"]
+                    key = self._internal_get_key(key_id=key_id)[0]
+                    if not key.fingerprint in unique_fingerprints:
+                        unique_fingerprints[key.fingerprint] = True
+                        results.append(key)
+            elif qtype == "uri":
+                sql = "SELECT id, key_id FROM uiduris where value=?"
+                cursor.execute(sql, (qvalue,))
+                rows = cursor.fetchall()
+                for row in rows:
+                    key_id = row["key_id"]
+                    key = self._internal_get_key(key_id=key_id)[0]
+                    if not key.fingerprint in unique_fingerprints:
+                        unique_fingerprints[key.fingerprint] = True
+                        results.append(key)
+        return results
 
     def create_newkey(
-        self, password: str, uid: str = "", ciphersuite: str = "RSA4k"
+        self,
+        password: str,
+        uid: str = "",
+        ciphersuite: str = "RSA4k",
+        creation=None,
+        expiration=None,
     ) -> Key:
         """Returns a public `Key` object after creating a new key in the store
 
         :param password: The password for the key as str.
         :param uid: The text for the uid value as str.
         :param ciphersuite: Default RSA4k, other values are RSA2k, Cv25519
+        :param creation: datetime.datetime, default datetime.now() (via rust)
+        :param expiration: datetime.datetime, default 0 (Never)
         """
-        public, secret, fingerprint = create_newkey(password, uid, ciphersuite)
-        # Now save the public key
-        key_filename = os.path.join(self.path, f"{fingerprint}.pub")
-        with open(key_filename, "w") as fobj:
-            fobj.write(public)
+        if creation:
+            ctime = creation.timestamp()
+        else:
+            ctime = 0
 
-        key = self.import_cert(key_filename, onplace=True)
-
+        if expiration:
+            etime = expiration.timestamp()
+        else:
+            etime = 0
+        public, secret, fingerprint = create_newkey(
+            password, uid, ciphersuite, int(ctime), int(etime)
+        )
         # Now save the secret key
         key_filename = os.path.join(self.path, f"{fingerprint}.sec")
         with open(key_filename, "w") as fobj:
             fobj.write(secret)
 
-        self.import_cert(key_filename, onplace=True)
+        key = self.import_cert(key_filename)
 
+        # TODO: should we remove the key_filename from the disk?
         return key
 
-    def delete_key(self, fingerprint: str, whichkey="both"):
+    def delete_key(self, fingerprint: str):
         """Deletes a given key based on the fingerprint.
 
         :param fingerprint: str representation of the fingerprint
         :praram whichkey: By default it deletes both secret and public key, accepts, public, or secret as other arguments.
         """
-        if not fingerprint in self:
-            raise KeyNotFoundError(
-                "The key for the given fingerprint={fingerprint} is not found in the keystore"
-            )
+        # if not fingerprint in self:
+        # raise KeyNotFoundError(
+        # "The key for the given fingerprint={fingerprint} is not found in the keystore"
+        # )
+        con = sqlite3.connect(self.dbpath)
+        with con:
+            cursor = con.cursor()
+            cursor.execute("DELETE FROM keys where fingerprint=?", (fingerprint,))
 
-        keys = self.fingerprints_cache[fingerprint]
-        # First we remove from disk
-        if whichkey == "public":
-            k = keys["public"]
-            _delete_key_file(k.keypath)
-            keys["public"] = None
-        elif whichkey == "secret":
-            k = keys["secret"]
-            _delete_key_file(k.keypath)
-            keys["secret"] = None
-        else:
-            for k in keys.values():
-                _delete_key_file(k.keypath)
-            # Now from the cache
-            del self.fingerprints_cache[fingerprint]
-
-    def _find_key_paths(self, keys):
+    def _find_keys(self, keys):
         "To find all the key paths"
-        final_key_paths = []
+        final_keys = []
         for k in keys:
             if type(k) == str:  # Means fingerprint
                 key = self.get_key(k)
-                final_key_paths.append(key.keypath)
+                final_keys.append(key.keyvalue)
             else:
-                final_key_paths.append(k.keypath)
-        return final_key_paths
+                final_keys.append(k.keyvalue)
+        return final_keys
 
     def encrypt(self, keys, data, outputfile="", armor=True):
         """Encrypts the given data with the list of keys and returns the output.
@@ -277,7 +402,7 @@ class KeyStore:
             ]
         else:
             finalkeys = keys
-        final_key_paths = self._find_key_paths(finalkeys)
+        final_key_paths = self._find_keys(finalkeys)
         # Check if we return data
         if type(data) == str:
             finaldata = data.encode("utf-8")
@@ -303,11 +428,11 @@ class KeyStore:
         :param password: Password for the secret key
         """
         if type(key) == str:  # Means we have a fingerprint
-            k = self.get_key(key, keytype="secret")
+            k = self.get_key(key)
         else:
             k = key
 
-        jp = Johnny(k.keypath)
+        jp = Johnny(k.keyvalue)
         return jp.decrypt_bytes(data, password)
 
     def encrypt_file(self, keys, inputfilepath, outputfilepath, armor=True):
@@ -327,7 +452,7 @@ class KeyStore:
             ]
         else:
             finalkeys = keys
-        final_key_paths = self._find_key_paths(finalkeys)
+        final_key_paths = self._find_keys(finalkeys)
 
         if type(inputfilepath) == str:
             inputfile = inputfilepath.encode("utf-8")
@@ -352,7 +477,7 @@ class KeyStore:
         :param password: Password for the secret key
         """
         if type(key) == str:  # Means we have a fingerprint
-            k = self.get_key(key, keytype="secret")
+            k = self.get_key(key)
         else:
             k = key
 
@@ -366,7 +491,7 @@ class KeyStore:
         else:
             outputpath = outputfile
 
-        jp = Johnny(k.keypath)
+        jp = Johnny(k.keyvalue)
         return jp.decrypt_file(inputfile, outputpath, password)
 
     def sign(self, key, data, password):
@@ -379,13 +504,13 @@ class KeyStore:
         :returns: The signature as string
         """
         if type(key) == str:  # Means we have a fingerprint
-            k = self.get_key(key, keytype="secret")
+            k = self.get_key(key)
         else:
             k = key
 
         if type(data) == str:
             data = data.encode("utf-8")
-        jp = Johnny(k.keypath)
+        jp = Johnny(k.keyvalue)
         return jp.sign_bytes_detached(data, password)
 
     def verify(self, key, data, signature):
@@ -398,13 +523,13 @@ class KeyStore:
         :returns: Boolean
         """
         if type(key) == str:  # Means we have a fingerprint
-            k = self.get_key(key, keytype="public")
+            k = self.get_key(key)
         else:
             k = key
 
         if type(data) == str:
             data = data.encode("utf-8")
-        jp = Johnny(k.keypath)
+        jp = Johnny(k.keyvalue)
         return jp.verify_bytes(data, signature.encode("utf-8"))
 
     def sign_file(self, key, filepath, password, write=False):
@@ -418,7 +543,7 @@ class KeyStore:
         :returns: The signature as string
         """
         if type(key) == str:  # Means we have a fingerprint
-            k = self.get_key(key, keytype="secret")
+            k = self.get_key(key)
         else:
             k = key
 
@@ -426,7 +551,7 @@ class KeyStore:
             filepath_in_bytes = filepath.encode("utf-8")
         else:
             filepath_in_bytes = filepath
-        jp = Johnny(k.keypath)
+        jp = Johnny(k.keyvalue)
         signature = jp.sign_file_detached(filepath_in_bytes, password)
 
         # Now check if we have to write the file on disk
@@ -447,7 +572,7 @@ class KeyStore:
         :returns: Boolean
         """
         if type(key) == str:  # Means we have a fingerprint
-            k = self.get_key(key, keytype="public")
+            k = self.get_key(key)
         else:
             k = key
 
@@ -464,5 +589,5 @@ class KeyStore:
 
         if type(filepath) == str:
             filepath = filepath.encode("utf-8")
-        jp = Johnny(k.keypath)
+        jp = Johnny(k.keyvalue)
         return jp.verify_file(filepath, signature_in_bytes)

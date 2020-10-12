@@ -17,8 +17,7 @@ For the rest of the documentation we assume that you imported the module as foll
         It takes a path to the directory where it stores/reads the keys. Please make sure that only the **user** has read/write capability
         to this path.
 
-        The keys are represented inside the directory as either "fingerprint.pub" or "fingerprint.sec" file based on if it is a public or secret part
-        of the key.
+        The keys are represented inside the directory in the **jce.db** sqlite3 database
 
         If you can check for existance of any fingerprint (str) or `Key` object in the via `in` opertor.
 
@@ -28,10 +27,11 @@ For the rest of the documentation we assume that you imported the module as foll
                 >>> "HEXFINGERPRINT" in ks
 
 
-        .. method:: create_newkey(password: str, uid: str = "", ciphersuite: str = "RSA4k") -> Key:
+        .. method:: create_newkey(password: str, uid: str = "", ciphersuite: str = "RSA4k", creation: Optional[datetime.datetime] = None, expiration: Optional[datetime.datetime] = None) -> Key:
 
                 Returns the public part of the newly created `Key` in the store directory. You can mention ciphersuite as *RSA2k* or *RSA4k*,
-                or *Cv25519*, while *RSA4k* is the default.
+                or *Cv25519*, while *RSA4k* is the default. You can also provide `datetime.datetime` objects for creation time and expiration
+                time. By default it will use the current time as creation time, and keys don't expire.
 
                 ::
 
@@ -80,10 +80,9 @@ For the rest of the documentation we assume that you imported the module as foll
 
                         >>> ks.decrypt_file(secret_key1, "/tmp/data.txt.asc", "/tmp/plain.txt", password=password)
 
-        .. method:: delete_key(fingerprint: str, whichkey: Union["both", "public", "secret""]="both") -> None:
+        .. method:: delete_key(fingerprint: str) -> None:
 
-                Deletes the given key based on the fingerprint argument, by default it removes both the public and secret key. If you only want to remove
-                the public or secret part, then pass *public* or *secret* to the **whichkey** argument.
+                Deletes the key based on the fingerprint from the KeyStore.
 
                 ::
 
@@ -93,25 +92,29 @@ For the rest of the documentation we assume that you imported the module as foll
 
                 Returns a tuple containing the total number of public and secret keys available in the KeyStore.
 
-        .. method:: get_key(fingerprint: str = "", keytype: Union["public", "secret"] = "public") -> Key:
+        .. method:: get_all_keys() -> List[Key]:
 
-                Returns a key from the keystore based on the fingerprint and keytype. By default it returns the public key part.
+                Returns a list of all the keys in the KeyStore.
+
+        .. method:: get_key(fingerprint: str = "") -> Key:
+
+                Returns a key from the keystore based on the fingerprint.
                 Raises **KeyNotFoundError** if no such key available in the keystore.
 
-        .. method:: get_keys(email: str = "", name: str = "", value: str = "", keytype: str = "public") -> List[Key]:
+        .. method:: get_keys(qvalue="", qtype="email") -> List[Key]:
 
-                Returns a list of keys based on either email or name or value of the UIDs in the key (searchs on one of the terms first come basis).
+                Returns a list of keys based on either email or name or value of the UIDs or URIs in the key (searchs on one of the terms first come basis).
+                qtype can be one of the `email`, `value`, `name`, `uri`.
 
                 ::
 
-                        >>> keys_via_names = ks.get_keys(name="test key")
-                        >>> keys_via_email = ks.get_keys(email="email@example.com")
+                        >>> keys_via_names = ks.get_keys(qvalue="test key", qtype="value")
+                        >>> keys_via_email = ks.get_keys(qvalue="email@example.com")
 
-        .. method:: import_cert(keypath: str, onplace=False) -> Key:
+        .. method:: import_cert(keypath: str) -> Key:
 
-                Imports a pgp key file from a path on the system. If the key is already in the correct format, and in the keystore directory,
-                then you can *onplace=True*, otherwise it will be copied into the keystore directory. The method returns the newly import
-                `Key` object to the caller.
+                Imports a pgp key file from a path on the system. 
+                The method returns the newly import `Key` object to the caller.
 
                 ::
 
@@ -136,14 +139,36 @@ For the rest of the documentation we assume that you imported the module as foll
                 Verifies the given filepath using the public key, and signature string, returns **True** or **False** as result. 
 
 
-.. class:: Key(keypath: str, fingerprint: str, keytype: Union["public", "secret"])
+.. class:: Key(keypath: str, fingerprint: str, uids: Dict[str, str] = {}, keytype=0, expirationtime=None, creationtime=None) -> Key:
 
-        Returns a Key object based on the keypath and fingerprint. The keytype value decides if the key object is a `public` or `secret` key. It does
-        not contain the actual key, but points to the right file path on the disk.
+        Returns a Key object based on the keypath and fingerprint. The keytype value decides if the key object is a `public` **0** or `secret` **1** key. 
 
         You can compare two key object with `==` operator.
 
         For most of the use cases you don't have to create one manually, but you can retrive one from the `KeyStore`.
 
+        .. attribute:: keyvalue
+
+                keyvalue holds the actual key as bytes.
+
+        .. attribute:: fingerprint
+
+                The string representation of the fingerprint
+
+        .. attribute:: uids
+
+                A dictionary holding all uids from the key.
+
+        .. attribute:: creationtime
+
+                The datetime.datetime object mentioning when the key was created.
+
+        .. attribute:: expirationtime
+
+                The datetime.datetime object mentioning when the key will expire or `None` otherwise.
+
+        .. method:: get_pub_key() -> str:
+
+                Returns the armored version of the public key as string.
 
 
