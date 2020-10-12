@@ -80,13 +80,15 @@ For the rest of the documentation we assume that you imported the module as foll
 
                         >>> ks.decrypt_file(secret_key1, "/tmp/data.txt.asc", "/tmp/plain.txt", password=password)
 
-        .. method:: delete_key(fingerprint: str) -> None:
+        .. method:: delete_key(key: Union[str, Key]) -> None:
 
-                Deletes the key based on the fingerprint from the KeyStore.
+                Deletes the key based on the fingerprint or the Key object from the KeyStore.
 
                 ::
 
                         >>> ks.delete_key("BB2D3F20233286371C3123D5209940B9669ED621")
+
+                .. note:: Raises `KeyNotFoundError` if the key is not available in the KeyStore.
 
         .. method:: details() -> Tuple[int, int]:
 

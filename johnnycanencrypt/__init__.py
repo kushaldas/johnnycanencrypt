@@ -3,7 +3,7 @@ import shutil
 import sqlite3
 from datetime import datetime
 from pprint import pprint
-from typing import Dict
+from typing import Dict, Union
 
 from .exceptions import KeyNotFoundError
 from .johnnycanencrypt import (
@@ -362,16 +362,22 @@ class KeyStore:
         # TODO: should we remove the key_filename from the disk?
         return key
 
-    def delete_key(self, fingerprint: str):
+    def delete_key(self, key: Union[str, Key]):
         """Deletes a given key based on the fingerprint.
 
-        :param fingerprint: str representation of the fingerprint
-        :praram whichkey: By default it deletes both secret and public key, accepts, public, or secret as other arguments.
+        :param key: Either str representation of the fingerprint or a Key object
         """
-        # if not fingerprint in self:
-        # raise KeyNotFoundError(
-        # "The key for the given fingerprint={fingerprint} is not found in the keystore"
-        # )
+        if type(key) == str:
+            fingerprint = key
+        elif type(key) == Key:
+            fingerprint = key.fingerprint
+        else:
+            raise TypeError(f"Wrong datatype for {key}")
+
+        if not fingerprint in self:
+            raise KeyNotFoundError(
+        "The key for the given fingerprint={fingerprint} is not found in the keystore"
+        )
         con = sqlite3.connect(self.dbpath)
         with con:
             cursor = con.cursor()
