@@ -95,7 +95,7 @@ def test_key_deletion():
     tempdir = tempfile.TemporaryDirectory()
     ks = jce.KeyStore(tempdir.name)
     ks.import_cert("tests/files/store/public.asc")
-    ks.import_cert("tests/files/store/pgp_keys.asc")
+    k = ks.import_cert("tests/files/store/pgp_keys.asc")
     ks.import_cert("tests/files/store/hellopublic.asc")
     ks.import_cert("tests/files/store/hellosecret.asc")
     ks.import_cert("tests/files/store/secret.asc")
@@ -104,10 +104,15 @@ def test_key_deletion():
     ks.delete_key("BB2D3F20233286371C3123D5209940B9669ED621")
     assert (1, 1) == ks.details()
 
-    # Now delete both public and secret
-    ks.delete_key("6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99")
-    assert (1, 0) == ks.details()
+    # Now send in a Key object
+    ks.delete_key(k)
+    assert (0, 1) == ks.details()
+    with pytest.raises(jce.KeyNotFoundError):
+        ks.delete_key("11111")
 
+    # Can not use any random data type
+    with pytest.raises(TypeError):
+        ks.delete_key(2441139)
 
 def test_key_equality():
     ks = jce.KeyStore("tests/files/store")
