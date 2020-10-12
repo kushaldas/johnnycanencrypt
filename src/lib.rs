@@ -245,7 +245,7 @@ fn find_creation_time(cert: openpgp::Cert) -> Option<f64> {
 
 #[pyfunction]
 #[text_signature = "(certdata)"]
-fn get_pub_key(py: Python, certdata: Vec<u8>) -> PyResult<String> {
+fn get_pub_key(_py: Python, certdata: Vec<u8>) -> PyResult<String> {
     let cert = openpgp::Cert::from_bytes(&certdata).unwrap();
     let armored = cert.armored().to_vec().unwrap();
     Ok(String::from_utf8(armored).unwrap())
