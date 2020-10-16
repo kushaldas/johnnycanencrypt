@@ -37,9 +37,9 @@ def test_no_such_key():
 
 def test_keystore_lifecycle():
     ks = jce.KeyStore(tmpdirname.name)
-    newkey = ks.create_newkey("redhat", "test key1 <email@example.com>", "RSA4k")
+    newkey = ks.create_newkey("redhat", "test key1 <email@example.com>", jce.Cipher.RSA4k)
     # the default key must be of secret
-    assert newkey.keytype == 1
+    assert newkey.keytype == jce.KeyType.SECRET
 
     ks.import_cert("tests/files/store/public.asc")
     ks.import_cert("tests/files/store/pgp_keys.asc")
