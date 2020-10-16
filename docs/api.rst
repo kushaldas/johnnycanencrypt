@@ -27,16 +27,20 @@ For the rest of the documentation we assume that you imported the module as foll
                 >>> "HEXFINGERPRINT" in ks
 
 
-        .. method:: create_newkey(password: str, uid: str = "", ciphersuite: str = "RSA4k", creation: Optional[datetime.datetime] = None, expiration: Optional[datetime.datetime] = None) -> Key:
+        .. method:: create_newkey(password: str, uid: str = "", ciphersuite: Cipher = Cipher.RSA4k, creation: Optional[datetime.datetime] = None, expiration: Optional[datetime.datetime] = None) -> Key:
 
-                Returns the public part of the newly created `Key` in the store directory. You can mention ciphersuite as *RSA2k* or *RSA4k*,
-                or *Cv25519*, while *RSA4k* is the default. You can also provide `datetime.datetime` objects for creation time and expiration
-                time. By default it will use the current time as creation time, and keys don't expire.
+                Returns the public part of the newly created `Key` in the store
+                directory. You can mention ciphersuite :class:`Cipher`  as
+                *Cipher.RSA2k* or *Cipher.RSA4k*, or *Cipher.Cv25519*, while
+                *Cipher.RSA4k* is the default. You can also provide
+                `datetime.datetime` objects for creation time and expiration
+                time. By default it will use the current time as creation time,
+                and keys don't expire.
 
                 ::
 
                         >>> ks = jce.KeyStore("/var/lib/myamazingapp")
-                        >>> newkey = ks.create_newkey("supersecretpassphrasefromdiceware", "test key1 <email@example.com>", "RSA4k")
+                        >>> newkey = ks.create_newkey("supersecretpassphrasefromdiceware", "test key1 <email@example.com>", jce.KeyType.RSA4k)
 
         .. method:: encrypt(keys, data, outputfile="", armor=True) -> bytes:
 
@@ -141,9 +145,14 @@ For the rest of the documentation we assume that you imported the module as foll
                 Verifies the given filepath using the public key, and signature string, returns **True** or **False** as result. 
 
 
-.. class:: Key(keypath: str, fingerprint: str, uids: Dict[str, str] = {}, keytype=0, expirationtime=None, creationtime=None) -> Key:
+.. class:: Cipher() -> Cipher:
 
-        Returns a Key object based on the keypath and fingerprint. The keytype value decides if the key object is a `public` **0** or `secret` **1** key. 
+        This is the enum class to metion the type of ciphersuite to be used while creating a new key. Possible values are **Cipher.RSA4k**,
+        **Cipher.RSA2k**, **Cipher.Cv25519**.
+
+.. class:: Key(keyvalue: bytes, fingerprint: str, uids: Dict[str, str] = {}, keytype: KeyType=KeyType.PUBLIC, expirationtime=None, creationtime=None) -> Key:
+
+        Returns a Key object  and fingerprint. The keytype enum :class:`KeyType`. 
 
         You can compare two key object with `==` operator.
 
@@ -173,4 +182,6 @@ For the rest of the documentation we assume that you imported the module as foll
 
                 Returns the armored version of the public key as string.
 
+.. class:: KeyType() -> KeyType:
 
+        Enum class to mark if a key is public or private. Possible values are **KeyType.PUBLIC** and **KeyType.SECRET**.

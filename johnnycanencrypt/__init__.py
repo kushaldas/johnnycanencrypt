@@ -2,6 +2,7 @@ import os
 import shutil
 import sqlite3
 from datetime import datetime
+from enum import Enum
 from pprint import pprint
 from typing import Dict, Union
 
@@ -13,10 +14,21 @@ from .johnnycanencrypt import (
     encrypt_bytes_to_bytes,
     encrypt_bytes_to_file,
     encrypt_file_internal,
-    parse_cert_file,
     get_pub_key,
+    parse_cert_file,
 )
 from .utils import _get_cert_data, createdb
+
+
+class KeyType(Enum):
+    PUBLIC = 0
+    SECRET = 1
+
+
+class Cipher(Enum):
+    RSA4k = "RSA4k"
+    RSA2k = "RSA2k"
+    Cv25519 = "Cv25519"
 
 
 class Key:
@@ -27,7 +39,7 @@ class Key:
         keyvalue: bytes,
         fingerprint: str,
         uids: Dict[str, str] = {},
-        keytype=0,
+        keytype: KeyType = KeyType.PUBLIC,
         expirationtime=None,
         creationtime=None,
     ):
@@ -43,7 +55,7 @@ class Key:
         )
 
     def __repr__(self):
-        return f"<Key fingerprint={self.fingerprint} keytype={self.keytype}>"
+        return f"<Key fingerprint={self.fingerprint} type={self.keytype.name}>"
 
     def __eq__(self, value):
         """Two keys are same when fingerprint and keytype matches"""
@@ -210,7 +222,7 @@ class KeyStore:
                     fingerprint = result["fingerprint"]
                     expirationtime = result["expiration"]
                     creationtime = result["creation"]
-                    keytype = result["keytype"]
+                    keytype = KeyType.SECRET if result["keytype"] else KeyType.PUBLIC
 
                     # Now get the uids
                     sql = "SELECT id, value FROM uidvalues WHERE key_id=?"
@@ -328,7 +340,7 @@ class KeyStore:
         self,
         password: str,
         uid: str = "",
-        ciphersuite: str = "RSA4k",
+        ciphersuite: Cipher = Cipher.RSA4k,
         creation=None,
         expiration=None,
     ) -> Key:
@@ -336,7 +348,7 @@ class KeyStore:
 
         :param password: The password for the key as str.
         :param uid: The text for the uid value as str.
-        :param ciphersuite: Default RSA4k, other values are RSA2k, Cv25519
+        :param ciphersuite: Default Cipher.RSA4k, other values are Cipher.RSA2k, Cipher.Cv25519
         :param creation: datetime.datetime, default datetime.now() (via rust)
         :param expiration: datetime.datetime, default 0 (Never)
         """
@@ -350,7 +362,7 @@ class KeyStore:
         else:
             etime = 0
         public, secret, fingerprint = create_newkey(
-            password, uid, ciphersuite, int(ctime), int(etime)
+            password, uid, ciphersuite.value, int(ctime), int(etime)
         )
         # Now save the secret key
         key_filename = os.path.join(self.path, f"{fingerprint}.sec")
@@ -376,8 +388,8 @@ class KeyStore:
 
         if not fingerprint in self:
             raise KeyNotFoundError(
-        "The key for the given fingerprint={fingerprint} is not found in the keystore"
-        )
+                "The key for the given fingerprint={fingerprint} is not found in the keystore"
+            )
         con = sqlite3.connect(self.dbpath)
         with con:
             cursor = con.cursor()
