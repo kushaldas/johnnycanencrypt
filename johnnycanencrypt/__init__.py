@@ -122,6 +122,7 @@ class KeyStore:
                 else:  # Means another secret to replace
                     # We will not do anything, if you want reimport for a secret key
                     # delete the old one, and import the new one
+                    # TODO: We should also raise SameKeyError here
                     return
 
                 cursor.execute(sql, (cert, ktype, etime, ctime, key_id))
