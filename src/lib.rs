@@ -41,6 +41,9 @@ use openpgp::cert::prelude::*;
 // Our CryptoError exception
 create_exception!(johnnycanencrypt, CryptoError, PyException);
 
+// Our SameKeyError exception
+create_exception!(johnnycanencrypt, SameKeyError, PyException);
+
 struct Helper {
     keys: HashMap<openpgp::KeyID, KeyPair>,
 }
@@ -246,16 +249,17 @@ fn find_creation_time(cert: openpgp::Cert) -> Option<f64> {
 #[pyfunction]
 #[text_signature = "(certdata, newcertdata)"]
 fn merge_keys(_py: Python, certdata: Vec<u8>, newcertdata: Vec<u8>) -> PyResult<PyObject> {
-
     let cert = openpgp::Cert::from_bytes(&certdata).unwrap();
     let newcert = openpgp::Cert::from_bytes(&newcertdata).unwrap();
+    if cert == newcert {
+        return Err(SameKeyError::new_err("Both keys are same. Can not merge."));
+    }
     // Now let us merge the new one into old one.
     // Remember, the opposite is a security risk.
     let mergred_cert = cert.merge(newcert).unwrap();
-    let cert_packets = mergred_cert.to_vec().unwrap();
+    let cert_packets = mergred_cert.armored().to_vec().unwrap();
     let res = PyBytes::new(_py, &cert_packets);
     return Ok(res.into());
-
 }
 
 #[pyfunction]
@@ -286,7 +290,10 @@ fn parse_cert_bytes(
     internal_parse_cert(py, cert)
 }
 
-fn internal_parse_cert(py: Python, cert: openpgp::Cert)-> PyResult<(PyObject, String, bool, PyObject, PyObject)> {
+fn internal_parse_cert(
+    py: Python,
+    cert: openpgp::Cert,
+) -> PyResult<(PyObject, String, bool, PyObject, PyObject)> {
     let p = &NP::new();
     let creationtime = match find_creation_time(cert.clone()) {
         Some(ctime) => Some(PyDateTime::from_timestamp(py, ctime, None).unwrap()),
@@ -881,6 +888,7 @@ fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(encrypt_bytes_to_bytes))?;
     m.add_wrapped(wrap_pyfunction!(encrypt_file_internal))?;
     m.add("CryptoError", _py.get_type::<CryptoError>())?;
+    m.add("SameKeyError", _py.get_type::<SameKeyError>())?;
     m.add_class::<Johnny>()?;
     Ok(())
 }

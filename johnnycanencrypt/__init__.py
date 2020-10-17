@@ -4,17 +4,20 @@ import sqlite3
 from datetime import datetime
 from enum import Enum
 from pprint import pprint
-from typing import Dict, Union, List
+from typing import Dict, List, Union
 
 from .exceptions import KeyNotFoundError
 from .johnnycanencrypt import (
     CryptoError,
     Johnny,
+    SameKeyError,
     create_newkey,
     encrypt_bytes_to_bytes,
     encrypt_bytes_to_file,
     encrypt_file_internal,
     get_pub_key,
+    merge_keys,
+    parse_cert_bytes,
     parse_cert_file,
 )
 from .utils import _get_cert_data, createdb
@@ -106,16 +109,22 @@ class KeyStore:
             cursor.execute(sql, (fingerprint,))
             fromdb = cursor.fetchone()
             if fromdb:  # Means a key is there in the db
+                key_id = fromdb["id"]
+                sql = "UPDATE keys SET keyvalue=?, keytype=?, expiration=?, creation=? WHERE id=?"
                 if (
-                    fromdb["keytype"] == 0 and keytype
-                ):  # Means secret key, we should insert
-                    sql = "UPDATE keys SET keyvalue=?, keytype=?, expiration=?, creation=? WHERE id=?"
-                    key_id = fromdb["id"]
-                    cursor.execute(sql, (cert, ktype, etime, ctime, key_id))
-                else:
-                    # raise Exception("Key already exists")
-                    pass
-                return
+                    fromdb["keytype"] == 0
+                ):  # only update if there is a public key in the store
+                    key = self.get_key(fingerprint)
+                    newcert = merge_keys(key.keyvalue, cert)
+                    uids, fp, kt, et, ct = parse_cert_bytes(newcert)
+                    etime = str(et.timestamp()) if et else ""
+                    ctime = str(ct.timestamp()) if ct else ""
+                else:  # Means another secret to replace
+                    # We will not do anything, if you want reimport for a secret key
+                    # delete the old one, and import the new one
+                    return
+
+                cursor.execute(sql, (cert, ktype, etime, ctime, key_id))
             else:
                 # Now insert the new key
                 sql = "INSERT INTO keys (keyvalue, fingerprint, keytype, expiration, creation) VALUES(?, ?, ?, ?, ?)"
