@@ -4,7 +4,7 @@ import sqlite3
 from datetime import datetime
 from enum import Enum
 from pprint import pprint
-from typing import Dict, Union
+from typing import Dict, Union, List
 
 from .exceptions import KeyNotFoundError
 from .johnnycanencrypt import (
@@ -272,11 +272,11 @@ class KeyStore:
         else:
             return ""
 
-    def get_all_keys(self):
+    def get_all_keys(self) -> List[Key]:
         "Returns a list of keys"
         return self._internal_get_key(allkeys=True)
 
-    def get_keys(self, qvalue: str, qtype: str = "email") -> Key:
+    def get_keys(self, qvalue: str, qtype: str = "email") -> List[Key]:
         """Finds an existing public key based on the email, or name or value (in this order). If the key can not be found on disk, then raises OSError.
 
         :param qvalue: Query text
@@ -380,8 +380,10 @@ class KeyStore:
         :param key: Either str representation of the fingerprint or a Key object
         """
         if type(key) == str:
+            assert isinstance(key, str)
             fingerprint = key
         elif type(key) == Key:
+            assert isinstance(key, Key)
             fingerprint = key.fingerprint
         else:
             raise TypeError(f"Wrong datatype for {key}")
