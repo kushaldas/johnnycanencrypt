@@ -244,6 +244,21 @@ fn find_creation_time(cert: openpgp::Cert) -> Option<f64> {
 }
 
 #[pyfunction]
+#[text_signature = "(certdata, newcertdata)"]
+fn merge_keys(_py: Python, certdata: Vec<u8>, newcertdata: Vec<u8>) -> PyResult<PyObject> {
+
+    let cert = openpgp::Cert::from_bytes(&certdata).unwrap();
+    let newcert = openpgp::Cert::from_bytes(&newcertdata).unwrap();
+    // Now let us merge the new one into old one.
+    // Remember, the opposite is a security risk.
+    let mergred_cert = cert.merge(newcert).unwrap();
+    let cert_packets = mergred_cert.to_vec().unwrap();
+    let res = PyBytes::new(_py, &cert_packets);
+    return Ok(res.into());
+
+}
+
+#[pyfunction]
 #[text_signature = "(certdata)"]
 fn get_pub_key(_py: Python, certdata: Vec<u8>) -> PyResult<String> {
     let cert = openpgp::Cert::from_bytes(&certdata).unwrap();
@@ -257,9 +272,22 @@ fn parse_cert_file(
     py: Python,
     certpath: String,
 ) -> PyResult<(PyObject, String, bool, PyObject, PyObject)> {
-    let p = &NP::new();
     let cert = openpgp::Cert::from_file(certpath).unwrap();
+    internal_parse_cert(py, cert)
+}
 
+#[pyfunction]
+#[text_signature = "(certpath)"]
+fn parse_cert_bytes(
+    py: Python,
+    certdata: Vec<u8>,
+) -> PyResult<(PyObject, String, bool, PyObject, PyObject)> {
+    let cert = openpgp::Cert::from_bytes(&certdata).unwrap();
+    internal_parse_cert(py, cert)
+}
+
+fn internal_parse_cert(py: Python, cert: openpgp::Cert)-> PyResult<(PyObject, String, bool, PyObject, PyObject)> {
+    let p = &NP::new();
     let creationtime = match find_creation_time(cert.clone()) {
         Some(ctime) => Some(PyDateTime::from_timestamp(py, ctime, None).unwrap()),
         None => None,
@@ -846,7 +874,9 @@ impl Johnny {
 fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(create_newkey))?;
     m.add_wrapped(wrap_pyfunction!(get_pub_key))?;
+    m.add_wrapped(wrap_pyfunction!(merge_keys))?;
     m.add_wrapped(wrap_pyfunction!(parse_cert_file))?;
+    m.add_wrapped(wrap_pyfunction!(parse_cert_bytes))?;
     m.add_wrapped(wrap_pyfunction!(encrypt_bytes_to_file))?;
     m.add_wrapped(wrap_pyfunction!(encrypt_bytes_to_bytes))?;
     m.add_wrapped(wrap_pyfunction!(encrypt_file_internal))?;

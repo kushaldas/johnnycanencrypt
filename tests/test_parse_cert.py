@@ -18,3 +18,23 @@ def test_parse_cert_file():
     )
     assert etime.date() == expirationtime.date()
     assert ctime.date() == creationtime.date()
+
+
+def test_parse_cert_bytes():
+    """Tests the rust implementation of the pgp key.
+
+    Tests via Kushal's key and a new key
+    """
+    # These two are known values from kushal
+    etime = datetime.datetime(2020, 10, 16, 20, 53, 47)
+    ctime = datetime.datetime(2017, 10, 17, 20, 53, 47)
+    # First let us read from the file
+    keypath = "tests/files/store/pgp_keys.asc"
+    with open(keypath, "rb") as fobj:
+        data = fobj.read()
+
+    uids, fingerprint, keytype, expirationtime, creationtime = rustjce.parse_cert_bytes(
+        data
+    )
+    assert etime.date() == expirationtime.date()
+    assert ctime.date() == creationtime.date()
