@@ -153,7 +153,7 @@ class KeyStore:
                         sql = f"INSERT INTO {tablename} (value, key_id, value_id) values (?, ?, ?)"
                         cursor.execute(sql, (value, key_id, value_id))
 
-    def __contains__(self, other):
+    def __contains__(self, other: Union[str, Key]) -> bool:
         """Checks if a Key object of fingerprint str exists in the keystore or not.
 
         :param other: Either fingerprint as str or `Key` object.
@@ -161,8 +161,10 @@ class KeyStore:
         """
         fingerprint = ""
         if type(other) == str:
+            assert isinstance(other, str)
             fingerprint = other
         elif type(other) == Key:
+            assert isinstance(other, Key)
             fingerprint = other.fingerprint
         try:
             if self.get_key(fingerprint):
