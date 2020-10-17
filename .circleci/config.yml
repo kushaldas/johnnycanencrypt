@@ -45,6 +45,13 @@ common-steps:
         source /home/circleci/.cargo/env
         python3 -m pytest -vv
 
+  - &typelint_jce
+    run:
+      name: Running mpy
+      command: |
+        . .venv/bin/activate
+        mypy johnnycanencrypt/*.py
+
 version: 2
 jobs:
   build-buster-3.7:
@@ -68,12 +75,27 @@ jobs:
       - *install_dependencies
       - *build_jce
       - *test_jce
+      - *typelint_jce
+
+  build-buster-3.9:
+    docker:
+      - image: circleci/python:3.9-buster
+    steps:
+      - checkout
+      - *install_system_packages
+      - *install_rustup
+      - *install_dependencies
+      - *build_jce
+      - *test_jce
+      - *typelint_jce
+
 
 
 workflows:
   version: 2
   johnny_can_encrypt_ci:
     jobs:
-    - build-buster-3.7
+    - build-buster-3.9
     - build-buster-3.8
+    - build-buster-3.7
 
