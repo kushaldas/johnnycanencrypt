@@ -37,7 +37,9 @@ def test_no_such_key():
 
 def test_keystore_lifecycle():
     ks = jce.KeyStore(tmpdirname.name)
-    newkey = ks.create_newkey("redhat", "test key1 <email@example.com>", jce.Cipher.RSA4k)
+    newkey = ks.create_newkey(
+        "redhat", "test key1 <email@example.com>", jce.Cipher.RSA4k
+    )
     # the default key must be of secret
     assert newkey.keytype == jce.KeyType.SECRET
 
@@ -113,6 +115,7 @@ def test_key_deletion():
     # Can not use any random data type
     with pytest.raises(TypeError):
         ks.delete_key(2441139)
+
 
 def test_key_equality():
     ks = jce.KeyStore("tests/files/store")
@@ -294,3 +297,11 @@ def test_get_pub_key():
     # now get the public key
     pub_key = key.get_pub_key()
     assert pub_key.startswith("-----BEGIN PGP PUBLIC KEY BLOCK-----")
+
+
+def test_same_key_import_error():
+    tempdir = tempfile.TemporaryDirectory()
+    ks = jce.KeyStore(tempdir.name)
+    ks.import_cert("tests/files/store/public.asc")
+    with pytest.raises(jce.SameKeyError):
+        ks.import_cert("tests/files/store/public.asc")
