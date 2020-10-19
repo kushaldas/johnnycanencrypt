@@ -42,6 +42,10 @@ Now, if we check the directory from the shell, we will find the keys imported th
         as the key store. `SecureDrop <https://securedrop.org>`_ uses **/var/lib/securedrop/store** as their key storage (via gpg's python binding).
 
 
+.. warning:: This module does not handle keys still using `sha1` or `md5` for hash algorithms. If you are using any such old key, please generate new key
+        and use them along wtih the module. `This function <https://docs.sequoia-pgp.org/sequoia_openpgp/policy/struct.StandardPolicy.html#method.reject_hash_at>`_ explains in some details why.
+
+
 KeyStore path for the applicaitons which can run per user
 ----------------------------------------------------------
 
