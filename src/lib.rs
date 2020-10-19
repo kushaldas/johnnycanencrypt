@@ -27,7 +27,6 @@ use crate::openpgp::parse::stream::{
 };
 
 use crate::openpgp::parse::Parse;
-use crate::openpgp::policy::NullPolicy as NP;
 use crate::openpgp::policy::Policy;
 use crate::openpgp::policy::StandardPolicy as P;
 use crate::openpgp::serialize::stream::{Encryptor, LiteralWriter, Message, Signer};
@@ -168,12 +167,12 @@ impl VerificationHelper for VHelper {
 
 // To create key pairs; from the given Cert
 fn get_keys(cert: &openpgp::cert::Cert, password: String) -> Vec<openpgp::crypto::KeyPair> {
-    let p = &NP::new();
+    let p = P::new();
 
     let mut keys = Vec::new();
     for key in cert
         .keys()
-        .with_policy(p, None)
+        .with_policy(&p, None)
         .alive()
         .revoked(false)
         .for_signing()
@@ -294,7 +293,7 @@ fn internal_parse_cert(
     py: Python,
     cert: openpgp::Cert,
 ) -> PyResult<(PyObject, String, bool, PyObject, PyObject)> {
-    let p = &NP::new();
+    let p = P::new();
     let creationtime = match find_creation_time(cert.clone()) {
         Some(ctime) => Some(PyDateTime::from_timestamp(py, ctime, None).unwrap()),
         None => None,
@@ -302,7 +301,7 @@ fn internal_parse_cert(
 
     let expirationtime = match cert
         .primary_key()
-        .with_policy(p, None)
+        .with_policy(&p, None)
         .unwrap()
         .key_expiration_time()
     {
@@ -447,10 +446,10 @@ fn encrypt_bytes_to_file(
     }
     let mode = KeyFlags::empty().set_storage_encryption();
 
-    let p = &NP::new();
+    let p = P::new();
     let recipients = certs.iter().flat_map(|cert| {
         cert.keys()
-            .with_policy(p, None)
+            .with_policy(&p, None)
             .alive()
             .revoked(false)
             .key_flags(&mode)
@@ -608,10 +607,10 @@ fn encrypt_bytes_to_bytes(
 
     let mode = KeyFlags::empty().set_storage_encryption();
 
-    let p = &NP::new();
+    let p = P::new();
     let recipients = certs.iter().flat_map(|cert| {
         cert.keys()
-            .with_policy(p, None)
+            .with_policy(&p, None)
             .alive()
             .revoked(false)
             .key_flags(&mode)
@@ -677,11 +676,11 @@ impl Johnny {
         armor: Option<bool>,
     ) -> PyResult<PyObject> {
         let mode = KeyFlags::empty().set_storage_encryption();
-        let p = &NP::new();
+        let p = P::new();
         let recipients = self
             .cert
             .keys()
-            .with_policy(p, None)
+            .with_policy(&p, None)
             .alive()
             .revoked(false)
             .key_flags(&mode);
@@ -726,7 +725,7 @@ impl Johnny {
     }
 
     pub fn decrypt_bytes(&self, py: Python, data: Vec<u8>, password: String) -> PyResult<PyObject> {
-        let p = &NP::new();
+        let p = P::new();
 
         let mut result = Vec::new();
         let reader = std::io::BufReader::new(&data[..]);
@@ -741,7 +740,7 @@ impl Johnny {
                 )))
             }
         };
-        let mut decryptor = match dec2.with_policy(p, None, Helper::new(p, &self.cert, &password)) {
+        let mut decryptor = match dec2.with_policy(&p, None, Helper::new(&p, &self.cert, &password)) {
             Ok(decr) => decr,
             Err(msg) => return Err(PyValueError::new_err(format!("Failed to decrypt: {}", msg))),
         };
@@ -825,14 +824,14 @@ impl Johnny {
         output: Vec<u8>,
         password: String,
     ) -> PyResult<bool> {
-        let p = &NP::new();
+        let p = P::new();
 
         let input = File::open(str::from_utf8(&filepath[..]).unwrap()).unwrap();
         let mut outfile = File::create(str::from_utf8(&output[..]).unwrap()).unwrap();
 
         let mut decryptor = DecryptorBuilder::from_reader(input)
             .unwrap()
-            .with_policy(p, None, Helper::new(p, &self.cert, &password))
+            .with_policy(&p, None, Helper::new(&p, &self.cert, &password))
             .unwrap();
         std::io::copy(&mut decryptor, &mut outfile).unwrap();
         Ok(true)
@@ -850,11 +849,11 @@ impl Johnny {
     }
 
     pub fn verify_bytes(&self, data: Vec<u8>, sig: Vec<u8>) -> PyResult<bool> {
-        let p = &P::new();
+        let p = P::new();
         let vh = VHelper::new(&self.cert);
         let mut v = DetachedVerifierBuilder::from_bytes(&sig[..])
             .unwrap()
-            .with_policy(p, None, vh)
+            .with_policy(&p, None, vh)
             .unwrap();
         match v.verify_bytes(data) {
             Ok(()) => return Ok(true),
@@ -862,11 +861,11 @@ impl Johnny {
         };
     }
     pub fn verify_file(&self, filepath: Vec<u8>, sig: Vec<u8>) -> PyResult<bool> {
-        let p = &P::new();
+        let p = P::new();
         let vh = VHelper::new(&self.cert);
         let mut v = DetachedVerifierBuilder::from_bytes(&sig[..])
             .unwrap()
-            .with_policy(p, None, vh)
+            .with_policy(&p, None, vh)
             .unwrap();
         let path = Path::new(str::from_utf8(&filepath[..]).unwrap());
         match v.verify_file(path) {

@@ -32,7 +32,7 @@ def test_nonexisting_keystore_path():
 def test_no_such_key():
     with pytest.raises(jce.KeyNotFoundError):
         ks = jce.KeyStore("tests/files/store")
-        key = ks.get_key("BB2D3F20233286371C3123D5209940B9669ED677")
+        key = ks.get_key("A4F388BBB194925AE301F844C52B42177857DD79")
 
 
 def test_keystore_lifecycle():
@@ -50,7 +50,7 @@ def test_keystore_lifecycle():
     # Now check the numbers of keys in the store
     assert (2, 2) == ks.details()
 
-    ks.delete_key("BB2D3F20233286371C3123D5209940B9669ED621")
+    ks.delete_key("F4F388BBB194925AE301F844C52B42177857DD79")
     assert (2, 1) == ks.details()
 
     # Now verify email cache
@@ -60,8 +60,8 @@ def test_keystore_lifecycle():
     assert key_via_fingerprint == keys_via_emails[0]
 
     # Now verify name cache
-    key_via_fingerprint = ks.get_key("6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99")
-    keys_via_names = ks.get_keys(qvalue="test key", qtype="value")
+    key_via_fingerprint = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
+    keys_via_names = ks.get_keys(qvalue="Test User2 <random@example.com>", qtype="value")
     assert len(keys_via_names) == 1
     assert key_via_fingerprint == keys_via_names[0]
 
@@ -103,7 +103,7 @@ def test_key_deletion():
     ks.import_cert("tests/files/store/secret.asc")
     assert (1, 2) == ks.details()
 
-    ks.delete_key("BB2D3F20233286371C3123D5209940B9669ED621")
+    ks.delete_key("F4F388BBB194925AE301F844C52B42177857DD79")
     assert (1, 1) == ks.details()
 
     # Now send in a Key object
@@ -119,17 +119,17 @@ def test_key_deletion():
 
 def test_key_equality():
     ks = jce.KeyStore("tests/files/store")
-    key = ks.get_key("6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99")
-    assert key.fingerprint == "6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99"
+    key = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
+    assert key.fingerprint == "F51C310E02DC1B7771E176D8A1C5C364EB5B9A20"
 
 
 def test_ks_encrypt_decrypt_bytes():
     "Encrypts and decrypt some bytes"
     ks = jce.KeyStore("tests/files/store")
-    public_key = ks.get_key("6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99")
+    public_key = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
     encrypted = ks.encrypt(public_key, DATA)
     assert encrypted.startswith(b"-----BEGIN PGP MESSAGE-----\n")
-    secret_key = ks.get_key("6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99")
+    secret_key = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
     decrypted_text = ks.decrypt(secret_key, encrypted, password="redhat").decode(
         "utf-8"
     )
@@ -139,16 +139,16 @@ def test_ks_encrypt_decrypt_bytes():
 def test_ks_encrypt_decrypt_bytes_multiple_recipients():
     "Encrypts and decrypt some bytes"
     ks = jce.KeyStore("tests/files/store")
-    key1 = ks.get_key("6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99")
-    key2 = ks.get_key("BB2D3F20233286371C3123D5209940B9669ED621")
+    key1 = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
+    key2 = ks.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
     encrypted = ks.encrypt([key1, key2], DATA)
     assert encrypted.startswith(b"-----BEGIN PGP MESSAGE-----\n")
-    secret_key1 = ks.get_key("6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99")
+    secret_key1 = ks.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
     decrypted_text = ks.decrypt(secret_key1, encrypted, password="redhat").decode(
         "utf-8"
     )
     assert DATA == decrypted_text
-    secret_key2 = ks.get_key("BB2D3F20233286371C3123D5209940B9669ED621")
+    secret_key2 = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
     decrypted_text = ks.decrypt(secret_key2, encrypted, password="redhat").decode(
         "utf-8"
     )
@@ -159,11 +159,11 @@ def test_ks_encrypt_decrypt_bytes_to_file():
     "Encrypts and decrypt some bytes"
     outputfile = os.path.join(tmpdirname.name, "encrypted.asc")
     ks = jce.KeyStore("tests/files/store")
-    secret_key = ks.get_key("6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99")
+    secret_key = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
     assert ks.encrypt(secret_key, DATA, outputfile=outputfile)
     with open(outputfile, "rb") as fobj:
         encrypted = fobj.read()
-    secret_key = ks.get_key("6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99")
+    secret_key = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
     decrypted_text = ks.decrypt(secret_key, encrypted, password="redhat").decode(
         "utf-8"
     )
@@ -174,12 +174,12 @@ def test_ks_encrypt_decrypt_bytes_to_file_multiple_recipients():
     "Encrypts and decrypt some bytes"
     outputfile = os.path.join(tmpdirname.name, "encrypted.asc")
     ks = jce.KeyStore("tests/files/store")
-    key1 = ks.get_key("6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99")
-    key2 = ks.get_key("BB2D3F20233286371C3123D5209940B9669ED621")
+    key1 = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
+    key2 = ks.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
     assert ks.encrypt([key1, key2], DATA, outputfile=outputfile)
     with open(outputfile, "rb") as fobj:
         encrypted = fobj.read()
-    secret_key = ks.get_key("6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99")
+    secret_key = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
     decrypted_text = ks.decrypt(secret_key, encrypted, password="redhat").decode(
         "utf-8"
     )
@@ -193,9 +193,9 @@ def test_ks_encrypt_decrypt_file(encrypt_decrypt_file):
     decrypted_output = "/tmp/text.txt"
 
     ks = jce.KeyStore("tests/files/store")
-    public_key = ks.get_key("6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99")
+    public_key = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
     assert ks.encrypt_file(public_key, inputfile, output)
-    secret_key = ks.get_key("6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99")
+    secret_key = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
     ks.decrypt_file(secret_key, output, decrypted_output, password="redhat")
     verify_files(inputfile, decrypted_output)
 
@@ -207,20 +207,20 @@ def test_ks_encrypt_decrypt_file_multiple_recipients(encrypt_decrypt_file):
     decrypted_output = "/tmp/text.txt"
 
     ks = jce.KeyStore("tests/files/store")
-    key1 = ks.get_key("6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99")
-    key2 = ks.get_key("BB2D3F20233286371C3123D5209940B9669ED621")
+    key1 = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
+    key2 = ks.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
     encrypted = ks.encrypt_file([key1, key2], inputfile, output)
-    secret_key1 = ks.get_key("6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99")
+    secret_key1 = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
     ks.decrypt_file(secret_key1, output, decrypted_output, password="redhat")
     verify_files(inputfile, decrypted_output)
-    secret_key2 = ks.get_key("BB2D3F20233286371C3123D5209940B9669ED621")
+    secret_key2 = ks.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
     ks.decrypt_file(secret_key2, output, decrypted_output, password="redhat")
     verify_files(inputfile, decrypted_output)
 
 
 def test_ks_sign_data():
     ks = jce.KeyStore("tests/files/store")
-    key = "6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99"
+    key = "F51C310E02DC1B7771E176D8A1C5C364EB5B9A20"
     signed = ks.sign(key, "hello", "redhat")
     assert signed.startswith("-----BEGIN PGP SIGNATURE-----\n")
     assert ks.verify(key, "hello", signed)
@@ -228,7 +228,7 @@ def test_ks_sign_data():
 
 def test_ks_sign_data_fails():
     ks = jce.KeyStore("tests/files/store")
-    key = "6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99"
+    key = "F51C310E02DC1B7771E176D8A1C5C364EB5B9A20"
     signed = ks.sign(key, "hello", "redhat")
     assert signed.startswith("-----BEGIN PGP SIGNATURE-----\n")
     assert not ks.verify(key, "hello2", signed)
@@ -239,7 +239,7 @@ def test_ks_sign_verify_file():
     tempdir = tempfile.TemporaryDirectory()
     shutil.copy(inputfile, tempdir.name)
     ks = jce.KeyStore("tests/files/store")
-    key = "6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99"
+    key = "F51C310E02DC1B7771E176D8A1C5C364EB5B9A20"
     file_to_be_signed = os.path.join(tempdir.name, "text.txt")
     signed = ks.sign_file(key, file_to_be_signed, "redhat", write=True)
     assert signed.startswith("-----BEGIN PGP SIGNATURE-----\n")
@@ -289,7 +289,7 @@ def test_get_pub_key():
 
     """
     ks = jce.KeyStore("./tests/files/store")
-    fingerprint = "6AC6957E2589CB8B5221F6508ADA07F0A0F7BA99"
+    fingerprint = "F51C310E02DC1B7771E176D8A1C5C364EB5B9A20"
     key = ks.get_key(fingerprint)
     # verify that the key is a secret
     key.keytype == 1
