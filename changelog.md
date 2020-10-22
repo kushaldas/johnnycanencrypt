@@ -1,11 +1,15 @@
 # Changlelog
 
-## unreleased
+## 2020-10-22
 
 ### Added
 
 - `encrypt_bytes_to_file` can encrypt data for multiple recipients and saves to a file.
 - Function signature to the `create_newkey` function.
+- Uses sequoia-pgp 0.20.0 as dependency #31
+- Can not use sha1 based keys with this library #29
+- SQLite3 based KeyStore `jce.db`
+- Python ENUMs key type and cipher type #33
 
 ### Fixed
 
