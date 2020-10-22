@@ -23,21 +23,12 @@ python3 -m pip install requirements-dev.txt
 maturin develop
 ```
 
-## Usage example
+## Introduction
 
-```Python
->>> import johnnycanencrypt as jce
->>> j = jce.Johnny("public.asc")
->>> data = j.encrypt_bytes(b"kushal \xf0\x9f\x90\x8d")
->>> js = jce.Johnny("secret.asc")
->>> result = js.decrypt_bytes(data, "mysecretpassword")
->>> print(result.decode("utf-8"))
-kushal 🐍
-
-```
+Please read the [Introduction](https://johnnycanencrypt.readthedocs.io/en/latest/introduction.html) documentation.
 
 ## API documentation
 
-Please go through the [full API documentation](https://johnnycanencrypt.readthedocs.io/en/latest/) for detailed descriptions.
+Please go through the [full API documentation](https://johnnycanencrypt.readthedocs.io/en/latest/api.html) for detailed descriptions.
 
 ## LICENSE: GPLv3+
