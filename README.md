@@ -9,10 +9,18 @@ It uses amazing [sequoia-pgp](https://sequoia-pgp.org/) library for the actual O
 
 ## How to build?
 
+First install [Rustup toolchain](https://rustup.rs) for your user.
+
 ### Build dependencies in Fedora
 
 ```
-sudo dnf install nettle clang clang-devel nettle-dev
+sudo dnf install nettle clang clang-devel nettle-devel python3-devel
+```
+
+### Build dependencies in Debian Buster
+
+```
+sudo apt install -y python3-dev libnettle6 nettle-dev libhogweed4 python3-pip python3-venv clang
 ```
 
 
