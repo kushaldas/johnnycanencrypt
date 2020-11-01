@@ -1,6 +1,13 @@
 # Changlelog
 
-## 2020-10-22
+## Unreleased
+
+### Added
+
+- `create_newkey` can take multiple uids as string or None for no uid #40.
+
+
+## [0.3.0] 2020-10-22
 
 ### Added
 

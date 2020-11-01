@@ -27,7 +27,7 @@ For the rest of the documentation we assume that you imported the module as foll
                 >>> "HEXFINGERPRINT" in ks
 
 
-        .. method:: create_newkey(password: str, uid: str = "", ciphersuite: Cipher = Cipher.RSA4k, creation: Optional[datetime.datetime] = None, expiration: Optional[datetime.datetime] = None) -> Key:
+        .. method:: create_newkey(password: str, uids: Optional[Union[List[str], str]] = [], ciphersuite: Cipher = Cipher.RSA4k, creation: Optional[datetime.datetime] = None, expiration: Optional[datetime.datetime] = None) -> Key:
 
                 Returns the public part of the newly created `Key` in the store
                 directory. You can mention ciphersuite :class:`Cipher`  as
@@ -35,7 +35,9 @@ For the rest of the documentation we assume that you imported the module as foll
                 *Cipher.RSA4k* is the default. You can also provide
                 `datetime.datetime` objects for creation time and expiration
                 time. By default it will use the current time as creation time,
-                and keys don't expire.
+                and keys don't expire. You can provide a string for uid, or multiple
+                strings using a List for multiple uids. It can also create a key without
+                any uids.
 
                 ::
 

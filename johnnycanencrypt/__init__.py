@@ -4,7 +4,7 @@ import sqlite3
 from datetime import datetime
 from enum import Enum
 from pprint import pprint
-from typing import Dict, List, Union
+from typing import Dict, List, Union, Optional
 
 from .exceptions import KeyNotFoundError
 from .johnnycanencrypt import (
@@ -351,7 +351,7 @@ class KeyStore:
     def create_newkey(
         self,
         password: str,
-        uid: str = "",
+        uids: Optional[Union[List[str], str]] = [],
         ciphersuite: Cipher = Cipher.RSA4k,
         creation=None,
         expiration=None,
@@ -359,7 +359,7 @@ class KeyStore:
         """Returns a public `Key` object after creating a new key in the store
 
         :param password: The password for the key as str.
-        :param uid: The text for the uid value as str.
+        :param uids: The text for the uid values as List of str. This can be none.
         :param ciphersuite: Default Cipher.RSA4k, other values are Cipher.RSA2k, Cipher.Cv25519
         :param creation: datetime.datetime, default datetime.now() (via rust)
         :param expiration: datetime.datetime, default 0 (Never)
@@ -373,8 +373,15 @@ class KeyStore:
             etime = expiration.timestamp()
         else:
             etime = 0
+        finaluids = []
+        if isinstance(uids, str):
+            if uids:
+                finaluids.append(uids)
+        elif isinstance(uids, list):
+            finaluids = uids
+
         public, secret, fingerprint = create_newkey(
-            password, uid, ciphersuite.value, int(ctime), int(etime)
+            password, finaluids, ciphersuite.value, int(ctime), int(etime)
         )
         # Now save the secret key
         key_filename = os.path.join(self.path, f"{fingerprint}.sec")
