@@ -376,7 +376,7 @@ fn internal_parse_cert(
 #[text_signature = "(password, userid, cipher)"]
 fn create_newkey(
     password: String,
-    userid: String,
+    userids: Vec<String>,
     cipher: String,
     creation: i64,
     expiration: i64,
@@ -388,12 +388,16 @@ fn create_newkey(
     } else if cipher == String::from("Cv25519") {
         ciphervalue = CipherSuite::Cv25519;
     }
-    let crtbuilder = CertBuilder::new()
+
+    let mut crtbuilder = CertBuilder::new()
         .add_storage_encryption_subkey()
         .add_signing_subkey()
         .set_cipher_suite(ciphervalue)
-        .set_password(Some(openpgp::crypto::Password::from(password)))
-        .add_userid(userid);
+        .set_password(Some(openpgp::crypto::Password::from(password)));
+
+    for uid in userids {
+        crtbuilder = crtbuilder.add_userid(uid);
+    }
 
     let crtbuilder = match creation {
         0 => crtbuilder,
@@ -740,7 +744,8 @@ impl Johnny {
                 )))
             }
         };
-        let mut decryptor = match dec2.with_policy(&p, None, Helper::new(&p, &self.cert, &password)) {
+        let mut decryptor = match dec2.with_policy(&p, None, Helper::new(&p, &self.cert, &password))
+        {
             Ok(decr) => decr,
             Err(msg) => return Err(PyValueError::new_err(format!("Failed to decrypt: {}", msg))),
         };

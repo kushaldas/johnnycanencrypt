@@ -61,7 +61,9 @@ def test_keystore_lifecycle():
 
     # Now verify name cache
     key_via_fingerprint = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
-    keys_via_names = ks.get_keys(qvalue="Test User2 <random@example.com>", qtype="value")
+    keys_via_names = ks.get_keys(
+        qvalue="Test User2 <random@example.com>", qtype="value"
+    )
     assert len(keys_via_names) == 1
     assert key_via_fingerprint == keys_via_names[0]
 
@@ -305,3 +307,23 @@ def test_same_key_import_error():
     ks.import_cert("tests/files/store/public.asc")
     with pytest.raises(jce.SameKeyError):
         ks.import_cert("tests/files/store/public.asc")
+
+
+def test_key_without_uid():
+    tempdir = tempfile.TemporaryDirectory()
+    ks = jce.KeyStore(tempdir.name)
+    k = ks.create_newkey("redhat")
+    uids, fp, secret, et, ct = jce.parse_cert_bytes(k.keyvalue)
+    assert len(uids) == 0
+
+def test_key_with_multiple_uids():
+    tempdir = tempfile.TemporaryDirectory()
+    ks = jce.KeyStore(tempdir.name)
+    uids = [
+        "Kushal Das <kushaldas@gmail.com>",
+        "kushal@freedom.press",
+        "This is also Kushal",
+    ]
+    k = ks.create_newkey("redhat", uids)
+    uids, fp, secret, et, ct = jce.parse_cert_bytes(k.keyvalue)
+    assert len(uids) == 3
