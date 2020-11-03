@@ -299,18 +299,23 @@ fn internal_parse_cert(
         None => None,
     };
 
-    let expirationtime = match cert
-        .primary_key()
-        .with_policy(&p, None)
-        .unwrap()
-        .key_expiration_time()
-    {
-        Some(etime) => {
-            let dt: DateTime<Utc> = DateTime::from(etime);
-            let pd = Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None).unwrap());
-            pd
+    let expirationtime = match cert.primary_key().with_policy(&p, None) {
+        Ok(value) => match value.key_expiration_time() {
+            Some(etime) => {
+                let dt: DateTime<Utc> = DateTime::from(etime);
+                let pd = Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None).unwrap());
+                pd
+            }
+            _ => None,
+        },
+        Err(txt) => {
+            let mut err_msg = Vec::new();
+            let eiters = txt.chain();
+            for error in eiters {
+                err_msg.push(error.to_string());
+            }
+            return Err(CryptoError::new_err(err_msg.join(", ")));
         }
-        _ => None,
     };
     let plist = PyList::empty(py);
     for ua in cert.userids() {

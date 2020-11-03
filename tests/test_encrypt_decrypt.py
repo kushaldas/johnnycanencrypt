@@ -157,9 +157,9 @@ def test_encrypt_decrypt_files_armored():
 
 # The following data was generated while encrypting for 2 UID. Then we will try to decrypt
 # using the second secret key.
-# sequoia on  master [?] via 🦀 v1.46.0 
-# ❯ ./target/debug/sq encrypt -o double.asc --recipient-key-file ../rust/johnnycanencrypt/tests/files/store/hellopublic.asc --recipient-key-file ../rust/johnnycanencrypt/tests/files/store/public.asc msg.txt 
-# sequoia on  master [?] via 🦀 v1.46.0 
+# sequoia on  master [?] via 🦀 v1.46.0
+# ❯ ./target/debug/sq encrypt -o double.asc --recipient-key-file ../rust/johnnycanencrypt/tests/files/store/hellopublic.asc --recipient-key-file ../rust/johnnycanencrypt/tests/files/store/public.asc msg.txt
+# sequoia on  master [?] via 🦀 v1.46.0
 # ❯ cp double.asc ../rust/johnnycanencrypt/tests/files/double_recipient.asc
 # Test case for issue number #14
 def test_decrypt_multiple_recipient_data():

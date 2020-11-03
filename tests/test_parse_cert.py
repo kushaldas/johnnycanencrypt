@@ -39,6 +39,7 @@ def test_parse_cert_bytes():
     assert etime.date() == expirationtime.date()
     assert ctime.date() == creationtime.date()
 
+
 def test_merge_certs():
     """Tests the rust implementation of merging two OpenPGP keys.
 
