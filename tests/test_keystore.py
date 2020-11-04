@@ -316,6 +316,7 @@ def test_key_without_uid():
     uids, fp, secret, et, ct = jce.parse_cert_bytes(k.keyvalue)
     assert len(uids) == 0
 
+
 def test_key_with_multiple_uids():
     tempdir = tempfile.TemporaryDirectory()
     ks = jce.KeyStore(tempdir.name)
@@ -327,3 +328,16 @@ def test_key_with_multiple_uids():
     k = ks.create_newkey("redhat", uids)
     uids, fp, secret, et, ct = jce.parse_cert_bytes(k.keyvalue)
     assert len(uids) == 3
+
+
+def test_error_at_sha1_based_key():
+    tempdir = tempfile.TemporaryDirectory()
+    ks = jce.KeyStore(tempdir.name)
+    with pytest.raises(jce.CryptoError) as err:
+        ks.import_cert("tests/files/test_journalist_key.pub")
+
+    errstr = str(err.value)
+    assert errstr.startswith("No binding signature at time")
+    assert errstr.endswith(
+        "Policy rejected non-revocation signature (PositiveCertification), SHA1 is not considered secure since 2013-01-01T00:00:00Z"
+    )
