@@ -100,6 +100,16 @@ For the rest of the documentation we assume that you imported the module as foll
 
                 Returns a tuple containing the total number of public and secret keys available in the KeyStore.
 
+        .. method:: fetch_key_by_email(email: str) -> Key:
+
+                Searches and retrives a key at https://keys.openpgp.org based on the given email address. Current limit is 1 email address can be
+                searched only once per minute. The key is also stored in the local keystore. Raises `KeyNotFoundError` if the key is not found.
+
+        .. method:: fetch_key_by_fingerprint(fingerprint: str) -> Key:
+
+                Searches and retrives a key at https://keys.openpgp.org based on the given fingerprint, one can search 6 times per minute. Raises
+                `KeyNotFoundError` if the key is not found.
+
         .. method:: get_all_keys() -> List[Key]:
 
                 Returns a list of all the keys in the KeyStore.

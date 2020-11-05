@@ -9,7 +9,7 @@ from typing import Dict, List, Optional, Union
 
 import requests
 
-from .exceptions import KeyNotFoundError
+from .exceptions import KeyNotFoundError, FetchingError
 from .johnnycanencrypt import (
     CryptoError,
     Johnny,
@@ -675,7 +675,7 @@ class KeyStore:
                 f"The given search term {term} was found in the server."
             )
 
-        if resp.status_code == 200:
+        elif resp.status_code == 200:
             cert = resp.text.encode("utf-8")
             uids, fingerprint, keytype, expirationtime, creationtime = parse_cert_bytes(
                 cert
@@ -685,3 +685,6 @@ class KeyStore:
                 cert, uids, fingerprint, keytype, expirationtime, creationtime
             )
             return self.get_key(fingerprint)
+        else:
+            raise FetchingError(f"Server returned: {resp.status_code}")
+
