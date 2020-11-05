@@ -1,0 +1,41 @@
+interactions:
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      User-Agent:
+      - python-requests/2.24.0
+    method: GET
+    uri: https://keys.openpgp.org/vks/v1/by-fingerprint/EF6E286DDA85EA2A4BA7DE684E2C6E8793298291
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAAA/PLV8hOrVRIyy/NSwGSRQolGZnFCmmZeempRQVFmXklelwARTupBCMAAAA=
+    headers:
+      Access-Control-Allow-Origin:
+      - '*'
+      Cache-Control:
+      - no-cache
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - text/html
+      Date:
+      - Thu, 05 Nov 2020 05:01:10 GMT
+      Server:
+      - nginx/1.14.2
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Accept-Encoding
+    status:
+      code: 404
+      message: Not Found
+version: 1

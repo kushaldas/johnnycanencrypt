@@ -4,6 +4,7 @@ import shutil
 import tempfile
 
 import pytest
+import vcr
 
 import johnnycanencrypt as jce
 
@@ -341,3 +342,40 @@ def test_error_at_sha1_based_key():
     assert errstr.endswith(
         "Policy rejected non-revocation signature (PositiveCertification), SHA1 is not considered secure since 2013-01-01T00:00:00Z"
     )
+
+
+@vcr.use_cassette("tests/files/test_fetch_key_by_fingerprint.yml")
+def test_fetch_key_by_fingerprint():
+    tempdir = tempfile.TemporaryDirectory()
+    ks = jce.KeyStore(tempdir.name)
+    key = ks.fetch_key_by_fingerprint("EF6E286DDA85EA2A4BA7DE684E2C6E8793298290")
+    assert len(key.uids) == 1
+    uid = key.uids[0]
+    assert uid["email"] == "torbrowser@torproject.org"
+    assert uid["name"] == "Tor Browser Developers"
+
+
+@vcr.use_cassette("tests/files/test_fetch_nonexistingkey_by_fingerprint.yml")
+def test_fetch_nonexistingkey_by_fingerprint():
+    tempdir = tempfile.TemporaryDirectory()
+    ks = jce.KeyStore(tempdir.name)
+    with pytest.raises(jce.KeyNotFoundError):
+        key = ks.fetch_key_by_fingerprint("EF6E286DDA85EA2A4BA7DE684E2C6E8793298291")
+
+@vcr.use_cassette("tests/files/test_fetch_key_by_email.yml")
+def test_fetch_key_by_email():
+    tempdir = tempfile.TemporaryDirectory()
+    ks = jce.KeyStore(tempdir.name)
+    key = ks.fetch_key_by_email("anwesha.srkr@gmail.com")
+    assert len(key.uids) == 2
+    uid = key.uids[0]
+    assert uid["name"] == "Anwesha Das"
+    assert key.fingerprint == "2871635BE3B4E5C04F02B848C353BFE051D06C33"
+
+
+@vcr.use_cassette("tests/files/test_fetch_nonexistingkey_by_email.yml")
+def test_fetch_nonexistingkey_by_email():
+    tempdir = tempfile.TemporaryDirectory()
+    ks = jce.KeyStore(tempdir.name)
+    with pytest.raises(jce.KeyNotFoundError):
+        ks.fetch_key_by_email("doesnotexists@kushaldas.in")
