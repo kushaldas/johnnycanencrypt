@@ -1,3 +1,5 @@
 pytest
 maturin
 mypy
+requests
+vcrpy
