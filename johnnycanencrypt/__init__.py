@@ -4,9 +4,12 @@ import sqlite3
 from datetime import datetime
 from enum import Enum
 from pprint import pprint
-from typing import Dict, List, Union, Optional
+import urllib.parse
+from typing import Dict, List, Optional, Union
 
-from .exceptions import KeyNotFoundError
+import requests
+
+from .exceptions import KeyNotFoundError, FetchingError
 from .johnnycanencrypt import (
     CryptoError,
     Johnny,
@@ -95,14 +98,21 @@ class KeyStore:
         creationtime=None,
     ):
         "Populates the internal cache of the store"
+        with open(fullpath, "rb") as fobj:
+            cert = fobj.read()
+        self._add_key_to_cache(
+            cert, uids, fingerprint, keytype, expirationtime, creationtime
+        )
+
+    def _add_key_to_cache(
+        self, cert, uids, fingerprint, keytype, expirationtime, creationtime
+    ):
         etime = str(expirationtime.timestamp()) if expirationtime else ""
         ctime = str(creationtime.timestamp()) if creationtime else ""
         con = sqlite3.connect(self.dbpath)
         con.row_factory = sqlite3.Row
         ktype = 1 if keytype else 0
         with con:
-            with open(fullpath, "rb") as fobj:
-                cert = fobj.read()
             cursor = con.cursor()
             # First let us check if a key already exists
             sql = "SELECT * FROM keys where fingerprint=?"
@@ -630,3 +640,51 @@ class KeyStore:
             filepath = filepath.encode("utf-8")
         jp = Johnny(k.keyvalue)
         return jp.verify_file(filepath, signature_in_bytes)
+
+    def fetch_key_by_fingerprint(self, fingerprint: str):
+        """Fetches key from keys.openpgp.org based on the fingerpint.
+
+        :param fingerprint: The fingerprint string without the leading 0x and in upper case.
+
+        :returns: Key object if found or else raises KeyNotFoundError
+        """
+        # First remove any leading 0x
+        if fingerprint.startswith("0x"):
+            fingerprint = fingerprint[2:]
+        # make it uppercase
+        fingerprint = fingerprint.upper()
+        url = f"https://keys.openpgp.org/vks/v1/by-fingerprint/{fingerprint}"
+        return self._internal_fetch_from_server(url, fingerprint)
+
+    def fetch_key_by_email(self, email: str):
+        """Fetches key from keys.openpgp.org based on the fingerpint.
+
+        :param email: The email address to search
+
+        :returns: Key object if found or else raises KeyNotFoundError
+        """
+        # encode the email address
+        email = urllib.parse.quote(email)
+        url = f"https://keys.openpgp.org/vks/v1/by-email/{email}"
+        return self._internal_fetch_from_server(url, email)
+
+    def _internal_fetch_from_server(self, url: str, term: str) -> Key:
+        resp = requests.get(url)
+        if resp.status_code == 404:
+            raise KeyNotFoundError(
+                f"The given search term {term} was found in the server."
+            )
+
+        elif resp.status_code == 200:
+            cert = resp.text.encode("utf-8")
+            uids, fingerprint, keytype, expirationtime, creationtime = parse_cert_bytes(
+                cert
+            )
+
+            self._add_key_to_cache(
+                cert, uids, fingerprint, keytype, expirationtime, creationtime
+            )
+            return self.get_key(fingerprint)
+        else:
+            raise FetchingError(f"Server returned: {resp.status_code}")
+
