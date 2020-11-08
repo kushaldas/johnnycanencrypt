@@ -288,9 +288,7 @@ def test_get_all_keys():
 
 
 def test_get_pub_key():
-    """Verifies that we export only the public key part from any key
-
-    """
+    """Verifies that we export only the public key part from any key"""
     ks = jce.KeyStore("./tests/files/store")
     fingerprint = "F51C310E02DC1B7771E176D8A1C5C364EB5B9A20"
     key = ks.get_key(fingerprint)
@@ -361,6 +359,7 @@ def test_fetch_nonexistingkey_by_fingerprint():
     ks = jce.KeyStore(tempdir.name)
     with pytest.raises(jce.KeyNotFoundError):
         key = ks.fetch_key_by_fingerprint("EF6E286DDA85EA2A4BA7DE684E2C6E8793298291")
+
 
 @vcr.use_cassette("tests/files/test_fetch_key_by_email.yml")
 def test_fetch_key_by_email():

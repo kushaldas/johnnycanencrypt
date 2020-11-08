@@ -73,8 +73,7 @@ class Key:
 
 
 class KeyStore:
-    """Returns `KeyStore` class object, takes the directory path as string.
-    """
+    """Returns `KeyStore` class object, takes the directory path as string."""
 
     def __init__(self, path: str) -> None:
         fullpath = os.path.abspath(path)
@@ -521,10 +520,11 @@ class KeyStore:
         """Decryptes the given file to the output path.
 
         :param key: Fingerprint or secret Key object
-        :param encrypted_path:: Path of the encrypted file
+        :param encrypted_path:: Path of the encrypted file, or the opened file handler in binary mode
         :param outputfile: Decrypted output file path as str
         :param password: Password for the secret key
         """
+        use_filehandler = False
         if type(key) == str:  # Means we have a fingerprint
             k = self.get_key(key)
         else:
@@ -532,8 +532,11 @@ class KeyStore:
 
         if type(encrypted_path) == str:
             inputfile = encrypted_path.encode("utf-8")
-        else:
+        elif isinstance(encrypted_path, bytes):
             inputfile = encrypted_path
+        else:
+            fh = encrypted_path
+            use_filehandler = True
 
         if type(outputfile) == str:
             outputpath = outputfile.encode("utf-8")
@@ -541,7 +544,10 @@ class KeyStore:
             outputpath = outputfile
 
         jp = Johnny(k.keyvalue)
-        return jp.decrypt_file(inputfile, outputpath, password)
+        if not use_filehandler:
+            return jp.decrypt_file(inputfile, outputpath, password)
+        else:
+            return jp.decrypt_filehandler(fh, outputpath, password)
 
     def sign(self, key, data, password):
         """Signs the given data with the key.
@@ -687,4 +693,3 @@ class KeyStore:
             return self.get_key(fingerprint)
         else:
             raise FetchingError(f"Server returned: {resp.status_code}")
-

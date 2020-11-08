@@ -866,6 +866,43 @@ impl Johnny {
         Ok(true)
     }
 
+    pub fn decrypt_filehandler(
+        &self,
+        _py: Python,
+        fh: PyObject,
+        output: Vec<u8>,
+        password: String,
+    ) -> PyResult<bool> {
+        let p = P::new();
+
+        let filedata = fh.call_method(_py, "read", (), None).unwrap();
+        let pbytes: &PyBytes = filedata.cast_as(_py).expect("Excepted bytes");
+        let data: Vec<u8> = Vec::from(pbytes.as_bytes());
+
+        let reader = std::io::BufReader::new(&data[..]);
+        let dec = DecryptorBuilder::from_reader(reader);
+        let dec2 = match dec {
+            Ok(dec) => dec,
+            Err(msg) => {
+                return Err(PySystemError::new_err(format!(
+                    "Can not create decryptor: {}",
+                    msg
+                )))
+            }
+        };
+        let mut decryptor = match dec2.with_policy(&p, None, Helper::new(&p, &self.cert, &password))
+        {
+            Ok(decr) => decr,
+            Err(msg) => return Err(CryptoError::new_err(format!("Failed to decrypt: {}", msg))),
+        };
+
+        let mut outfile = File::create(str::from_utf8(&output[..]).unwrap()).unwrap();
+
+        std::io::copy(&mut decryptor, &mut outfile).unwrap();
+        Ok(true)
+    }
+
+
     pub fn sign_bytes_detached(&self, data: Vec<u8>, password: String) -> PyResult<String> {
         let mut localdata = io::Cursor::new(data);
         sign_bytes_detached_internal(&self.cert, &mut localdata, password)
