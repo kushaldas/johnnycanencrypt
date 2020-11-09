@@ -211,10 +211,10 @@ def test_ks_encrypt_decrypt_filehandler(encrypt_decrypt_file):
     ks = jce.KeyStore("tests/files/store")
     public_key = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
     with open(inputfile, "rb") as fobj:
-        assert ks.encrypt_file(public_key, inputfile, output)
+        assert ks.encrypt_file(public_key, fobj, output)
     secret_key = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
     with open(output, "rb") as fobj:
-        ks.decrypt_file(secret_key, output, decrypted_output, password="redhat")
+        ks.decrypt_file(secret_key, fobj, decrypted_output, password="redhat")
     verify_files(inputfile, decrypted_output)
 
 

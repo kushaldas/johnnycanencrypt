@@ -18,6 +18,7 @@ from .johnnycanencrypt import (
     encrypt_bytes_to_bytes,
     encrypt_bytes_to_file,
     encrypt_file_internal,
+    encrypt_filehandler_to_file,
     get_pub_key,
     merge_keys,
     parse_cert_bytes,
@@ -491,8 +492,23 @@ class KeyStore:
         :param outputfilepath: output file path
         :param armor: Default is True, for armored output.
         """
-        if not os.path.exists(inputfilepath):
-            raise FileNotFoundError(f"{inputfilepath} can not be found.")
+        check_path = False
+        use_filehandler = False
+
+        # This is when we receive str
+        if isinstance(inputfilepath, str):
+            check_path = True
+            inputfile = inputfilepath.encode("utf-8")
+        # This is when we receive bytes
+        elif isinstance(inputfilepath, bytes):
+            check_path = True
+            inputfile = inputfilepath
+        else:  # This is when we receive opened file handler
+            fh = inputfilepath
+            use_filehandler = True
+        if check_path:  # Only verify if it is a file path
+            if not os.path.exists(inputfilepath):
+                raise FileNotFoundError(f"{inputfilepath} can not be found.")
 
         if type(keys) != list:
             finalkeys = [
@@ -502,18 +518,16 @@ class KeyStore:
             finalkeys = keys
         final_key_paths = self._find_keys(finalkeys)
 
-        if type(inputfilepath) == str:
-            inputfile = inputfilepath.encode("utf-8")
-        else:
-            inputfile = inputfilepath
-
         # For encryption to a file
         if type(outputfilepath) == str:
             encrypted_file = outputfilepath.encode("utf-8")
         else:
             encrypted_file = outputfilepath
 
-        encrypt_file_internal(final_key_paths, inputfile, encrypted_file, armor)
+        if not use_filehandler:
+            encrypt_file_internal(final_key_paths, inputfile, encrypted_file, armor)
+        else:
+           encrypt_filehandler_to_file(final_key_paths, fh, encrypted_file, armor)
         return True
 
     def decrypt_file(self, key, encrypted_path, outputfile, password=""):
