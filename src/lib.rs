@@ -439,6 +439,25 @@ fn create_newkey(
     ))
 }
 
+/// This function takes a list of public key paths, and encrypts the given data from the opened
+/// filehandler in bytes to an output file. You can also pass boolen flag armor for armored output.
+/// Always remember to open the file in the Python side in "rb" mode, so that the `read()` call can
+/// return bytes.
+#[pyfunction]
+#[text_signature = "(publickeys, fh, output, armor=False)"]
+fn encrypt_filehandler_to_file(
+    _py: Python,
+    publickeys: Vec<Vec<u8>>,
+    fh: PyObject,
+    output: Vec<u8>,
+    armor: Option<bool>,
+) -> PyResult<bool> {
+    let data = fh.call_method(_py, "read", (), None).unwrap();
+    let pbytes: &PyBytes = data.cast_as(_py).expect("Excepted bytes");
+    let filedata: Vec<u8> = Vec::from(pbytes.as_bytes());
+    return encrypt_bytes_to_file(publickeys, filedata, output, armor);
+}
+
 /// This function takes a list of public key paths, and encrypts the given data in bytes to an output
 /// file. You can also pass boolen flag armor for armored output.
 #[pyfunction]
@@ -847,6 +866,43 @@ impl Johnny {
         Ok(true)
     }
 
+    pub fn decrypt_filehandler(
+        &self,
+        _py: Python,
+        fh: PyObject,
+        output: Vec<u8>,
+        password: String,
+    ) -> PyResult<bool> {
+        let p = P::new();
+
+        let filedata = fh.call_method(_py, "read", (), None).unwrap();
+        let pbytes: &PyBytes = filedata.cast_as(_py).expect("Excepted bytes");
+        let data: Vec<u8> = Vec::from(pbytes.as_bytes());
+
+        let reader = std::io::BufReader::new(&data[..]);
+        let dec = DecryptorBuilder::from_reader(reader);
+        let dec2 = match dec {
+            Ok(dec) => dec,
+            Err(msg) => {
+                return Err(PySystemError::new_err(format!(
+                    "Can not create decryptor: {}",
+                    msg
+                )))
+            }
+        };
+        let mut decryptor = match dec2.with_policy(&p, None, Helper::new(&p, &self.cert, &password))
+        {
+            Ok(decr) => decr,
+            Err(msg) => return Err(CryptoError::new_err(format!("Failed to decrypt: {}", msg))),
+        };
+
+        let mut outfile = File::create(str::from_utf8(&output[..]).unwrap()).unwrap();
+
+        std::io::copy(&mut decryptor, &mut outfile).unwrap();
+        Ok(true)
+    }
+
+
     pub fn sign_bytes_detached(&self, data: Vec<u8>, password: String) -> PyResult<String> {
         let mut localdata = io::Cursor::new(data);
         sign_bytes_detached_internal(&self.cert, &mut localdata, password)
@@ -891,6 +947,7 @@ fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(create_newkey))?;
     m.add_wrapped(wrap_pyfunction!(get_pub_key))?;
     m.add_wrapped(wrap_pyfunction!(merge_keys))?;
+    m.add_wrapped(wrap_pyfunction!(encrypt_filehandler_to_file))?;
     m.add_wrapped(wrap_pyfunction!(parse_cert_file))?;
     m.add_wrapped(wrap_pyfunction!(parse_cert_bytes))?;
     m.add_wrapped(wrap_pyfunction!(encrypt_bytes_to_file))?;

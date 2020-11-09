@@ -203,6 +203,22 @@ def test_ks_encrypt_decrypt_file(encrypt_decrypt_file):
     verify_files(inputfile, decrypted_output)
 
 
+def test_ks_encrypt_decrypt_filehandler(encrypt_decrypt_file):
+    "Encrypts and decrypt some bytes"
+    inputfile = "tests/files/text.txt"
+    output = "/tmp/text-encrypted.pgp"
+    decrypted_output = "/tmp/text.txt"
+
+    ks = jce.KeyStore("tests/files/store")
+    public_key = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
+    with open(inputfile, "rb") as fobj:
+        assert ks.encrypt_file(public_key, fobj, output)
+    secret_key = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
+    with open(output, "rb") as fobj:
+        ks.decrypt_file(secret_key, fobj, decrypted_output, password="redhat")
+    verify_files(inputfile, decrypted_output)
+
+
 def test_ks_encrypt_decrypt_file_multiple_recipients(encrypt_decrypt_file):
     "Encrypts and decrypt some bytes"
     inputfile = "tests/files/text.txt"
@@ -288,9 +304,7 @@ def test_get_all_keys():
 
 
 def test_get_pub_key():
-    """Verifies that we export only the public key part from any key
-
-    """
+    """Verifies that we export only the public key part from any key"""
     ks = jce.KeyStore("./tests/files/store")
     fingerprint = "F51C310E02DC1B7771E176D8A1C5C364EB5B9A20"
     key = ks.get_key(fingerprint)
@@ -361,6 +375,7 @@ def test_fetch_nonexistingkey_by_fingerprint():
     ks = jce.KeyStore(tempdir.name)
     with pytest.raises(jce.KeyNotFoundError):
         key = ks.fetch_key_by_fingerprint("EF6E286DDA85EA2A4BA7DE684E2C6E8793298291")
+
 
 @vcr.use_cassette("tests/files/test_fetch_key_by_email.yml")
 def test_fetch_key_by_email():

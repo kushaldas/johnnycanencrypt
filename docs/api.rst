@@ -58,9 +58,9 @@ For the rest of the documentation we assume that you imported the module as foll
                         >>> encrypted = ks.encrypt([key1, key2], "Encrypted this string")
                         >>> assert encrypted.startswith(b"-----BEGIN PGP MESSAGE-----\n")
 
-        .. method:: encrypt_file(keys, inputfilepath, outputfilepath, armor=True) -> bool:
+        .. method:: encrypt_file(keys, inputfilepath: Union[str,bytes,BinaryIO], outputfilepath: Union[str, bytes], armor=True) -> bool:
 
-                Returns `True` after encrypting the give *inputfilepath* to the *outputfilepath*.
+                Returns `True` after encrypting the given *inputfilepath* to the *outputfilepath*. The *inputfilepath* could be `str`, or `bytes`, or a opened file handler for bytes.
 
                 ::
 
@@ -78,13 +78,16 @@ For the rest of the documentation we assume that you imported the module as foll
 
                         >>> plain_bytes = ks.decrypt(secret_key2, encrypted_bytes, password=password)
 
-        .. method:: decrypt_file(key, encrypted_path, outputfile, password=""):
+        .. method:: decrypt_file(key, encrypted_path: Union[str,bytes,BinaryIO], outputfile, password=""):
 
-                Decryptes the given *encrypted_path* and wrties the output to the *outputfile* path (both given as str).
+                Decryptes the given *encrypted_path* and wrties the output to the *outputfile* path (both given as str or bytes). In the *encrypted_path* can be an opened file handler to read
+                binary data.
 
                 ::
 
                         >>> ks.decrypt_file(secret_key1, "/tmp/data.txt.asc", "/tmp/plain.txt", password=password)
+                        >>> with open("/tmp/hello.gpg", "rb") as fobj:
+                        ...     ks.decrypt_file(secret_key1, fobj, "/tmp/plain.txt", password=password)
 
         .. method:: delete_key(key: Union[str, Key]) -> None:
 

@@ -1,15 +1,15 @@
 import os
 import shutil
 import sqlite3
+import urllib.parse
 from datetime import datetime
 from enum import Enum
 from pprint import pprint
-import urllib.parse
 from typing import Dict, List, Optional, Union
 
 import requests
 
-from .exceptions import KeyNotFoundError, FetchingError
+from .exceptions import FetchingError, KeyNotFoundError
 from .johnnycanencrypt import (
     CryptoError,
     Johnny,
@@ -18,6 +18,7 @@ from .johnnycanencrypt import (
     encrypt_bytes_to_bytes,
     encrypt_bytes_to_file,
     encrypt_file_internal,
+    encrypt_filehandler_to_file,
     get_pub_key,
     merge_keys,
     parse_cert_bytes,
@@ -73,8 +74,7 @@ class Key:
 
 
 class KeyStore:
-    """Returns `KeyStore` class object, takes the directory path as string.
-    """
+    """Returns `KeyStore` class object, takes the directory path as string."""
 
     def __init__(self, path: str) -> None:
         fullpath = os.path.abspath(path)
@@ -492,8 +492,23 @@ class KeyStore:
         :param outputfilepath: output file path
         :param armor: Default is True, for armored output.
         """
-        if not os.path.exists(inputfilepath):
-            raise FileNotFoundError(f"{inputfilepath} can not be found.")
+        check_path = False
+        use_filehandler = False
+
+        # This is when we receive str
+        if isinstance(inputfilepath, str):
+            check_path = True
+            inputfile = inputfilepath.encode("utf-8")
+        # This is when we receive bytes
+        elif isinstance(inputfilepath, bytes):
+            check_path = True
+            inputfile = inputfilepath
+        else:  # This is when we receive opened file handler
+            fh = inputfilepath
+            use_filehandler = True
+        if check_path:  # Only verify if it is a file path
+            if not os.path.exists(inputfilepath):
+                raise FileNotFoundError(f"{inputfilepath} can not be found.")
 
         if type(keys) != list:
             finalkeys = [
@@ -503,28 +518,27 @@ class KeyStore:
             finalkeys = keys
         final_key_paths = self._find_keys(finalkeys)
 
-        if type(inputfilepath) == str:
-            inputfile = inputfilepath.encode("utf-8")
-        else:
-            inputfile = inputfilepath
-
         # For encryption to a file
         if type(outputfilepath) == str:
             encrypted_file = outputfilepath.encode("utf-8")
         else:
             encrypted_file = outputfilepath
 
-        encrypt_file_internal(final_key_paths, inputfile, encrypted_file, armor)
+        if not use_filehandler:
+            encrypt_file_internal(final_key_paths, inputfile, encrypted_file, armor)
+        else:
+            encrypt_filehandler_to_file(final_key_paths, fh, encrypted_file, armor)
         return True
 
     def decrypt_file(self, key, encrypted_path, outputfile, password=""):
         """Decryptes the given file to the output path.
 
         :param key: Fingerprint or secret Key object
-        :param encrypted_path:: Path of the encrypted file
+        :param encrypted_path:: Path of the encrypted file, or the opened file handler in binary mode
         :param outputfile: Decrypted output file path as str
         :param password: Password for the secret key
         """
+        use_filehandler = False
         if type(key) == str:  # Means we have a fingerprint
             k = self.get_key(key)
         else:
@@ -532,8 +546,11 @@ class KeyStore:
 
         if type(encrypted_path) == str:
             inputfile = encrypted_path.encode("utf-8")
-        else:
+        elif isinstance(encrypted_path, bytes):
             inputfile = encrypted_path
+        else:
+            fh = encrypted_path
+            use_filehandler = True
 
         if type(outputfile) == str:
             outputpath = outputfile.encode("utf-8")
@@ -541,7 +558,10 @@ class KeyStore:
             outputpath = outputfile
 
         jp = Johnny(k.keyvalue)
-        return jp.decrypt_file(inputfile, outputpath, password)
+        if not use_filehandler:
+            return jp.decrypt_file(inputfile, outputpath, password)
+        else:
+            return jp.decrypt_filehandler(fh, outputpath, password)
 
     def sign(self, key, data, password):
         """Signs the given data with the key.
@@ -687,4 +707,3 @@ class KeyStore:
             return self.get_key(fingerprint)
         else:
             raise FetchingError(f"Server returned: {resp.status_code}")
-
