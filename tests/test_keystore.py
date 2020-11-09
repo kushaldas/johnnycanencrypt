@@ -202,6 +202,7 @@ def test_ks_encrypt_decrypt_file(encrypt_decrypt_file):
     ks.decrypt_file(secret_key, output, decrypted_output, password="redhat")
     verify_files(inputfile, decrypted_output)
 
+
 def test_ks_encrypt_decrypt_filehandler(encrypt_decrypt_file):
     "Encrypts and decrypt some bytes"
     inputfile = "tests/files/text.txt"
@@ -216,7 +217,6 @@ def test_ks_encrypt_decrypt_filehandler(encrypt_decrypt_file):
     with open(output, "rb") as fobj:
         ks.decrypt_file(secret_key, fobj, decrypted_output, password="redhat")
     verify_files(inputfile, decrypted_output)
-
 
 
 def test_ks_encrypt_decrypt_file_multiple_recipients(encrypt_decrypt_file):

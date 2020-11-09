@@ -1,15 +1,15 @@
 import os
 import shutil
 import sqlite3
+import urllib.parse
 from datetime import datetime
 from enum import Enum
 from pprint import pprint
-import urllib.parse
 from typing import Dict, List, Optional, Union
 
 import requests
 
-from .exceptions import KeyNotFoundError, FetchingError
+from .exceptions import FetchingError, KeyNotFoundError
 from .johnnycanencrypt import (
     CryptoError,
     Johnny,
@@ -527,7 +527,7 @@ class KeyStore:
         if not use_filehandler:
             encrypt_file_internal(final_key_paths, inputfile, encrypted_file, armor)
         else:
-           encrypt_filehandler_to_file(final_key_paths, fh, encrypted_file, armor)
+            encrypt_filehandler_to_file(final_key_paths, fh, encrypted_file, armor)
         return True
 
     def decrypt_file(self, key, encrypted_path, outputfile, password=""):
