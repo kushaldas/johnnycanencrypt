@@ -8,6 +8,16 @@ CREATE TABLE keys (
 	keytype INTEGER
 );
 
+CREATE TABLE subkeys (
+	id INTEGER PRIMARY KEY,
+	key_id INTEGER,
+	fingerprint TEXT NOT NULL,
+	keyid TEXT NOT NULL,
+	FOREIGN KEY (key_id)
+	REFERENCES keys (id)
+		ON DELETE CASCADE
+);
+
 CREATE TABLE uidvalues (
 	id INTEGER PRIMARY KEY,
 	value TEXT,

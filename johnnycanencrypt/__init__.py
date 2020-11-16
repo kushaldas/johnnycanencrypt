@@ -96,16 +96,17 @@ class KeyStore:
         keytype,
         expirationtime=None,
         creationtime=None,
+        subkeys=[],
     ):
         "Populates the internal cache of the store"
         with open(fullpath, "rb") as fobj:
             cert = fobj.read()
         self._add_key_to_cache(
-            cert, uids, fingerprint, keytype, expirationtime, creationtime
+            cert, uids, fingerprint, keytype, expirationtime, creationtime, subkeys
         )
 
     def _add_key_to_cache(
-        self, cert, uids, fingerprint, keytype, expirationtime, creationtime
+        self, cert, uids, fingerprint, keytype, expirationtime, creationtime, subkeys
     ):
         etime = str(expirationtime.timestamp()) if expirationtime else ""
         ctime = str(creationtime.timestamp()) if creationtime else ""
@@ -126,7 +127,7 @@ class KeyStore:
                 ):  # only update if there is a public key in the store
                     key = self.get_key(fingerprint)
                     newcert = merge_keys(key.keyvalue, cert)
-                    uids, fp, kt, et, ct = parse_cert_bytes(newcert)
+                    uids, fp, kt, et, ct, subkeys = parse_cert_bytes(newcert)
                     etime = str(et.timestamp()) if et else ""
                     ctime = str(ct.timestamp()) if ct else ""
                 else:  # Means another secret to replace
@@ -141,6 +142,11 @@ class KeyStore:
                 sql = "INSERT INTO keys (keyvalue, fingerprint, keytype, expiration, creation) VALUES(?, ?, ?, ?, ?)"
                 cursor.execute(sql, (cert, fingerprint, ktype, etime, ctime))
                 key_id = cursor.lastrowid
+
+            # Now let us add the subkey and keyid details
+            sql = "INSERT INTO subkeys (key_id, fingerprint, keyid) VALUES(?, ?, ?)"
+            for subkey in subkeys:
+                cursor.execute(sql, (key_id, subkey[1], subkey[0]))
 
             # TODO: Now for each of the uid, add to the right dictionary
             for uid_keyname in ["name", "value", "email", "uri"]:
@@ -189,12 +195,17 @@ class KeyStore:
         :param path: Path to the pgp key file.
         :param onplace: Default value is False, if True means the keyfile is in the right directory
         """
-        uids, fingerprint, keytype, expirationtime, creationtime = parse_cert_file(
-            keypath
-        )
+        (
+            uids,
+            fingerprint,
+            keytype,
+            expirationtime,
+            creationtime,
+            subkeys,
+        ) = parse_cert_file(keypath)
 
         self.add_key_to_cache(
-            keypath, uids, fingerprint, keytype, expirationtime, creationtime
+            keypath, uids, fingerprint, keytype, expirationtime, creationtime, subkeys
         )
         return self.get_key(fingerprint)
 
@@ -697,12 +708,17 @@ class KeyStore:
 
         elif resp.status_code == 200:
             cert = resp.text.encode("utf-8")
-            uids, fingerprint, keytype, expirationtime, creationtime = parse_cert_bytes(
-                cert
-            )
+            (
+                uids,
+                fingerprint,
+                keytype,
+                expirationtime,
+                creationtime,
+                subkeys,
+            ) = parse_cert_bytes(cert)
 
             self._add_key_to_cache(
-                cert, uids, fingerprint, keytype, expirationtime, creationtime
+                cert, uids, fingerprint, keytype, expirationtime, creationtime, subkeys
             )
             return self.get_key(fingerprint)
         else:

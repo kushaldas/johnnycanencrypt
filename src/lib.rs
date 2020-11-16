@@ -274,7 +274,7 @@ fn get_pub_key(_py: Python, certdata: Vec<u8>) -> PyResult<String> {
 fn parse_cert_file(
     py: Python,
     certpath: String,
-) -> PyResult<(PyObject, String, bool, PyObject, PyObject)> {
+) -> PyResult<(PyObject, String, bool, PyObject, PyObject, PyObject)> {
     let cert = openpgp::Cert::from_file(certpath).unwrap();
     internal_parse_cert(py, cert)
 }
@@ -284,7 +284,7 @@ fn parse_cert_file(
 fn parse_cert_bytes(
     py: Python,
     certdata: Vec<u8>,
-) -> PyResult<(PyObject, String, bool, PyObject, PyObject)> {
+) -> PyResult<(PyObject, String, bool, PyObject, PyObject, PyObject)> {
     let cert = openpgp::Cert::from_bytes(&certdata).unwrap();
     internal_parse_cert(py, cert)
 }
@@ -292,7 +292,7 @@ fn parse_cert_bytes(
 fn internal_parse_cert(
     py: Python,
     cert: openpgp::Cert,
-) -> PyResult<(PyObject, String, bool, PyObject, PyObject)> {
+) -> PyResult<(PyObject, String, bool, PyObject, PyObject, PyObject)> {
     let p = P::new();
     let creationtime = match find_creation_time(cert.clone()) {
         Some(ctime) => Some(PyDateTime::from_timestamp(py, ctime, None).unwrap()),
@@ -366,12 +366,18 @@ fn internal_parse_cert(
         plist.append(pd).unwrap();
     }
 
+    let subkeys = PyList::empty(py);
+    for ka in cert.keys().subkeys() {
+        subkeys.append((ka.keyid().to_hex(), ka.fingerprint().to_hex())).unwrap();
+    }
+
     Ok((
         plist.into(),
         cert.fingerprint().to_hex(),
         cert.is_tsk(),
         expirationtime.to_object(py),
         creationtime.to_object(py),
+        subkeys.to_object(py)
     ))
 }
 
