@@ -74,7 +74,7 @@ def test_keystore_contains_key():
     ks = jce.KeyStore(tmpdirname.name)
     keypath = "tests/files/store/secret.asc"
     k = ks.import_cert(keypath)
-    _, fingerprint, keytype, exp, ctime = jce.parse_cert_file(keypath)
+    _, fingerprint, keytype, exp, ctime, subkeys = jce.parse_cert_file(keypath)
 
     # First only the fingerprint
     assert fingerprint in ks
@@ -328,7 +328,7 @@ def test_key_without_uid():
     tempdir = tempfile.TemporaryDirectory()
     ks = jce.KeyStore(tempdir.name)
     k = ks.create_newkey("redhat")
-    uids, fp, secret, et, ct = jce.parse_cert_bytes(k.keyvalue)
+    uids, fp, secret, et, ct, subkeys = jce.parse_cert_bytes(k.keyvalue)
     assert len(uids) == 0
 
 
@@ -341,7 +341,7 @@ def test_key_with_multiple_uids():
         "This is also Kushal",
     ]
     k = ks.create_newkey("redhat", uids)
-    uids, fp, secret, et, ct = jce.parse_cert_bytes(k.keyvalue)
+    uids, fp, secret, et, ct, subkeys = jce.parse_cert_bytes(k.keyvalue)
     assert len(uids) == 3
 
 

@@ -13,9 +13,14 @@ def test_parse_cert_file():
     ctime = datetime.datetime(2017, 10, 17, 20, 53, 47)
     # First let us check from the file
     keypath = "tests/files/store/pgp_keys.asc"
-    uids, fingerprint, keytype, expirationtime, creationtime = rustjce.parse_cert_file(
-        keypath
-    )
+    (
+        uids,
+        fingerprint,
+        keytype,
+        expirationtime,
+        creationtime,
+        subkeys,
+    ) = rustjce.parse_cert_file(keypath)
     assert etime.date() == expirationtime.date()
     assert ctime.date() == creationtime.date()
 
@@ -33,9 +38,14 @@ def test_parse_cert_bytes():
     with open(keypath, "rb") as fobj:
         data = fobj.read()
 
-    uids, fingerprint, keytype, expirationtime, creationtime = rustjce.parse_cert_bytes(
-        data
-    )
+    (
+        uids,
+        fingerprint,
+        keytype,
+        expirationtime,
+        creationtime,
+        subkeys,
+    ) = rustjce.parse_cert_bytes(data)
     assert etime.date() == expirationtime.date()
     assert ctime.date() == creationtime.date()
 
@@ -59,9 +69,14 @@ def test_merge_certs():
     newcert = rustjce.merge_keys(data, newdata)
     assert isinstance(newcert, bytes)
 
-    uids, fingerprint, keytype, expirationtime, creationtime = rustjce.parse_cert_bytes(
-        newcert
-    )
+    (
+        uids,
+        fingerprint,
+        keytype,
+        expirationtime,
+        creationtime,
+        subkeys,
+    ) = rustjce.parse_cert_bytes(newcert)
 
     assert ctime.date() == creationtime.date()
     assert not expirationtime
