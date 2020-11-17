@@ -371,13 +371,17 @@ fn internal_parse_cert(
         subkeys.append((ka.keyid().to_hex(), ka.fingerprint().to_hex())).unwrap();
     }
 
+    let othervalues = PyDict::new(py);
+    othervalues.set_item("keyid", cert.primary_key().keyid().to_hex()).unwrap();
+    othervalues.set_item("subkeys", subkeys).unwrap();
+
     Ok((
         plist.into(),
         cert.fingerprint().to_hex(),
         cert.is_tsk(),
         expirationtime.to_object(py),
         creationtime.to_object(py),
-        subkeys.to_object(py)
+        othervalues.to_object(py)
     ))
 }
 

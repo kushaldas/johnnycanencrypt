@@ -45,13 +45,16 @@ class Key:
         self,
         keyvalue: bytes,
         fingerprint: str,
+        keyid: str,
         uids: Dict[str, str] = {},
         keytype: KeyType = KeyType.PUBLIC,
         expirationtime=None,
         creationtime=None,
+        othervalues={}
     ):
         self.keyvalue = keyvalue
         self.keytype = keytype
+        self.keyid = keyid
         self.fingerprint = fingerprint
         self.uids = uids
         self.expirationtime = (
@@ -60,6 +63,7 @@ class Key:
         self.creationtime = (
             datetime.fromtimestamp(float(creationtime)) if creationtime else None
         )
+        self.othervalues = othervalues
 
     def __repr__(self):
         return f"<Key fingerprint={self.fingerprint} type={self.keytype.name}>"
@@ -106,13 +110,15 @@ class KeyStore:
         )
 
     def _add_key_to_cache(
-        self, cert, uids, fingerprint, keytype, expirationtime, creationtime, subkeys
+        self, cert, uids, fingerprint, keytype, expirationtime, creationtime, othervalues
     ):
         etime = str(expirationtime.timestamp()) if expirationtime else ""
         ctime = str(creationtime.timestamp()) if creationtime else ""
         con = sqlite3.connect(self.dbpath)
         con.row_factory = sqlite3.Row
         ktype = 1 if keytype else 0
+        subkeys = othervalues["subkeys"]
+        mainkeyid = othervalues["keyid"]
         with con:
             cursor = con.cursor()
             # First let us check if a key already exists
@@ -127,7 +133,7 @@ class KeyStore:
                 ):  # only update if there is a public key in the store
                     key = self.get_key(fingerprint)
                     newcert = merge_keys(key.keyvalue, cert)
-                    uids, fp, kt, et, ct, subkeys = parse_cert_bytes(newcert)
+                    uids, fp, kt, et, ct, othervalues = parse_cert_bytes(newcert)
                     etime = str(et.timestamp()) if et else ""
                     ctime = str(ct.timestamp()) if ct else ""
                 else:  # Means another secret to replace
@@ -139,8 +145,8 @@ class KeyStore:
                 cursor.execute(sql, (cert, ktype, etime, ctime, key_id))
             else:
                 # Now insert the new key
-                sql = "INSERT INTO keys (keyvalue, fingerprint, keytype, expiration, creation) VALUES(?, ?, ?, ?, ?)"
-                cursor.execute(sql, (cert, fingerprint, ktype, etime, ctime))
+                sql = "INSERT INTO keys (keyvalue, fingerprint, keyid, keytype, expiration, creation) VALUES(?, ?, ?, ?, ?, ?)"
+                cursor.execute(sql, (cert, fingerprint, mainkeyid, ktype, etime, ctime))
                 key_id = cursor.lastrowid
 
             # Now let us add the subkey and keyid details
@@ -201,11 +207,11 @@ class KeyStore:
             keytype,
             expirationtime,
             creationtime,
-            subkeys,
+            othervalues,
         ) = parse_cert_file(keypath)
 
         self.add_key_to_cache(
-            keypath, uids, fingerprint, keytype, expirationtime, creationtime, subkeys
+            keypath, uids, fingerprint, keytype, expirationtime, creationtime, othervalues
         )
         return self.get_key(fingerprint)
 
@@ -253,6 +259,7 @@ class KeyStore:
                     key_id = result["id"]
                     cert = result["keyvalue"]
                     fingerprint = result["fingerprint"]
+                    keyid = result["keyid"]
                     expirationtime = result["expiration"]
                     creationtime = result["creation"]
                     keytype = KeyType.SECRET if result["keytype"] else KeyType.PUBLIC
@@ -280,14 +287,26 @@ class KeyStore:
                             }
                         )
 
+                    # Get the subkeys
+                    sql = "SELECT fingerprint, keyid FROM subkeys WHERE key_id=?"
+                    cursor.execute(sql, (key_id,))
+                    rows = cursor.fetchall()
+                    othervalues = {}
+                    subs = {}
+                    for row in rows:
+                        subs[row["keyid"]] = row["fingerprint"]
+                    othervalues["subkeys"] = subs
+
                     finalresult.append(
                         Key(
                             cert,
                             fingerprint,
+                            keyid,
                             uids,
                             keytype,
                             expirationtime,
                             creationtime,
+                            othervalues,
                         )
                     )
             if finalresult:
@@ -673,7 +692,7 @@ class KeyStore:
         return jp.verify_file(filepath, signature_in_bytes)
 
     def fetch_key_by_fingerprint(self, fingerprint: str):
-        """Fetches key from keys.openpgp.org based on the fingerpint.
+        """Fetches key from keys.openpgp.org based on the fingerprint.
 
         :param fingerprint: The fingerprint string without the leading 0x and in upper case.
 
@@ -714,11 +733,11 @@ class KeyStore:
                 keytype,
                 expirationtime,
                 creationtime,
-                subkeys,
+                othervalues,
             ) = parse_cert_bytes(cert)
 
             self._add_key_to_cache(
-                cert, uids, fingerprint, keytype, expirationtime, creationtime, subkeys
+                cert, uids, fingerprint, keytype, expirationtime, creationtime, othervalues
             )
             return self.get_key(fingerprint)
         else:

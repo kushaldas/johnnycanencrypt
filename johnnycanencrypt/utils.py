@@ -3,6 +3,7 @@ CREATE TABLE keys (
 	id INTEGER PRIMARY KEY,
 	keyvalue BLOB NOT NULL,
 	fingerprint TEXT NOT NULL,
+	keyid TEXT NOT NULL,
 	expiration TEXT,
 	creation TEXT,
 	keytype INTEGER

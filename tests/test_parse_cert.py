@@ -19,7 +19,7 @@ def test_parse_cert_file():
         keytype,
         expirationtime,
         creationtime,
-        subkeys,
+        othervalues,
     ) = rustjce.parse_cert_file(keypath)
     assert etime.date() == expirationtime.date()
     assert ctime.date() == creationtime.date()
@@ -44,7 +44,7 @@ def test_parse_cert_bytes():
         keytype,
         expirationtime,
         creationtime,
-        subkeys,
+        othervalues,
     ) = rustjce.parse_cert_bytes(data)
     assert etime.date() == expirationtime.date()
     assert ctime.date() == creationtime.date()
