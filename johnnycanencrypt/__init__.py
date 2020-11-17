@@ -254,7 +254,6 @@ class KeyStore:
     def _internal_get_key(self, fingerprint="", key_id=None, allkeys=False):
         con = sqlite3.connect(self.dbpath)
         con.row_factory = sqlite3.Row
-        finalresult = []
         with con:
             cursor = con.cursor()
             if fingerprint:
@@ -267,65 +266,66 @@ class KeyStore:
                 sql = "SELECT * FROM keys"
                 cursor.execute(sql)
             rows = cursor.fetchall()
-            for result in rows:
-                if result:
-                    key_id = result["id"]
-                    cert = result["keyvalue"]
-                    fingerprint = result["fingerprint"]
-                    keyid = result["keyid"]
-                    expirationtime = result["expiration"]
-                    creationtime = result["creation"]
-                    keytype = KeyType.SECRET if result["keytype"] else KeyType.PUBLIC
+            return self._internal_build_key_list(rows, con, cursor)
 
-                    # Now get the uids
-                    sql = "SELECT id, value FROM uidvalues WHERE key_id=?"
-                    cursor.execute(sql, (key_id,))
-                    rows = cursor.fetchall()
-                    uids = []
-                    for row in rows:
-                        value_id = row["id"]
-                        email = self._get_one_row_from_table(
-                            cursor, "uidemails", value_id
-                        )
-                        name = self._get_one_row_from_table(
-                            cursor, "uidnames", value_id
-                        )
-                        uri = self._get_one_row_from_table(cursor, "uiduris", value_id)
-                        uids.append(
-                            {
-                                "value": row["value"],
-                                "email": email,
-                                "name": name,
-                                "uri": uri,
-                            }
-                        )
+    def _internal_build_key_list(self, rows, con, cursor):
+        "Internal method to create a list of keys from db result rows"
+        finalresult = []
+        for result in rows:
+            if result:
+                key_id = result["id"]
+                cert = result["keyvalue"]
+                fingerprint = result["fingerprint"]
+                keyid = result["keyid"]
+                expirationtime = result["expiration"]
+                creationtime = result["creation"]
+                keytype = KeyType.SECRET if result["keytype"] else KeyType.PUBLIC
 
-                    # Get the subkeys
-                    sql = "SELECT fingerprint, keyid FROM subkeys WHERE key_id=?"
-                    cursor.execute(sql, (key_id,))
-                    rows = cursor.fetchall()
-                    othervalues = {}
-                    subs = {}
-                    for row in rows:
-                        subs[row["keyid"]] = row["fingerprint"]
-                    othervalues["subkeys"] = subs
-
-                    finalresult.append(
-                        Key(
-                            cert,
-                            fingerprint,
-                            keyid,
-                            uids,
-                            keytype,
-                            expirationtime,
-                            creationtime,
-                            othervalues,
-                        )
+                # Now get the uids
+                sql = "SELECT id, value FROM uidvalues WHERE key_id=?"
+                cursor.execute(sql, (key_id,))
+                rows = cursor.fetchall()
+                uids = []
+                for row in rows:
+                    value_id = row["id"]
+                    email = self._get_one_row_from_table(cursor, "uidemails", value_id)
+                    name = self._get_one_row_from_table(cursor, "uidnames", value_id)
+                    uri = self._get_one_row_from_table(cursor, "uiduris", value_id)
+                    uids.append(
+                        {
+                            "value": row["value"],
+                            "email": email,
+                            "name": name,
+                            "uri": uri,
+                        }
                     )
-            if finalresult:
-                return finalresult
 
-            raise KeyNotFoundError(f"The key(s) not found in the keystore.")
+                # Get the subkeys
+                sql = "SELECT fingerprint, keyid FROM subkeys WHERE key_id=?"
+                cursor.execute(sql, (key_id,))
+                rows = cursor.fetchall()
+                othervalues = {}
+                subs = {}
+                for row in rows:
+                    subs[row["keyid"]] = row["fingerprint"]
+                othervalues["subkeys"] = subs
+
+                finalresult.append(
+                    Key(
+                        cert,
+                        fingerprint,
+                        keyid,
+                        uids,
+                        keytype,
+                        expirationtime,
+                        creationtime,
+                        othervalues,
+                    )
+                )
+        if finalresult:
+            return finalresult
+
+        raise KeyNotFoundError(f"The key(s) not found in the keystore.")
 
     def _get_one_row_from_table(self, cursor, tablename, value_id):
         "Internal function to select different uid items"
