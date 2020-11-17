@@ -266,9 +266,40 @@ class KeyStore:
                 sql = "SELECT * FROM keys"
                 cursor.execute(sql)
             rows = cursor.fetchall()
-            return self._internal_build_key_list(rows, con, cursor)
+            return self._internal_build_key_list(rows, cursor)
 
-    def _internal_build_key_list(self, rows, con, cursor):
+    def get_keys_by_keyid(self, keyid: str):
+        "Returns a list of keys for a given KeyID"
+        # TODO: This has bad SQL, we can improve in future.
+        con = sqlite3.connect(self.dbpath)
+        con.row_factory = sqlite3.Row
+        list_of_db_ids = set()
+        with con:
+            cursor = con.cursor()
+            sql = "SELECT * FROM keys WHERE keyid=?"
+            cursor.execute(sql, (keyid,))
+            rows = cursor.fetchall()
+            for row in rows:
+                list_of_db_ids.add(row["id"])
+
+            sql = "SELECT * FROM subkeys WHERE keyid=?"
+            cursor.execute(sql, (keyid,))
+            rows = cursor.fetchall()
+            for row in rows:
+                list_of_db_ids.add(row["key_id"])
+            # Now the final search
+            result = []
+            sql = "SELECT * FROM keys WHERE id=?"
+            for key_id in list(list_of_db_ids):
+                cursor.execute(sql, (key_id,))
+                rows = cursor.fetchall()
+                result.extend(self._internal_build_key_list(rows, cursor))
+
+            if not result:
+                KeyNotFoundError(f"The key with keyid {keyid} is not found.")
+            return result
+
+    def _internal_build_key_list(self, rows, cursor):
         "Internal method to create a list of keys from db result rows"
         finalresult = []
         for result in rows:
@@ -324,7 +355,6 @@ class KeyStore:
                 )
         if finalresult:
             return finalresult
-
         raise KeyNotFoundError(f"The key(s) not found in the keystore.")
 
     def _get_one_row_from_table(self, cursor, tablename, value_id):

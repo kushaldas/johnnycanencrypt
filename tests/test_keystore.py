@@ -95,6 +95,14 @@ def test_keystore_keyids():
     assert key.keyid == "D8219C8C43F6C5E1"
 
 
+def test_keystore_get_via_keyids():
+    ks = jce.KeyStore("./tests/files/store")
+    key = ks.get_key("A85FF376759C994A8A1168D8D8219C8C43F6C5E1")
+    keys = ks.get_keys_by_keyid("FB82AA5D326DA75D")
+    assert len(keys) == 1
+    assert key == keys[0]
+
+
 def test_keystore_key_uids():
     ks = jce.KeyStore("./tests/files/store")
     key = ks.get_key("A85FF376759C994A8A1168D8D8219C8C43F6C5E1")
