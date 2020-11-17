@@ -50,7 +50,7 @@ class Key:
         keytype: KeyType = KeyType.PUBLIC,
         expirationtime=None,
         creationtime=None,
-        othervalues={}
+        othervalues={},
     ):
         self.keyvalue = keyvalue
         self.keytype = keytype
@@ -110,7 +110,14 @@ class KeyStore:
         )
 
     def _add_key_to_cache(
-        self, cert, uids, fingerprint, keytype, expirationtime, creationtime, othervalues
+        self,
+        cert,
+        uids,
+        fingerprint,
+        keytype,
+        expirationtime,
+        creationtime,
+        othervalues,
     ):
         etime = str(expirationtime.timestamp()) if expirationtime else ""
         ctime = str(creationtime.timestamp()) if creationtime else ""
@@ -211,7 +218,13 @@ class KeyStore:
         ) = parse_cert_file(keypath)
 
         self.add_key_to_cache(
-            keypath, uids, fingerprint, keytype, expirationtime, creationtime, othervalues
+            keypath,
+            uids,
+            fingerprint,
+            keytype,
+            expirationtime,
+            creationtime,
+            othervalues,
         )
         return self.get_key(fingerprint)
 
@@ -737,7 +750,13 @@ class KeyStore:
             ) = parse_cert_bytes(cert)
 
             self._add_key_to_cache(
-                cert, uids, fingerprint, keytype, expirationtime, creationtime, othervalues
+                cert,
+                uids,
+                fingerprint,
+                keytype,
+                expirationtime,
+                creationtime,
+                othervalues,
             )
             return self.get_key(fingerprint)
         else:
