@@ -26,7 +26,7 @@ use crate::openpgp::parse::stream::{
     VerificationHelper,
 };
 
-use crate::openpgp::parse::Parse;
+use crate::openpgp::parse::{PacketParser, PacketParserResult, Parse};
 use crate::openpgp::policy::Policy;
 use crate::openpgp::policy::StandardPolicy as P;
 use crate::openpgp::serialize::stream::{Encryptor, LiteralWriter, Message, Signer};
@@ -34,6 +34,7 @@ use crate::openpgp::serialize::Marshal;
 use crate::openpgp::serialize::MarshalInto;
 use crate::openpgp::types::KeyFlags;
 use crate::openpgp::types::SymmetricAlgorithm;
+use crate::openpgp::Packet;
 use chrono::prelude::*;
 use openpgp::cert::prelude::*;
 
@@ -261,6 +262,50 @@ fn merge_keys(_py: Python, certdata: Vec<u8>, newcertdata: Vec<u8>) -> PyResult<
     return Ok(res.into());
 }
 
+/// This function takes a path to an encrypted message and tries to guess the keyids it was
+/// encrypted for. Note: It will read through the whole file and not memory happy code. Use with
+/// care.
+#[pyfunction]
+#[text_signature = "(filepath)"]
+fn file_encrypted_for(_py: Python, filepath: String) -> PyResult<PyObject> {
+    let mut ppr = PacketParser::from_file(filepath).unwrap();
+    let plist = PyList::empty(_py);
+    while let PacketParserResult::Some(pp) = ppr {
+        // Get the packet out of the parser and start parsing the next
+        // packet, recursing.
+        let (packet, next_ppr) = pp.recurse().unwrap();
+        ppr = next_ppr;
+
+        if let Packet::PKESK(ps) = packet {
+            let id = ps.recipient().to_hex();
+            plist.append(id).unwrap();
+        }
+    }
+    Ok(plist.into())
+}
+
+/// This function takes an encrypted message as bytes and tries to guess the keyids it was
+/// encrypted for. Note: It will keep the whole content on memory and not memory happy code. Use
+/// with care.
+#[pyfunction]
+#[text_signature = "(messagedata)"]
+fn bytes_encrypted_for(_py: Python, messagedata: Vec<u8>) -> PyResult<PyObject> {
+    let mut ppr = PacketParser::from_bytes(&messagedata[..]).unwrap();
+    let plist = PyList::empty(_py);
+    while let PacketParserResult::Some(pp) = ppr {
+        // Get the packet out of the parser and start parsing the next
+        // packet, recursing.
+        let (packet, next_ppr) = pp.recurse().unwrap();
+        ppr = next_ppr;
+
+        if let Packet::PKESK(ps) = packet {
+            let id = ps.recipient().to_hex();
+            plist.append(id).unwrap();
+        }
+    }
+    Ok(plist.into())
+}
+
 #[pyfunction]
 #[text_signature = "(certdata)"]
 fn get_pub_key(_py: Python, certdata: Vec<u8>) -> PyResult<String> {
@@ -368,11 +413,15 @@ fn internal_parse_cert(
 
     let subkeys = PyList::empty(py);
     for ka in cert.keys().subkeys() {
-        subkeys.append((ka.keyid().to_hex(), ka.fingerprint().to_hex())).unwrap();
+        subkeys
+            .append((ka.keyid().to_hex(), ka.fingerprint().to_hex()))
+            .unwrap();
     }
 
     let othervalues = PyDict::new(py);
-    othervalues.set_item("keyid", cert.primary_key().keyid().to_hex()).unwrap();
+    othervalues
+        .set_item("keyid", cert.primary_key().keyid().to_hex())
+        .unwrap();
     othervalues.set_item("subkeys", subkeys).unwrap();
 
     Ok((
@@ -381,7 +430,7 @@ fn internal_parse_cert(
         cert.is_tsk(),
         expirationtime.to_object(py),
         creationtime.to_object(py),
-        othervalues.to_object(py)
+        othervalues.to_object(py),
     ))
 }
 
@@ -912,7 +961,6 @@ impl Johnny {
         Ok(true)
     }
 
-
     pub fn sign_bytes_detached(&self, data: Vec<u8>, password: String) -> PyResult<String> {
         let mut localdata = io::Cursor::new(data);
         sign_bytes_detached_internal(&self.cert, &mut localdata, password)
@@ -956,6 +1004,8 @@ impl Johnny {
 fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(create_newkey))?;
     m.add_wrapped(wrap_pyfunction!(get_pub_key))?;
+    m.add_wrapped(wrap_pyfunction!(bytes_encrypted_for))?;
+    m.add_wrapped(wrap_pyfunction!(file_encrypted_for))?;
     m.add_wrapped(wrap_pyfunction!(merge_keys))?;
     m.add_wrapped(wrap_pyfunction!(encrypt_filehandler_to_file))?;
     m.add_wrapped(wrap_pyfunction!(parse_cert_file))?;

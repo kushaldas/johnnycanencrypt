@@ -7,6 +7,7 @@ import pytest
 import vcr
 
 import johnnycanencrypt as jce
+import johnnycanencrypt.johnnycanencrypt as rjce
 
 from .utils import clean_outputfiles, verify_files
 
@@ -358,6 +359,14 @@ def test_key_with_multiple_uids():
     uids, fp, secret, et, ct, othervalues = jce.parse_cert_bytes(k.keyvalue)
     assert len(uids) == 3
 
+def test_get_encrypted_for():
+    ks = jce.KeyStore("tests/files/store/")
+    keyids = rjce.file_encrypted_for("tests/files/double_recipient.asc")
+    assert keyids == ['1CF980B8E69E112A', '5A7A1560D46ED4F6']
+    with open("tests/files/double_recipient.asc", "rb") as fobj:
+        data = fobj.read()
+    keyids = rjce.bytes_encrypted_for(data)
+    assert keyids == ['1CF980B8E69E112A', '5A7A1560D46ED4F6']
 
 def test_error_at_sha1_based_key():
     tempdir = tempfile.TemporaryDirectory()
