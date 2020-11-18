@@ -132,6 +132,13 @@ For the rest of the documentation we assume that you imported the module as foll
                         >>> keys_via_names = ks.get_keys(qvalue="test key", qtype="value")
                         >>> keys_via_email = ks.get_keys(qvalue="email@example.com")
 
+        .. method:: get_keys_by_keyid(keyid: str) -> List[Key]:
+
+                Returns a list of keys matching with the keyids, first directly
+                checks the master keys and then subkeys. Raises
+                **KeyNotFoundError** in case no such keyid is found on the
+                store.
+
         .. method:: import_cert(keypath: str) -> Key:
 
                 Imports a pgp key file from a path on the system. 
