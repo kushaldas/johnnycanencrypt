@@ -1,5 +1,14 @@
 # Changlelog
 
+## Unreleased
+
+### Added
+
+- `get_keys_by_keyid` to get keys for a given keyid
+- `fetch_key_by_email` can fetch key from keys.openpgp.org for a given email id.
+- `fetch_key_by_fingerprint` can fetch key from keys.openpgp.org for a given fingerprint.
+- `encrypt_file` and `decrypt_file` can take an opened binary file handler in Python as input.
+
 ## [0.4.0] - 2020-11-01
 
 ### Added

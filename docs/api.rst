@@ -204,6 +204,14 @@ For the rest of the documentation we assume that you imported the module as foll
 
                 Returns the armored version of the public key as string.
 
+        .. attribute:: keyid
+
+                The keyid of the master key
+
+        .. attribute:: othervalues
+
+                A dictionary containing subkeys's keyids and fingerprints.
+
 .. class:: KeyType() -> KeyType:
 
         Enum class to mark if a key is public or private. Possible values are **KeyType.PUBLIC** and **KeyType.SECRET**.
