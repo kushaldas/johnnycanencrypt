@@ -14,8 +14,8 @@ use std::str;
 use std::time::{Duration, SystemTime};
 
 extern crate anyhow;
-
 extern crate sequoia_openpgp as openpgp;
+extern crate talktosc;
 
 use crate::openpgp::armor;
 use openpgp::armor::{Kind, Writer};
@@ -33,16 +33,173 @@ use crate::openpgp::serialize::stream::{Encryptor, LiteralWriter, Message, Signe
 use crate::openpgp::serialize::Marshal;
 use crate::openpgp::serialize::MarshalInto;
 use crate::openpgp::types::KeyFlags;
+use crate::openpgp::packet::key;
 use crate::openpgp::types::SymmetricAlgorithm;
 use crate::openpgp::Packet;
+use crate::openpgp::crypto::Decryptor;
 use chrono::prelude::*;
 use openpgp::cert::prelude::*;
+use talktosc::*;
+
+mod scard;
 
 // Our CryptoError exception
 create_exception!(johnnycanencrypt, CryptoError, PyException);
 
 // Our SameKeyError exception
 create_exception!(johnnycanencrypt, SameKeyError, PyException);
+
+// Error in selecting OpenPGP applet in the card
+create_exception!(johnnycanencrypt, CardError, PyException);
+
+pub struct YuBi {
+    // KeyID -> Card serial number mapping.
+    //keys: HashMap<openpgp::KeyID, String>,
+    // PublicKey
+    keys: HashMap<openpgp::KeyID,
+                  openpgp::packet::Key<key::PublicParts, key::UnspecifiedRole>>,
+    pin: Vec<u8>,
+}
+
+impl YuBi {
+    pub fn new(policy: &dyn Policy, certdata: Vec<u8>, pin: Vec<u8>) -> Self {
+        let mut keys = HashMap::new();
+        let cert = openpgp::Cert::from_bytes(&certdata).unwrap();
+        for ka in cert.keys().with_policy(policy, None)
+            .for_storage_encryption().for_transport_encryption()
+        {
+            let key = ka.key();
+            keys.insert(key.keyid(), key.clone().into());
+        }
+        YuBi {keys, pin}
+    }
+}
+
+#[allow(unused)]
+impl DecryptionHelper for YuBi {
+    fn decrypt<D>(
+        &mut self,
+        pkesks: &[openpgp::packet::PKESK],
+        _skesks: &[openpgp::packet::SKESK],
+        sym_algo: Option<SymmetricAlgorithm>,
+        mut decrypt: D,
+    ) -> openpgp::Result<Option<openpgp::Fingerprint>>
+    where
+        D: FnMut(SymmetricAlgorithm, &SessionKey) -> bool,
+    {
+        let p = &P::new();
+        // Read the following
+        // https://docs.sequoia-pgp.org/src/sequoia_openpgp/packet/pkesk.rs.html#139
+        // Try each PKESK until we succeed.
+         for pkesk in pkesks {
+            if let Some(key) = self.keys.get(pkesk.recipient()) {
+                let mut pair = scard::KeyPair::new(self.pin.clone(), key)?;
+                let fp =  Some(pair.public().fingerprint());
+                if pkesk.decrypt(&mut pair, sym_algo)
+                    .map(|(algo, session_key)| decrypt(algo, &session_key))
+                    .unwrap_or(false)
+                {
+                    return Ok(fp);
+                }
+            }
+         }
+
+        Ok(None)
+    }
+}
+impl VerificationHelper for YuBi {
+    fn get_certs(&mut self, _ids: &[openpgp::KeyHandle]) -> openpgp::Result<Vec<openpgp::Cert>> {
+        Ok(vec![]) // Feed the Certs to the verifier here.
+    }
+    fn check(&mut self, _structure: MessageStructure) -> openpgp::Result<()> {
+        Ok(())
+    }
+}
+
+#[pyfunction]
+fn decrypt_bytes_on_card(
+    _py: Python,
+    data: Vec<u8>,
+    pin: Vec<u8>,
+    certdata: Vec<u8>,
+) -> PyResult<PyObject> {
+    //let keys: HashMap<openpgp::KeyID, String> = HashMap::new();
+    //for (key, val) in keys_from_py.iter() {
+    //let kid: openpgp::KeyID = key.parse().unwrap();
+    //keys.insert(kid, val.clone());
+    //}
+    let p = P::new();
+
+    let mut result = Vec::new();
+    let reader = std::io::BufReader::new(&data[..]);
+
+    let dec = DecryptorBuilder::from_reader(reader);
+    let dec2 = match dec {
+        Ok(dec) => dec,
+        Err(msg) => {
+            return Err(PySystemError::new_err(format!(
+                "Can not create decryptor: {}",
+                msg
+            )))
+        }
+    };
+    let mut decryptor = match dec2.with_policy(&p, None, YuBi::new(&p, certdata, pin)) {
+        Ok(decr) => decr,
+        Err(msg) => return Err(PyValueError::new_err(format!("Failed to decrypt: {}", msg))),
+    };
+    std::io::copy(&mut decryptor, &mut result).unwrap();
+    let res = PyBytes::new(_py, &result);
+    Ok(res.into())
+}
+
+#[pyfunction]
+fn get_card_details(py: Python) -> PyResult<PyObject> {
+    let card = talktosc::create_connection();
+    let card = match card {
+        Ok(card) => card,
+        Err(value) => return Err(CardError::new_err(format!("{}", value))),
+    };
+
+    let select_openpgp = apdus::create_apdu_select_openpgp();
+    let resp = talktosc::send_and_parse(&card, select_openpgp);
+    match resp {
+        Ok(_) => (),
+        Err(value) => return Err(CardError::new_err(format!("{}", value))),
+    }
+    // Now let us get the serial number
+    let resp = talktosc::send_and_parse(&card, apdus::create_apdu_get_aid());
+    let resp = match resp {
+        Ok(resp) => resp,
+        Err(value) => return Err(CardError::new_err(format!("{}", value))),
+    };
+
+    let pd = PyDict::new(py);
+    pd.set_item("serial_number", tlvs::parse_card_serial(resp.get_data()))
+        .unwrap();
+    // Now, we will get the whole of AID
+    let mut aiddata: Vec<u8> = Vec::new();
+
+    let mut resp =
+        talktosc::send_and_parse(&card, apdus::create_apdu_get_application_data()).unwrap();
+    aiddata.extend(resp.get_data());
+    // This means we have more data to read.
+    while resp.sw1 == 0x61 {
+        let apdu = apdus::create_apdu_for_reading(resp.sw2.clone());
+
+        resp = talktosc::send_and_parse(&card, apdu).unwrap();
+        aiddata.extend(resp.get_data());
+    }
+    // Now we have all the data in aiddata
+    let tlv = &tlvs::read_list(aiddata, true)[0];
+    let sigdata = tlv.get_fingerprints().unwrap();
+    let (sig_f, enc_f, auth_f) = tlvs::parse_fingerprints(sigdata);
+    pd.set_item("sig_f", sig_f).unwrap();
+    pd.set_item("enc_f", enc_f).unwrap();
+    pd.set_item("auth_f", auth_f).unwrap();
+    // Disconnect
+    talktosc::disconnect(card);
+    Ok(pd.into())
+}
 
 struct Helper {
     keys: HashMap<openpgp::KeyID, KeyPair>,
@@ -91,7 +248,17 @@ impl DecryptionHelper for Helper {
         // Try each PKESK until we succeed.
         for pkesk in pkesks {
             let keyid = pkesk.recipient();
-            dbg!(keyid.to_hex());
+            // The following was done to extract the actual encrypted session key.
+            // So that we can verify our code by just decrypt that on smartcard
+            //let esk = pkesk.esk();
+            //match esk {
+                //openpgp::crypto::mpi::Ciphertext::RSA { c: myvalue } => {
+                    //let mut file = File::create("foo2.binary")?;
+                    //let value = myvalue.value();
+                    //file.write_all(&value[..]).unwrap();
+                //}
+                //_ => (),
+            //};
             // If the keyid is not present, we should just skip to next pkesk
             let keypair = match self.keys.get_mut(&keyid) {
                 Some(keypair) => keypair,
@@ -245,6 +412,7 @@ fn find_creation_time(cert: openpgp::Cert) -> Option<f64> {
 
     None
 }
+
 
 #[pyfunction]
 #[text_signature = "(certdata, newcertdata)"]
@@ -999,9 +1167,11 @@ impl Johnny {
     }
 }
 
-#[pymodule]
 /// A Python module implemented in Rust.
+#[pymodule]
 fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
+    m.add_wrapped(wrap_pyfunction!(get_card_details))?;
+    m.add_wrapped(wrap_pyfunction!(decrypt_bytes_on_card))?;
     m.add_wrapped(wrap_pyfunction!(create_newkey))?;
     m.add_wrapped(wrap_pyfunction!(get_pub_key))?;
     m.add_wrapped(wrap_pyfunction!(bytes_encrypted_for))?;

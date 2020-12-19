@@ -6,7 +6,8 @@ CREATE TABLE keys (
 	keyid TEXT NOT NULL,
 	expiration TEXT,
 	creation TEXT,
-	keytype INTEGER
+	keytype INTEGER,
+    oncard TEXT
 );
 
 CREATE TABLE subkeys (
@@ -73,3 +74,17 @@ def _get_cert_data(filepath):
     "Returns the filepath content as bytes"
     with open(filepath, "rb") as fobj:
         return fobj.read()
+
+
+def __get_cert_data(filepath):
+    "Returns the filepath content as bytes"
+    with open(filepath, "rb") as fobj:
+        return fobj.read()
+
+
+def convert_fingerprint(data):
+    "Converts binary data to fingerprint string"
+    s = ""
+    for x in data:
+        s += format(x, "02x")
+    return s.upper()

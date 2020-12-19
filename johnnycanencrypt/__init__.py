@@ -24,7 +24,10 @@ from .johnnycanencrypt import (
     parse_cert_bytes,
     parse_cert_file,
 )
-from .utils import _get_cert_data, createdb
+
+import johnnycanencrypt.johnnycanencrypt as rjce
+
+from .utils import _get_cert_data, createdb, convert_fingerprint
 
 
 class KeyType(Enum):
@@ -51,6 +54,7 @@ class Key:
         expirationtime=None,
         creationtime=None,
         othervalues={},
+        oncard: str = "",
     ):
         self.keyvalue = keyvalue
         self.keytype = keytype
@@ -64,6 +68,7 @@ class Key:
             datetime.fromtimestamp(float(creationtime)) if creationtime else None
         )
         self.othervalues = othervalues
+        self.oncard = oncard
 
     def __repr__(self):
         return f"<Key fingerprint={self.fingerprint} type={self.keytype.name}>"
@@ -311,6 +316,7 @@ class KeyStore:
                 expirationtime = result["expiration"]
                 creationtime = result["creation"]
                 keytype = KeyType.SECRET if result["keytype"] else KeyType.PUBLIC
+                oncard = result["oncard"]
 
                 # Now get the uids
                 sql = "SELECT id, value FROM uidvalues WHERE key_id=?"
@@ -351,6 +357,7 @@ class KeyStore:
                         expirationtime,
                         creationtime,
                         othervalues,
+                        oncard,
                     )
                 )
         if finalresult:
@@ -750,7 +757,7 @@ class KeyStore:
         return self._internal_fetch_from_server(url, fingerprint)
 
     def fetch_key_by_email(self, email: str):
-        """Fetches key from keys.openpgp.org based on the fingerpint.
+        """Fetches key from keys.openpgp.org based on the fingerprint.
 
         :param email: The email address to search
 
@@ -791,3 +798,29 @@ class KeyStore:
             return self.get_key(fingerprint)
         else:
             raise FetchingError(f"Server returned: {resp.status_code}")
+
+    def sync_smartcard(self):
+        """
+        Syncs the attached smartcard to the right public keys in the KeyStore.
+
+        :returns: The fingerprint of the primary key.
+        """
+        data = rjce.get_card_details()
+        if not data["serial_number"]:
+            return "No data found."
+        con = sqlite3.connect(self.dbpath)
+        con.row_factory = sqlite3.Row
+        with con:
+            cursor = con.cursor()
+            # First let us check if a key already exists
+            sql = "SELECT DISTINCT key_id, fingerprint FROM subkeys where fingerprint IN (?, ?, ?)"
+            sig_f = convert_fingerprint(data["sig_f"])
+            enc_f = convert_fingerprint(data["enc_f"])
+            auth_f = convert_fingerprint(data["auth_f"])
+            cursor.execute(sql, (sig_f, enc_f, auth_f))
+            fromdb = cursor.fetchone()
+            if fromdb:
+                # Means we found the main key, now we have to mark it with the serial number of the card
+                sql = "UPDATE keys SET oncard=? WHERE id=?"
+                cursor.execute(sql, (data["serial_number"], fromdb["key_id"]))
+                return fromdb["fingerprint"]
