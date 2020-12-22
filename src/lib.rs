@@ -843,7 +843,7 @@ fn create_newkey(
     // Default we create RSA4k keys
     let mut ciphervalue = CipherSuite::RSA4k;
     if cipher == String::from("RSA2k") {
-        ciphervalue = CipherSuite::RSA4k;
+        ciphervalue = CipherSuite::RSA2k;
     } else if cipher == String::from("Cv25519") {
         ciphervalue = CipherSuite::Cv25519;
     }
@@ -851,6 +851,7 @@ fn create_newkey(
     let mut crtbuilder = CertBuilder::new()
         .add_storage_encryption_subkey()
         .add_signing_subkey()
+        .add_authentication_subkey()
         .set_cipher_suite(ciphervalue)
         .set_password(Some(openpgp::crypto::Password::from(password)));
 
