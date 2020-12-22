@@ -1,9 +1,74 @@
-use sequoia_openpgp as openpgp;
-use openpgp::crypto;
 use crate::openpgp::packet::key;
 use crate::openpgp::types::SymmetricAlgorithm;
+use openpgp::crypto;
 use openpgp::packet::prelude::*;
+use sequoia_openpgp as openpgp;
 use talktosc::*;
+
+pub fn move_subkey_to_card(
+    pw3_apdu: apdus::APDU,
+    algo_apdu: apdus::APDU,
+    apdu: apdus::APDU,
+    fp_apdu: apdus::APDU,
+    time_apdu: apdus::APDU,
+) -> Result<bool, errors::TalktoSCError> {
+    // NOw let us move the key to the card
+    let card = talktosc::create_connection();
+    let card = match card {
+        Ok(card) => card,
+        Err(value) => return Err(value),
+    };
+
+    let select_openpgp = apdus::create_apdu_select_openpgp();
+    let resp = talktosc::send_and_parse(&card, select_openpgp);
+    match resp {
+        Ok(_) => (),
+        Err(value) => return Err(value),
+    }
+
+    let resp = talktosc::send_and_parse(&card, pw3_apdu.clone());
+    match resp {
+        Ok(_) => (),
+        Err(value) => return Err(value),
+    }
+
+    // NOw the algo first
+    let resp = talktosc::send_and_parse(&card, algo_apdu);
+    match resp {
+        Ok(_) => (),
+        Err(value) => return Err(value),
+    }
+
+    // Another time pw3 verification
+    let resp = talktosc::send_and_parse(&card, pw3_apdu.clone());
+    match resp {
+        Ok(_) => (),
+        Err(value) => return Err(value),
+    }
+    // Next the actual key
+    let resp = talktosc::send_and_parse(&card, apdu);
+    match resp {
+        Ok(_) => (),
+        Err(value) => return Err(value),
+    }
+
+    // Next is the fingerprint
+    let resp = talktosc::send_and_parse(&card, fp_apdu);
+    match resp {
+        Ok(_) => (),
+        Err(value) => return Err(value),
+    }
+
+    // Next is the creation time
+
+    let resp = talktosc::send_and_parse(&card, time_apdu);
+    match resp {
+        Ok(_) => (),
+        Err(value) => return Err(value),
+    }
+    talktosc::disconnect(card);
+    Ok(true)
+}
 
 fn decrypt_the_secret_in_card(c: Vec<u8>, pin: Vec<u8>) -> Result<Vec<u8>, errors::TalktoSCError> {
     let card = talktosc::create_connection();
