@@ -26,6 +26,8 @@ use crate::openpgp::parse::stream::{
     VerificationHelper,
 };
 
+use crate::openpgp::crypto::Decryptor;
+use crate::openpgp::packet::key;
 use crate::openpgp::parse::{PacketParser, PacketParserResult, Parse};
 use crate::openpgp::policy::Policy;
 use crate::openpgp::policy::StandardPolicy as P;
@@ -33,10 +35,8 @@ use crate::openpgp::serialize::stream::{Encryptor, LiteralWriter, Message, Signe
 use crate::openpgp::serialize::Marshal;
 use crate::openpgp::serialize::MarshalInto;
 use crate::openpgp::types::KeyFlags;
-use crate::openpgp::packet::key;
 use crate::openpgp::types::SymmetricAlgorithm;
 use crate::openpgp::Packet;
-use crate::openpgp::crypto::Decryptor;
 use chrono::prelude::*;
 use openpgp::cert::prelude::*;
 use talktosc::*;
@@ -56,8 +56,7 @@ pub struct YuBi {
     // KeyID -> Card serial number mapping.
     //keys: HashMap<openpgp::KeyID, String>,
     // PublicKey
-    keys: HashMap<openpgp::KeyID,
-                  openpgp::packet::Key<key::PublicParts, key::UnspecifiedRole>>,
+    keys: HashMap<openpgp::KeyID, openpgp::packet::Key<key::PublicParts, key::UnspecifiedRole>>,
     pin: Vec<u8>,
 }
 
@@ -65,13 +64,16 @@ impl YuBi {
     pub fn new(policy: &dyn Policy, certdata: Vec<u8>, pin: Vec<u8>) -> Self {
         let mut keys = HashMap::new();
         let cert = openpgp::Cert::from_bytes(&certdata).unwrap();
-        for ka in cert.keys().with_policy(policy, None)
-            .for_storage_encryption().for_transport_encryption()
+        for ka in cert
+            .keys()
+            .with_policy(policy, None)
+            .for_storage_encryption()
+            .for_transport_encryption()
         {
             let key = ka.key();
             keys.insert(key.keyid(), key.clone().into());
         }
-        YuBi {keys, pin}
+        YuBi { keys, pin }
     }
 }
 
@@ -91,18 +93,19 @@ impl DecryptionHelper for YuBi {
         // Read the following
         // https://docs.sequoia-pgp.org/src/sequoia_openpgp/packet/pkesk.rs.html#139
         // Try each PKESK until we succeed.
-         for pkesk in pkesks {
+        for pkesk in pkesks {
             if let Some(key) = self.keys.get(pkesk.recipient()) {
                 let mut pair = scard::KeyPair::new(self.pin.clone(), key)?;
-                let fp =  Some(pair.public().fingerprint());
-                if pkesk.decrypt(&mut pair, sym_algo)
+                let fp = Some(pair.public().fingerprint());
+                if pkesk
+                    .decrypt(&mut pair, sym_algo)
                     .map(|(algo, session_key)| decrypt(algo, &session_key))
                     .unwrap_or(false)
                 {
                     return Ok(fp);
                 }
             }
-         }
+        }
 
         Ok(None)
     }
@@ -252,12 +255,12 @@ impl DecryptionHelper for Helper {
             // So that we can verify our code by just decrypt that on smartcard
             //let esk = pkesk.esk();
             //match esk {
-                //openpgp::crypto::mpi::Ciphertext::RSA { c: myvalue } => {
-                    //let mut file = File::create("foo2.binary")?;
-                    //let value = myvalue.value();
-                    //file.write_all(&value[..]).unwrap();
-                //}
-                //_ => (),
+            //openpgp::crypto::mpi::Ciphertext::RSA { c: myvalue } => {
+            //let mut file = File::create("foo2.binary")?;
+            //let value = myvalue.value();
+            //file.write_all(&value[..]).unwrap();
+            //}
+            //_ => (),
             //};
             // If the keyid is not present, we should just skip to next pkesk
             let keypair = match self.keys.get_mut(&keyid) {
@@ -413,7 +416,6 @@ fn find_creation_time(cert: openpgp::Cert) -> Option<f64> {
     None
 }
 
-
 #[pyfunction]
 #[text_signature = "(certdata, newcertdata)"]
 fn merge_keys(_py: Python, certdata: Vec<u8>, newcertdata: Vec<u8>) -> PyResult<PyObject> {
@@ -480,6 +482,231 @@ fn get_pub_key(_py: Python, certdata: Vec<u8>) -> PyResult<String> {
     let cert = openpgp::Cert::from_bytes(&certdata).unwrap();
     let armored = cert.armored().to_vec().unwrap();
     Ok(String::from_utf8(armored).unwrap())
+}
+
+#[pyfunction]
+#[text_signature = "(certdata, pin, password)"]
+fn upload_to_smartcard(_py: Python, certdata: Vec<u8>, pin: Vec<u8>, password: String) -> PyResult<bool> {
+    let cert = openpgp::Cert::from_bytes(&certdata).unwrap();
+
+    // Here the keytype is something I decided
+    // 1 -- encryption key
+    // 2 -- singing key
+    // 3 -- authentication key
+
+    parse_and_move_a_subkey(cert.clone(), 1, pin.clone(), password.clone())?;
+    parse_and_move_a_subkey(cert.clone(), 2, pin, password)
+}
+
+fn parse_and_move_a_subkey(cert: openpgp::Cert, keytype: i8, pin: Vec<u8>, password: String) -> PyResult<bool> {
+    let policy = P::new();
+    // To flag if it is a RSA key
+    let mut rsa_flag = false;
+    let mut main_d: Option<openpgp::crypto::mpi::ProtectedMPI> = None;
+    let mut main_p: Option<openpgp::crypto::mpi::ProtectedMPI> = None;
+    let mut main_q: Option<openpgp::crypto::mpi::ProtectedMPI> = None;
+    let mut main_u: Option<openpgp::crypto::mpi::ProtectedMPI> = None;
+    let mut main_e: Option<openpgp::crypto::mpi::MPI> = None;
+    // This is idiotic, but will do for now
+    let mut main_e_for_second_use: Option<openpgp::crypto::mpi::MPI> = None;
+    let mut main_n: Option<openpgp::crypto::mpi::MPI> = None;
+    let mut ts = 0 as u64;
+
+    let mut fp: Option<openpgp::Fingerprint> = None;
+    let mut valid_ka = cert.keys().with_policy(&policy, None);
+    valid_ka = match keytype {
+        1 => valid_ka.for_storage_encryption(),
+        2 => valid_ka.for_certification(),
+        3 => valid_ka.for_authentication(),
+        _ => return Err(PyValueError::new_err("wrong value for the keytype")),
+    };
+    for ka in valid_ka.secret() {
+        // First let us get the value of e from the public key
+        let public = ka.parts_as_public();
+        match public.mpis().clone() {
+            openpgp::crypto::mpi::PublicKey::RSA { ref e, ref n } => {
+                main_e = Some(e.clone());
+                main_e_for_second_use = Some(e.clone());
+                main_n = Some(n.clone());
+            }
+            _ => (),
+        }
+        let key = ka
+            .key()
+            .clone()
+            .decrypt_secret(&openpgp::crypto::Password::from(password.clone()))
+            .unwrap();
+        let ctime = key.creation_time();
+        let dt: DateTime<Utc> = DateTime::from(ctime);
+        ts = dt.timestamp() as u64;
+
+        fp = Some(key.fingerprint());
+
+        // NOTE: all integers has to converted via to_be_bytes, and then remove any extra 0 in the
+        // front.
+        //let dd: u32 = 65537;
+        //dbg!(dd.to_be_bytes());
+
+        if let Some(secrets) = key.optional_secret() {
+            match secrets {
+                openpgp::packet::key::SecretKeyMaterial::Unencrypted(ref u) => {
+                    u.map(|mpis| match mpis.clone() {
+                        openpgp::crypto::mpi::SecretKeyMaterial::RSA { d, p, q, u } => {
+                            main_d = Some(d.clone());
+                            main_p = Some(p.clone());
+                            main_q = Some(q.clone());
+                            main_u = Some(u.clone());
+                            rsa_flag = true;
+                        }
+                        _ => (),
+                    });
+                }
+                _ => (),
+            }
+        }
+    }
+    let mut result: Vec<u8> = Vec::new();
+    // Let us create the TLV for 5F48
+    // First the exponent
+    let values: Vec<u8> = main_e.unwrap().value().iter().copied().collect();
+    for value in values {
+        result.push(value);
+    }
+    // Then the p
+    let values: Vec<u8> = main_p.unwrap().value().iter().copied().collect();
+    for value in values {
+        result.push(value);
+    }
+    // Then the q
+    let values: Vec<u8> = main_q.unwrap().value().iter().copied().collect();
+    for value in values {
+        result.push(value);
+    }
+    let len = result.len() as u16;
+    // This is for the TLV 0x5F48
+    let mut for5f48: Vec<u8> = vec![0x5F, 0x48];
+    if len > 0xFF {
+        for5f48.push(0x82);
+    } else {
+        for5f48.push(0x81);
+    }
+    // Now we should add the length of the data in 2 bytes
+    let length = len.to_be_bytes();
+    for5f48.push(length[0]);
+    for5f48.push(length[1]);
+    for5f48.extend(result.iter());
+
+    // This is for the TLV 0x7F48
+    let for7f48: Vec<u8> = vec![
+        0x7F, 0x48, 0x0A, 0x91, 0x03, 0x92, 0x82, 0x01, 0x00, 0x93, 0x82, 0x01, 0x00,
+    ];
+
+    // check 4.4.3.12 Private Key Template for details
+    //
+    let mut maindata: Vec<u8> = match keytype {
+        1 => vec![0xB8, 0x00],
+        2 => vec![0xB6, 0x00],
+        3 => vec![0xA4, 0x00],
+        _ => return Err(PyValueError::new_err("wrong value for keytype")),
+    };
+
+    maindata.extend(for7f48.iter());
+    maindata.extend(for5f48.iter());
+
+    // Now this encapsulates to 4D Tag
+    let mut for4d: Vec<u8> = vec![0x4D];
+    let len = maindata.len() as u16;
+    if len > 0xFF {
+        for4d.push(0x82);
+    } else {
+        for4d.push(0x81);
+    }
+    // Now we should add the length of the data in 2 bytes
+    let length = len.to_be_bytes();
+    for4d.push(length[0]);
+    for4d.push(length[1]);
+    for4d.extend(maindata.iter());
+
+    let apdu = talktosc::apdus::APDU::create_big_apdu(0x00, 0xDB, 0x3F, 0xFF, for4d);
+
+    // Here are the steps we have to do
+    // First, verify admin pin (PW3)
+    // Set algorithm attributes, see 4.4.3.9 Algorithm Attributes for details
+    // Verify admin pin again
+    // Put the key via big apdu (put_data)
+    // Put the fingerprint (put_data)
+    // Put the timestamp (put_data)
+    let n_value: Vec<u8> = main_n
+        .unwrap()
+        .bits()
+        .to_be_bytes()
+        .iter()
+        .skip_while(|&&v| v == 0)
+        .copied()
+        .collect();
+    let e_value: Vec<u8> = main_e_for_second_use
+        .unwrap()
+        .bits()
+        .to_be_bytes()
+        .iter()
+        .skip_while(|&&v| v == 0)
+        .copied()
+        .collect();
+
+    let time_value: Vec<u8> = ts
+        .to_be_bytes()
+        .iter()
+        .skip_while(|&&e| e == 0)
+        .copied()
+        .collect();
+
+    let mut for_algo_attributes: Vec<u8> = vec![01];
+    for_algo_attributes.extend(n_value);
+    if e_value.len() == 1 {
+        for_algo_attributes.push(0x00);
+    }
+    for_algo_attributes.extend(e_value);
+    // Because right now we are only dealing with RSA:    00 = standard (e, p, q)
+    for_algo_attributes.push(0x00);
+
+    let algo_apdu = match keytype {
+        1 => talktosc::apdus::APDU::create_big_apdu(0x00, 0xDA, 0x00, 0xC2, for_algo_attributes),
+        2 => talktosc::apdus::APDU::create_big_apdu(0x00, 0xDA, 0x00, 0xC1, for_algo_attributes),
+        3 => talktosc::apdus::APDU::create_big_apdu(0x00, 0xDA, 0x00, 0xC3, for_algo_attributes),
+        _ => return Err(PyValueError::new_err("wrong value for keytype")),
+    };
+    // Details are in PUT DATA DO part in the spec 4.4.2
+    let fp_p2 = match keytype {
+        1 => 0xC8,
+        2 => 0xC7,
+        3 => 0xC9,
+        _ => return Err(PyValueError::new_err("wrong value for keytype")),
+    };
+    let fp_apdu = talktosc::apdus::APDU::create_big_apdu(
+        0x00,
+        0xDA,
+        0x00,
+        fp_p2,
+        fp.unwrap().as_bytes().iter().map(|&x| x).collect(),
+    );
+    let time_p2 = match keytype {
+        1 => 0xCF,
+        2 => 0xCE,
+        3 => 0xD0,
+        _ => return Err(PyValueError::new_err("wrong value for keytype")),
+    };
+
+    let time_apdu = talktosc::apdus::APDU::new(0x00, 0xDA, 0x00, time_p2, Some(time_value));
+    let pw3_apdu = talktosc::apdus::create_apdu_verify_pw3(pin);
+
+    match scard::move_subkey_to_card(pw3_apdu, algo_apdu, apdu, fp_apdu, time_apdu) {
+        Ok(res) => Ok(res),
+        Err(value) => Err(CardError::new_err(format!("{}", value))),
+    }
+    //dbg!(talktosc::tlvs::hexify(algo_apdu.iapdus[0].clone()));
+    //dbg!(talktosc::tlvs::hexify(fp_apdu.iapdus[0].clone()));
+    //dbg!(talktosc::tlvs::hexify(time_apdu.iapdus[0].clone()));
+    //dbg!(ts.to_be_bytes());
 }
 
 #[pyfunction]
@@ -1173,6 +1400,7 @@ fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(get_card_details))?;
     m.add_wrapped(wrap_pyfunction!(decrypt_bytes_on_card))?;
     m.add_wrapped(wrap_pyfunction!(create_newkey))?;
+    m.add_wrapped(wrap_pyfunction!(upload_to_smartcard))?;
     m.add_wrapped(wrap_pyfunction!(get_pub_key))?;
     m.add_wrapped(wrap_pyfunction!(bytes_encrypted_for))?;
     m.add_wrapped(wrap_pyfunction!(file_encrypted_for))?;
