@@ -5,7 +5,6 @@ use openpgp::packet::prelude::*;
 use sequoia_openpgp as openpgp;
 use talktosc::*;
 
-
 // Sets the name to the card
 #[allow(unused)]
 pub fn set_data(pw3_apdu: apdus::APDU, data: apdus::APDU) -> Result<bool, errors::TalktoSCError> {
@@ -37,7 +36,6 @@ pub fn set_data(pw3_apdu: apdus::APDU, data: apdus::APDU) -> Result<bool, errors
         Ok(_) => Ok(true),
         Err(value) => return Err(value),
     }
-
 }
 
 pub fn move_subkey_to_card(
@@ -62,9 +60,14 @@ pub fn move_subkey_to_card(
     }
 
     let resp = talktosc::send_and_parse(&card, pw3_apdu.clone());
-    match resp {
-        Ok(_) => (),
+    let resp = match resp {
+        Ok(_) => resp.unwrap(),
         Err(value) => return Err(value),
+    };
+
+    // Verify if the admin pin worked or not.
+    if resp.is_okay() == false {
+        return Err(errors::TalktoSCError::PinError);
     }
 
     // NOw the algo first
@@ -76,10 +79,16 @@ pub fn move_subkey_to_card(
 
     // Another time pw3 verification
     let resp = talktosc::send_and_parse(&card, pw3_apdu.clone());
-    match resp {
-        Ok(_) => (),
+    let resp = match resp {
+        Ok(_) => resp.unwrap(),
         Err(value) => return Err(value),
+    };
+
+    // Verify if the admin pin worked or not.
+    if resp.is_okay() == false {
+        return Err(errors::TalktoSCError::PinError);
     }
+
     // Next the actual key
     let resp = talktosc::send_and_parse(&card, apdu);
     match resp {
