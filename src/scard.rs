@@ -22,9 +22,14 @@ pub fn set_data(pw3_apdu: apdus::APDU, data: apdus::APDU) -> Result<bool, errors
         Err(value) => return Err(value),
     }
     let resp = talktosc::send_and_parse(&card, pw3_apdu.clone());
-    match resp {
-        Ok(_) => (),
+    let resp = match resp {
+        Ok(_) => resp.unwrap(),
         Err(value) => return Err(value),
+    };
+
+    // Verify if the admin pin worked or not.
+    if resp.is_okay() == false {
+        return Err(errors::TalktoSCError::PinError);
     }
 
     let resp = talktosc::send_and_parse(&card, data);
