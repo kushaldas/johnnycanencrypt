@@ -486,7 +486,12 @@ fn get_pub_key(_py: Python, certdata: Vec<u8>) -> PyResult<String> {
 
 #[pyfunction]
 #[text_signature = "(certdata, pin, password)"]
-fn upload_to_smartcard(_py: Python, certdata: Vec<u8>, pin: Vec<u8>, password: String) -> PyResult<bool> {
+fn upload_to_smartcard(
+    _py: Python,
+    certdata: Vec<u8>,
+    pin: Vec<u8>,
+    password: String,
+) -> PyResult<bool> {
     let cert = openpgp::Cert::from_bytes(&certdata).unwrap();
 
     // Here the keytype is something I decided
@@ -495,32 +500,46 @@ fn upload_to_smartcard(_py: Python, certdata: Vec<u8>, pin: Vec<u8>, password: S
     // 3 -- authentication key
 
     parse_and_move_a_subkey(cert.clone(), 1, pin.clone(), password.clone())?;
-    parse_and_move_a_subkey(cert.clone(), 2, pin, password)
+    parse_and_move_a_subkey(cert.clone(), 2, pin.clone(), password.clone())?;
+    parse_and_move_a_subkey(cert.clone(), 3, pin.clone(), password.clone())
 }
 
-fn parse_and_move_a_subkey(cert: openpgp::Cert, keytype: i8, pin: Vec<u8>, password: String) -> PyResult<bool> {
+#[allow(unused)]
+fn parse_and_move_a_subkey(
+    cert: openpgp::Cert,
+    keytype: i8,
+    pin: Vec<u8>,
+    password: String,
+) -> PyResult<bool> {
     let policy = P::new();
-    // To flag if it is a RSA key
-    let mut rsa_flag = false;
+    // To flag if it is a RSA key, or ECDH or EdDSA
+    let mut what_kind_of_key = "";
+    // These are for private keys
+    // https://docs.sequoia-pgp.org/0.21.0/sequoia_openpgp/crypto/mpi/enum.SecretKeyMaterial.html
     let mut main_d: Option<openpgp::crypto::mpi::ProtectedMPI> = None;
     let mut main_p: Option<openpgp::crypto::mpi::ProtectedMPI> = None;
     let mut main_q: Option<openpgp::crypto::mpi::ProtectedMPI> = None;
     let mut main_u: Option<openpgp::crypto::mpi::ProtectedMPI> = None;
+    let mut main_scalar: Option<openpgp::crypto::mpi::ProtectedMPI> = None;
+    // Below are for public keys
+    // https://docs.sequoia-pgp.org/0.21.0/sequoia_openpgp/crypto/mpi/enum.PublicKey.html
     let mut main_e: Option<openpgp::crypto::mpi::MPI> = None;
+    let mut main_eq: Option<openpgp::crypto::mpi::MPI> = None;
+    let mut main_curve: Option<openpgp::types::Curve> = None;
     // This is idiotic, but will do for now
     let mut main_e_for_second_use: Option<openpgp::crypto::mpi::MPI> = None;
     let mut main_n: Option<openpgp::crypto::mpi::MPI> = None;
     let mut ts = 0 as u64;
 
     let mut fp: Option<openpgp::Fingerprint> = None;
-    let mut valid_ka = cert.keys().with_policy(&policy, None);
+    let mut valid_ka = cert.keys().subkeys().with_policy(&policy, None).secret().alive().revoked(false);
     valid_ka = match keytype {
         1 => valid_ka.for_storage_encryption(),
-        2 => valid_ka.for_certification(),
+        2 => valid_ka.for_signing(),
         3 => valid_ka.for_authentication(),
         _ => return Err(PyValueError::new_err("wrong value for the keytype")),
     };
-    for ka in valid_ka.secret() {
+    for ka in valid_ka {
         // First let us get the value of e from the public key
         let public = ka.parts_as_public();
         match public.mpis().clone() {
@@ -528,6 +547,14 @@ fn parse_and_move_a_subkey(cert: openpgp::Cert, keytype: i8, pin: Vec<u8>, passw
                 main_e = Some(e.clone());
                 main_e_for_second_use = Some(e.clone());
                 main_n = Some(n.clone());
+            }
+            openpgp::crypto::mpi::PublicKey::ECDH { curve, q, .. } => {
+                main_curve = Some(curve.clone());
+                main_eq = Some(q.clone());
+            }
+            openpgp::crypto::mpi::PublicKey::EdDSA { curve, q } => {
+                main_curve = Some(curve.clone());
+                main_eq = Some(q.clone());
             }
             _ => (),
         }
@@ -556,7 +583,15 @@ fn parse_and_move_a_subkey(cert: openpgp::Cert, keytype: i8, pin: Vec<u8>, passw
                             main_p = Some(p.clone());
                             main_q = Some(q.clone());
                             main_u = Some(u.clone());
-                            rsa_flag = true;
+                            what_kind_of_key = "rsa";
+                        }
+                        openpgp::crypto::mpi::SecretKeyMaterial::ECDH { scalar } => {
+                            main_scalar = Some(scalar.clone());
+                            what_kind_of_key = "ECDH";
+                        }
+                        openpgp::crypto::mpi::SecretKeyMaterial::EdDSA { scalar } => {
+                            main_scalar = Some(scalar.clone());
+                            what_kind_of_key = "EdDSA";
                         }
                         _ => (),
                     });
@@ -567,39 +602,57 @@ fn parse_and_move_a_subkey(cert: openpgp::Cert, keytype: i8, pin: Vec<u8>, passw
     }
     let mut result: Vec<u8> = Vec::new();
     // Let us create the TLV for 5F48
-    // First the exponent
-    let values: Vec<u8> = main_e.unwrap().value().iter().copied().collect();
-    for value in values {
-        result.push(value);
-    }
-    // Then the p
-    let values: Vec<u8> = main_p.unwrap().value().iter().copied().collect();
-    for value in values {
-        result.push(value);
-    }
-    // Then the q
-    let values: Vec<u8> = main_q.unwrap().value().iter().copied().collect();
-    for value in values {
-        result.push(value);
-    }
-    let len = result.len() as u16;
-    // This is for the TLV 0x5F48
     let mut for5f48: Vec<u8> = vec![0x5F, 0x48];
-    if len > 0xFF {
-        for5f48.push(0x82);
-    } else {
-        for5f48.push(0x81);
-    }
-    // Now we should add the length of the data in 2 bytes
-    let length = len.to_be_bytes();
-    for5f48.push(length[0]);
-    for5f48.push(length[1]);
-    for5f48.extend(result.iter());
-
     // This is for the TLV 0x7F48
-    let for7f48: Vec<u8> = vec![
-        0x7F, 0x48, 0x0A, 0x91, 0x03, 0x92, 0x82, 0x01, 0x00, 0x93, 0x82, 0x01, 0x00,
-    ];
+    let mut for7f48: Vec<u8> = Vec::new();
+    // Now this encapsulates to 4D Tag
+    let mut for4d: Vec<u8> = vec![0x4D];
+
+    match what_kind_of_key {
+        "rsa" => {
+            // First the exponent
+            let values: Vec<u8> = main_e.unwrap().value().iter().copied().collect();
+            for value in values {
+                result.push(value);
+            }
+            // Then the p
+            let values: Vec<u8> = main_p.unwrap().value().iter().copied().collect();
+            for value in values {
+                result.push(value);
+            }
+            // Then the q
+            let values: Vec<u8> = main_q.unwrap().value().iter().copied().collect();
+            for value in values {
+                result.push(value);
+            }
+            let len = result.len() as u16;
+            // This is for the TLV 0x5F48
+            if len > 0xFF {
+                for5f48.push(0x82);
+            } else {
+                for5f48.push(0x81);
+            }
+            // Now we should add the length of the data in 2 bytes
+            let length = len.to_be_bytes();
+            for5f48.push(length[0]);
+            for5f48.push(length[1]);
+            for5f48.extend(result.iter());
+            // For the TLV 0x7F48
+            //
+            for7f48 = vec![
+                0x7F, 0x48, 0x0A, 0x91, 0x03, 0x92, 0x82, 0x01, 0x00, 0x93, 0x82, 0x01, 0x00,
+            ];
+        }
+        "EdDSA" | "ECDH" => {
+            let data: Vec<u8> = Vec::from(main_scalar.unwrap().value());
+            let len = data.len() as u8;
+            for5f48.push(len);
+            for5f48.extend(data.iter());
+
+            for7f48 = vec![0x7F, 0x48, 0x02, 0x92, len];
+        }
+        _ => (),
+    }
 
     // check 4.4.3.12 Private Key Template for details
     //
@@ -613,18 +666,25 @@ fn parse_and_move_a_subkey(cert: openpgp::Cert, keytype: i8, pin: Vec<u8>, passw
     maindata.extend(for7f48.iter());
     maindata.extend(for5f48.iter());
 
-    // Now this encapsulates to 4D Tag
-    let mut for4d: Vec<u8> = vec![0x4D];
-    let len = maindata.len() as u16;
-    if len > 0xFF {
-        for4d.push(0x82);
-    } else {
-        for4d.push(0x81);
+    match what_kind_of_key {
+        "rsa" => {
+            let len = maindata.len() as u16;
+            if len > 0xFF {
+                for4d.push(0x82);
+            } else {
+                for4d.push(0x81);
+            }
+            // Now we should add the length of the data in 2 bytes
+            let length = len.to_be_bytes();
+            for4d.push(length[0]);
+            for4d.push(length[1]);
+        }
+        "ECDH" | "EdDSA" => {
+            let len = maindata.len() as u8;
+            for4d.push(len);
+        }
+        _ => (),
     }
-    // Now we should add the length of the data in 2 bytes
-    let length = len.to_be_bytes();
-    for4d.push(length[0]);
-    for4d.push(length[1]);
     for4d.extend(maindata.iter());
 
     let apdu = talktosc::apdus::APDU::create_big_apdu(0x00, 0xDB, 0x3F, 0xFF, for4d);
@@ -636,22 +696,6 @@ fn parse_and_move_a_subkey(cert: openpgp::Cert, keytype: i8, pin: Vec<u8>, passw
     // Put the key via big apdu (put_data)
     // Put the fingerprint (put_data)
     // Put the timestamp (put_data)
-    let n_value: Vec<u8> = main_n
-        .unwrap()
-        .bits()
-        .to_be_bytes()
-        .iter()
-        .skip_while(|&&v| v == 0)
-        .copied()
-        .collect();
-    let e_value: Vec<u8> = main_e_for_second_use
-        .unwrap()
-        .bits()
-        .to_be_bytes()
-        .iter()
-        .skip_while(|&&v| v == 0)
-        .copied()
-        .collect();
 
     let time_value: Vec<u8> = ts
         .to_be_bytes()
@@ -659,16 +703,47 @@ fn parse_and_move_a_subkey(cert: openpgp::Cert, keytype: i8, pin: Vec<u8>, passw
         .skip_while(|&&e| e == 0)
         .copied()
         .collect();
-
     let mut for_algo_attributes: Vec<u8> = vec![01];
-    for_algo_attributes.extend(n_value);
-    if e_value.len() == 1 {
-        for_algo_attributes.push(0x00);
-    }
-    for_algo_attributes.extend(e_value);
-    // Because right now we are only dealing with RSA:    00 = standard (e, p, q)
-    for_algo_attributes.push(0x00);
 
+    match what_kind_of_key {
+        // Here we will create the algorithm attributes data
+        "rsa" => {
+            let n_value: Vec<u8> = main_n
+                .unwrap()
+                .bits()
+                .to_be_bytes()
+                .iter()
+                .skip_while(|&&v| v == 0)
+                .copied()
+                .collect();
+            let e_value: Vec<u8> = main_e_for_second_use
+                .unwrap()
+                .bits()
+                .to_be_bytes()
+                .iter()
+                .skip_while(|&&v| v == 0)
+                .copied()
+                .collect();
+
+            for_algo_attributes.extend(n_value);
+            if e_value.len() == 1 {
+                for_algo_attributes.push(0x00);
+            }
+            for_algo_attributes.extend(e_value);
+            // Because right now we are only dealing with RSA:    00 = standard (e, p, q)
+            for_algo_attributes.push(0x00);
+        }
+
+        "ECDH" => {
+            for_algo_attributes = vec![
+                0x12, 0x2B, 0x06, 0x01, 0x04, 0x01, 0x97, 0x55, 0x01, 0x05, 0x01,
+            ];
+        }
+        "EdDSA" => {
+            for_algo_attributes = vec![0x16, 0x2B, 0x06, 0x01, 0x04, 0x01, 0xDA, 0x47, 0x0F, 0x01];
+        }
+        _ => (),
+    }
     let algo_apdu = match keytype {
         1 => talktosc::apdus::APDU::create_big_apdu(0x00, 0xDA, 0x00, 0xC2, for_algo_attributes),
         2 => talktosc::apdus::APDU::create_big_apdu(0x00, 0xDA, 0x00, 0xC1, for_algo_attributes),
@@ -705,8 +780,9 @@ fn parse_and_move_a_subkey(cert: openpgp::Cert, keytype: i8, pin: Vec<u8>, passw
     }
     //dbg!(talktosc::tlvs::hexify(algo_apdu.iapdus[0].clone()));
     //dbg!(talktosc::tlvs::hexify(fp_apdu.iapdus[0].clone()));
-    //dbg!(talktosc::tlvs::hexify(time_apdu.iapdus[0].clone()));
-    //dbg!(ts.to_be_bytes());
+    //dbg!(talktosc::tlvs::hexify(apdu.iapdus[0].clone()));
+    //print!("\n\n\n");
+    //Ok(true)
 }
 
 #[pyfunction]
