@@ -181,17 +181,25 @@ fn get_card_details(py: Python) -> PyResult<PyObject> {
     pd.set_item("serial_number", tlvs::parse_card_serial(resp.get_data()))
         .unwrap();
     // Now the name of the card holder
-     let resp = talktosc::send_and_parse(&card, apdus::create_apdu_personal_information());
+    let resp = talktosc::send_and_parse(&card, apdus::create_apdu_personal_information());
     let resp = match resp {
         Ok(resp) => resp,
         Err(value) => return Err(CardError::new_err(format!("{}", value))),
     };
 
     let personal = tlvs::read_list(resp.get_data(), true)[0].clone();
-    let name = personal.get_name().unwrap();
-    let res = PyBytes::new(py, &name);
-    let name_in_bytes: PyObject = res.into();
-    pd.set_item("name", name_in_bytes).unwrap();
+    let name = String::from_utf8(personal.get_name().unwrap()).unwrap();
+    pd.set_item("name", name).unwrap();
+
+    // Let us get the URL of the public key
+    let url_apdu = apdus::APDU::new(0x00, 0xCA, 0x5F, 0x50, None);
+    let resp = talktosc::send_and_parse(&card, url_apdu);
+    let resp = match resp {
+        Ok(resp) => resp,
+        Err(value) => return Err(CardError::new_err(format!("{}", value))),
+    };
+    let url = String::from_utf8(resp.get_data()).unwrap();
+    pd.set_item("url", url).unwrap();
 
     // Now, we will get the whole of AID
     let mut aiddata: Vec<u8> = Vec::new();
@@ -227,11 +235,27 @@ pub fn set_name(name: Vec<u8>, pin: Vec<u8>) -> PyResult<bool>{
     let pw3_apdu = talktosc::apdus::create_apdu_verify_pw3(pin);
     let name_apdu = talktosc::apdus::APDU::new(0x00, 0xDA, 0x00, 0x5B, Some(name));
 
-    match scard::set_name(pw3_apdu, name_apdu) {
+    match scard::set_data(pw3_apdu, name_apdu) {
         Ok(value) => Ok(value),
         Err(value) => Err(CardError::new_err(format!("Error {}", value))),
     }
 }
+
+/// Sets the URL of the public key of the card.
+/// Requires the URL as buytes
+/// Also requires the admin pin in bytes.
+#[pyfunction]
+#[text_signature = "(url, pin)"]
+pub fn set_url(url: Vec<u8>, pin: Vec<u8>) -> PyResult<bool>{
+    let pw3_apdu = talktosc::apdus::create_apdu_verify_pw3(pin);
+    let url_apdu = talktosc::apdus::APDU::new(0x00, 0xDA, 0x5F, 0x50, Some(url));
+
+    match scard::set_data(pw3_apdu, url_apdu) {
+        Ok(value) => Ok(value),
+        Err(value) => Err(CardError::new_err(format!("Error {}", value))),
+    }
+}
+
 
 struct Helper {
     keys: HashMap<openpgp::KeyID, KeyPair>,
@@ -1504,6 +1528,7 @@ impl Johnny {
 #[pymodule]
 fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(set_name))?;
+    m.add_wrapped(wrap_pyfunction!(set_url))?;
     m.add_wrapped(wrap_pyfunction!(get_card_details))?;
     m.add_wrapped(wrap_pyfunction!(decrypt_bytes_on_card))?;
     m.add_wrapped(wrap_pyfunction!(create_newkey))?;
