@@ -176,9 +176,23 @@ fn get_card_details(py: Python) -> PyResult<PyObject> {
         Err(value) => return Err(CardError::new_err(format!("{}", value))),
     };
 
+
     let pd = PyDict::new(py);
     pd.set_item("serial_number", tlvs::parse_card_serial(resp.get_data()))
         .unwrap();
+    // Now the name of the card holder
+     let resp = talktosc::send_and_parse(&card, apdus::create_apdu_personal_information());
+    let resp = match resp {
+        Ok(resp) => resp,
+        Err(value) => return Err(CardError::new_err(format!("{}", value))),
+    };
+
+    let personal = tlvs::read_list(resp.get_data(), true)[0].clone();
+    let name = personal.get_name().unwrap();
+    let res = PyBytes::new(py, &name);
+    let name_in_bytes: PyObject = res.into();
+    pd.set_item("name", name_in_bytes).unwrap();
+
     // Now, we will get the whole of AID
     let mut aiddata: Vec<u8> = Vec::new();
 
@@ -202,6 +216,21 @@ fn get_card_details(py: Python) -> PyResult<PyObject> {
     // Disconnect
     talktosc::disconnect(card);
     Ok(pd.into())
+}
+
+/// Sets the name of the card holder.
+/// Requires the name as bytes in b"surname<<Firstname" format, and should be less than 39 in size.
+/// Also requires the admin pin in bytes.
+#[pyfunction]
+#[text_signature = "(name, pin)"]
+pub fn set_name(name: Vec<u8>, pin: Vec<u8>) -> PyResult<bool>{
+    let pw3_apdu = talktosc::apdus::create_apdu_verify_pw3(pin);
+    let name_apdu = talktosc::apdus::APDU::new(0x00, 0xDA, 0x00, 0x5B, Some(name));
+
+    match scard::set_name(pw3_apdu, name_apdu) {
+        Ok(value) => Ok(value),
+        Err(value) => Err(CardError::new_err(format!("Error {}", value))),
+    }
 }
 
 struct Helper {
@@ -1474,6 +1503,7 @@ impl Johnny {
 /// A Python module implemented in Rust.
 #[pymodule]
 fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
+    m.add_wrapped(wrap_pyfunction!(set_name))?;
     m.add_wrapped(wrap_pyfunction!(get_card_details))?;
     m.add_wrapped(wrap_pyfunction!(decrypt_bytes_on_card))?;
     m.add_wrapped(wrap_pyfunction!(create_newkey))?;

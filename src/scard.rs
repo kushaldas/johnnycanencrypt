@@ -5,6 +5,35 @@ use openpgp::packet::prelude::*;
 use sequoia_openpgp as openpgp;
 use talktosc::*;
 
+// Sets the name to the card
+#[allow(unused)]
+pub fn set_name(pw3_apdu: apdus::APDU, name: apdus::APDU) -> Result<bool, errors::TalktoSCError> {
+    let card = talktosc::create_connection();
+    let card = match card {
+        Ok(card) => card,
+        Err(value) => return Err(value),
+    };
+
+    let select_openpgp = apdus::create_apdu_select_openpgp();
+    let resp = talktosc::send_and_parse(&card, select_openpgp);
+    match resp {
+        Ok(_) => (),
+        Err(value) => return Err(value),
+    }
+    let resp = talktosc::send_and_parse(&card, pw3_apdu.clone());
+    match resp {
+        Ok(_) => (),
+        Err(value) => return Err(value),
+    }
+
+    let resp = talktosc::send_and_parse(&card, name);
+    match resp {
+        Ok(_) => Ok(true),
+        Err(value) => return Err(value),
+    }
+
+}
+
 pub fn move_subkey_to_card(
     pw3_apdu: apdus::APDU,
     algo_apdu: apdus::APDU,
