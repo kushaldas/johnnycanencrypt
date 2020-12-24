@@ -150,6 +150,48 @@ fn decrypt_the_secret_in_card(c: Vec<u8>, pin: Vec<u8>) -> Result<Vec<u8>, error
     Ok(Vec::from(aiddata))
 }
 
+fn sign_hash_in_card(c: Vec<u8>, pin: Vec<u8>) -> Result<Vec<u8>, errors::TalktoSCError> {
+    let card = talktosc::create_connection();
+    let card = match card {
+        Ok(card) => card,
+        Err(value) => return Err(value),
+    };
+
+    let select_openpgp = apdus::create_apdu_select_openpgp();
+    let resp = talktosc::send_and_parse(&card, select_openpgp);
+    match resp {
+        Ok(_) => (),
+        Err(value) => return Err(value),
+    }
+    let resp = talktosc::send_and_parse(&card, apdus::create_apdu_verify_pw1_for_sign(pin));
+    match resp {
+        Ok(_) => (),
+        Err(value) => return Err(value),
+    }
+
+    // Experiment code
+    let mut iapdu: Vec<u8> = vec![0x00, 0x2A, 0x9E, 0x9A, c.len() as u8];
+    iapdu.extend(c.clone().iter());
+    iapdu.push(0x00);
+    let iapdus = vec![iapdu];
+
+    let dapdu = apdus::APDU { cla: 0x00, ins: 0x21, p1: 0x9E, p2: 0x9A, data: c.clone(), iapdus, };
+
+    let mut aiddata: Vec<u8> = Vec::new();
+
+    let mut resp = talktosc::send_and_parse(&card, dapdu).unwrap();
+    aiddata.extend(resp.get_data());
+    // This means we have more data to read.
+    while resp.sw1 == 0x61 {
+        let apdu = apdus::create_apdu_for_reading(resp.sw2.clone());
+
+        resp = talktosc::send_and_parse(&card, apdu).unwrap();
+        aiddata.extend(resp.get_data());
+    }
+    talktosc::disconnect(card);
+    Ok(Vec::from(aiddata))
+}
+
 pub struct KeyPair<'a> {
     public: &'a Key<key::PublicParts, key::UnspecifiedRole>,
     pin: Vec<u8>,
@@ -215,6 +257,69 @@ impl<'a> crypto::Decryptor for KeyPair<'a> {
                 "unsupported combination of key pair {:?} \
                      and ciphertext {:?}",
                 public, ciphertext
+            ))
+            .into()),
+        }
+    }
+}
+// TODO: This function needs refactoring
+impl<'a> crypto::Signer for KeyPair<'a> {
+    fn public(&self) -> &Key<key::PublicParts, key::UnspecifiedRole> {
+        self.public
+    }
+
+    fn sign(
+        &mut self,
+        hash_algo: openpgp::types::HashAlgorithm,
+        digest: &[u8],
+    ) -> openpgp::Result<openpgp::crypto::mpi::Signature> {
+        use crate::openpgp::crypto::mpi::PublicKey;
+        use crate::openpgp::types::PublicKeyAlgorithm::*;
+
+        #[allow(deprecated)]
+        match (self.public.pk_algo(), self.public.mpis()) {
+            (RSASign, PublicKey::RSA { .. }) | (RSAEncryptSign, PublicKey::RSA { .. }) => {
+                match hash_algo {
+                    openpgp::types::HashAlgorithm::SHA256 => {
+                        let mut data_for_rsa = vec![
+                            0x30, 0x31, 0x30, 0x0D, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03,
+                            0x04, 0x02, 0x01, 0x05, 0x00, 0x04, 0x20,
+                        ];
+                        data_for_rsa.extend(digest);
+                        data_for_rsa.push(0x00);
+                        let result = sign_hash_in_card(data_for_rsa, self.pin.clone()).unwrap();
+                        let mpi = openpgp::crypto::mpi::MPI::new(&result[..]);
+                        return Ok(openpgp::crypto::mpi::Signature::RSA { s: mpi });
+                    },
+                    openpgp::types::HashAlgorithm::SHA512 => {
+                        let mut data_for_rsa = vec![
+                            0x30, 0x51, 0x30, 0x0D, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03,
+                            0x04, 0x02, 0x03, 0x05, 0x00, 0x04, 0x40,
+                        ];
+                        data_for_rsa.extend(digest);
+                        let result = sign_hash_in_card(data_for_rsa, self.pin.clone()).unwrap();
+                        let mpi = openpgp::crypto::mpi::MPI::new(&result[..]);
+                        return Ok(openpgp::crypto::mpi::Signature::RSA { s: mpi });
+                    }
+                    _ => {
+                        return Err(openpgp::Error::InvalidOperation(format!(
+                            "unsupported combination of hash algorithm {:?} and key {:?}",
+                            hash_algo, self.public
+                        ))
+                        .into());
+                    }
+                }
+            },
+            (EdDSA, PublicKey::EdDSA { .. }) => {
+                let data_for_eddsa: Vec<u8> = digest.iter().map(|x| x).copied().collect();
+                        let result = sign_hash_in_card(data_for_eddsa, self.pin.clone()).unwrap();
+                        let r = openpgp::crypto::mpi::MPI::new(&result[..32]);
+                        let s = openpgp::crypto::mpi::MPI::new(&result[32..]);
+                        return Ok(openpgp::crypto::mpi::Signature::EdDSA { r, s });
+            },
+            (pk_algo, _) => Err(openpgp::Error::InvalidOperation(format!(
+                "unsupported combination of algorithm {:?} and key {:?}",
+                pk_algo, self.public
             ))
             .into()),
         }
