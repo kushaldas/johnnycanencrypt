@@ -176,7 +176,6 @@ fn get_card_details(py: Python) -> PyResult<PyObject> {
         Err(value) => return Err(CardError::new_err(format!("{}", value))),
     };
 
-
     let pd = PyDict::new(py);
     pd.set_item("serial_number", tlvs::parse_card_serial(resp.get_data()))
         .unwrap();
@@ -231,7 +230,7 @@ fn get_card_details(py: Python) -> PyResult<PyObject> {
 /// Also requires the admin pin in bytes.
 #[pyfunction]
 #[text_signature = "(name, pin)"]
-pub fn set_name(name: Vec<u8>, pin: Vec<u8>) -> PyResult<bool>{
+pub fn set_name(name: Vec<u8>, pin: Vec<u8>) -> PyResult<bool> {
     let pw3_apdu = talktosc::apdus::create_apdu_verify_pw3(pin);
     let name_apdu = talktosc::apdus::APDU::new(0x00, 0xDA, 0x00, 0x5B, Some(name));
 
@@ -246,7 +245,7 @@ pub fn set_name(name: Vec<u8>, pin: Vec<u8>) -> PyResult<bool>{
 /// Also requires the admin pin in bytes.
 #[pyfunction]
 #[text_signature = "(url, pin)"]
-pub fn set_url(url: Vec<u8>, pin: Vec<u8>) -> PyResult<bool>{
+pub fn set_url(url: Vec<u8>, pin: Vec<u8>) -> PyResult<bool> {
     let pw3_apdu = talktosc::apdus::create_apdu_verify_pw3(pin);
     let url_apdu = talktosc::apdus::APDU::new(0x00, 0xDA, 0x5F, 0x50, Some(url));
 
@@ -255,7 +254,6 @@ pub fn set_url(url: Vec<u8>, pin: Vec<u8>) -> PyResult<bool>{
         Err(value) => Err(CardError::new_err(format!("Error {}", value))),
     }
 }
-
 
 struct Helper {
     keys: HashMap<openpgp::KeyID, KeyPair>,
@@ -413,6 +411,75 @@ fn get_keys(cert: &openpgp::cert::Cert, password: String) -> Vec<openpgp::crypto
         keys.push(key.into_keypair().unwrap());
     }
     keys
+}
+
+#[pyfunction]
+pub fn sign_bytes_detached_on_card(
+    certdata: Vec<u8>,
+    data: Vec<u8>,
+    pin: Vec<u8>,
+) -> PyResult<String> {
+    let mut localdata = io::Cursor::new(data);
+    sign_internal_detached_on_card(certdata, &mut localdata, pin)
+}
+
+#[pyfunction]
+pub fn sign_file_detached_on_card(
+    certdata: Vec<u8>,
+    filepath: Vec<u8>,
+    pin: Vec<u8>,
+) -> PyResult<String> {
+    let file = Path::new(str::from_utf8(&filepath[..]).unwrap());
+    let mut localdata = File::open(file)?;
+    sign_internal_detached_on_card(certdata, &mut localdata, pin)
+}
+// This is the internal function which signs either bytes or an input file on the smartcard
+fn sign_internal_detached_on_card(
+    certdata: Vec<u8>,
+    input: &mut dyn io::Read,
+    pin: Vec<u8>,
+) -> PyResult<String> {
+    let policy = &P::new();
+    // This is where we will store all the signing keys
+    let mut keys: Vec<scard::KeyPair> = Vec::new();
+    let cert = openpgp::Cert::from_bytes(&certdata).unwrap();
+    // Note: We are only selecting subkeys for signing via card
+    for ka in cert
+        .keys()
+        .with_policy(policy, None)
+        .subkeys()
+        .alive()
+        .revoked(false)
+        .for_signing()
+    {
+        let key = ka.key();
+        let pair = scard::KeyPair::new(pin.clone(), key).unwrap();
+        keys.push(pair);
+    }
+    let mut result = Vec::new();
+    let mut sink = armor::Writer::new(&mut result, armor::Kind::Signature)
+        .expect("Failed to create armored writer.");
+
+    // Stream an OpenPGP message.
+    let message = Message::new(&mut sink);
+
+    // Now, create a signer that emits the detached signature(s).
+    let mut signer = Signer::new(message, keys.pop().expect("No key for signing"));
+    for s in keys {
+        signer = signer.add_signer(s);
+    }
+    let mut signer = signer.detached().build().expect("Failed to create signer");
+
+    // Copy all the data.
+    io::copy(input, &mut signer).expect("Failed to sign data");
+
+    // Finally, teardown the stack to ensure all the data is written.
+    signer.finalize().expect("Failed to write data");
+
+    // Finalize the armor writer.
+    sink.finalize().expect("Failed to write data");
+
+    Ok(String::from_utf8(result).unwrap())
 }
 
 fn sign_bytes_detached_internal(
@@ -585,7 +652,13 @@ fn parse_and_move_a_subkey(
     let mut ts = 0 as u64;
 
     let mut fp: Option<openpgp::Fingerprint> = None;
-    let mut valid_ka = cert.keys().subkeys().with_policy(&policy, None).secret().alive().revoked(false);
+    let mut valid_ka = cert
+        .keys()
+        .subkeys()
+        .with_policy(&policy, None)
+        .secret()
+        .alive()
+        .revoked(false);
     valid_ka = match keytype {
         1 => valid_ka.for_storage_encryption(),
         2 => valid_ka.for_signing(),
@@ -1527,6 +1600,8 @@ impl Johnny {
 /// A Python module implemented in Rust.
 #[pymodule]
 fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
+    m.add_wrapped(wrap_pyfunction!(sign_bytes_detached_on_card))?;
+    m.add_wrapped(wrap_pyfunction!(sign_file_detached_on_card))?;
     m.add_wrapped(wrap_pyfunction!(set_name))?;
     m.add_wrapped(wrap_pyfunction!(set_url))?;
     m.add_wrapped(wrap_pyfunction!(get_card_details))?;
