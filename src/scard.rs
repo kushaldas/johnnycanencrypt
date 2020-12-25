@@ -5,6 +5,34 @@ use openpgp::packet::prelude::*;
 use sequoia_openpgp as openpgp;
 use talktosc::*;
 
+// To change the admin pin
+#[allow(unused)]
+pub fn chagne_admin_pin(pw3change: apdus::APDU) -> Result<bool, errors::TalktoSCError> {
+    let card = talktosc::create_connection();
+    let card = match card {
+        Ok(card) => card,
+        Err(value) => return Err(value),
+    };
+
+    let select_openpgp = apdus::create_apdu_select_openpgp();
+    let resp = talktosc::send_and_parse(&card, select_openpgp);
+    match resp {
+        Ok(_) => (),
+        Err(value) => return Err(value),
+    }
+    let resp = talktosc::send_and_parse(&card, pw3change);
+    let resp = match resp {
+        Ok(_) => resp.unwrap(),
+        Err(value) => return Err(value),
+    };
+
+    // Verify if the admin pin worked or not.
+    if resp.is_okay() == false {
+        return Err(errors::TalktoSCError::PinError);
+    }
+    Ok(true)
+}
+
 // Sets the name to the card
 #[allow(unused)]
 pub fn set_data(pw3_apdu: apdus::APDU, data: apdus::APDU) -> Result<bool, errors::TalktoSCError> {
@@ -32,10 +60,17 @@ pub fn set_data(pw3_apdu: apdus::APDU, data: apdus::APDU) -> Result<bool, errors
     }
 
     let resp = talktosc::send_and_parse(&card, data);
-    match resp {
-        Ok(_) => Ok(true),
+    let resp = match resp {
+        Ok(_) => resp.unwrap(),
         Err(value) => return Err(value),
+    };
+
+    if resp.is_okay() == true {
+        return Ok(true);
     }
+
+    // Should not reach here
+    Ok(false)
 }
 
 pub fn move_subkey_to_card(
@@ -175,7 +210,14 @@ fn sign_hash_in_card(c: Vec<u8>, pin: Vec<u8>) -> Result<Vec<u8>, errors::Talkto
     iapdu.push(0x00);
     let iapdus = vec![iapdu];
 
-    let dapdu = apdus::APDU { cla: 0x00, ins: 0x21, p1: 0x9E, p2: 0x9A, data: c.clone(), iapdus, };
+    let dapdu = apdus::APDU {
+        cla: 0x00,
+        ins: 0x21,
+        p1: 0x9E,
+        p2: 0x9A,
+        data: c.clone(),
+        iapdus,
+    };
 
     let mut aiddata: Vec<u8> = Vec::new();
 
@@ -290,7 +332,7 @@ impl<'a> crypto::Signer for KeyPair<'a> {
                         let result = sign_hash_in_card(data_for_rsa, self.pin.clone()).unwrap();
                         let mpi = openpgp::crypto::mpi::MPI::new(&result[..]);
                         return Ok(openpgp::crypto::mpi::Signature::RSA { s: mpi });
-                    },
+                    }
                     openpgp::types::HashAlgorithm::SHA512 => {
                         let mut data_for_rsa = vec![
                             0x30, 0x51, 0x30, 0x0D, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03,
@@ -309,14 +351,14 @@ impl<'a> crypto::Signer for KeyPair<'a> {
                         .into());
                     }
                 }
-            },
+            }
             (EdDSA, PublicKey::EdDSA { .. }) => {
                 let data_for_eddsa: Vec<u8> = digest.iter().map(|x| x).copied().collect();
-                        let result = sign_hash_in_card(data_for_eddsa, self.pin.clone()).unwrap();
-                        let r = openpgp::crypto::mpi::MPI::new(&result[..32]);
-                        let s = openpgp::crypto::mpi::MPI::new(&result[32..]);
-                        return Ok(openpgp::crypto::mpi::Signature::EdDSA { r, s });
-            },
+                let result = sign_hash_in_card(data_for_eddsa, self.pin.clone()).unwrap();
+                let r = openpgp::crypto::mpi::MPI::new(&result[..32]);
+                let s = openpgp::crypto::mpi::MPI::new(&result[32..]);
+                return Ok(openpgp::crypto::mpi::Signature::EdDSA { r, s });
+            }
             (pk_algo, _) => Err(openpgp::Error::InvalidOperation(format!(
                 "unsupported combination of algorithm {:?} and key {:?}",
                 pk_algo, self.public

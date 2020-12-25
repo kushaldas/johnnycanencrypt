@@ -225,6 +225,43 @@ fn get_card_details(py: Python) -> PyResult<PyObject> {
     Ok(pd.into())
 }
 
+
+/// Change user pin (PW1)
+#[pyfunction]
+#[text_signature = "(adminpin, newpin)"]
+pub fn change_user_pin(adminpin: Vec<u8>, newpin: Vec<u8>) -> PyResult<bool>
+{
+    // check for minimum length of 6 chars
+    if newpin.len() < 6 {
+        return Err(PyValueError::new_err("The new pin should be 6 chars length minimum."));
+    }
+    let pw3_apdu = talktosc::apdus::create_apdu_verify_pw3(adminpin);
+    let newuserpin_apdu = talktosc::apdus::create_apdu_change_pw1(newpin);
+
+    match scard::set_data(pw3_apdu, newuserpin_apdu) {
+        Ok(value) => Ok(value),
+        Err(value) => Err(CardError::new_err(format!("Error {}", value))),
+    }
+}
+
+/// Change admin pin (PW3)
+#[pyfunction]
+#[text_signature = "(adminpin, newadminpin)"]
+pub fn change_admin_pin(adminpin: Vec<u8>, newadminpin: Vec<u8>) -> PyResult<bool>
+{
+    // check for minimum length of 6 chars
+    if newadminpin.len() < 8 {
+        return Err(PyValueError::new_err("The new pin should be 6 chars length minimum."));
+    }
+    let newadminpin_apdu = talktosc::apdus::create_apdu_change_pw3(adminpin, newadminpin);
+
+    match scard::chagne_admin_pin(newadminpin_apdu) {
+        Ok(value) => Ok(value),
+        Err(value) => Err(CardError::new_err(format!("Error {}", value))),
+    }
+}
+
+
 /// Sets the name of the card holder.
 /// Requires the name as bytes in b"surname<<Firstname" format, and should be less than 39 in size.
 /// Also requires the admin pin in bytes.
@@ -1600,6 +1637,8 @@ impl Johnny {
 /// A Python module implemented in Rust.
 #[pymodule]
 fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
+    m.add_wrapped(wrap_pyfunction!(change_admin_pin))?;
+    m.add_wrapped(wrap_pyfunction!(change_user_pin))?;
     m.add_wrapped(wrap_pyfunction!(sign_bytes_detached_on_card))?;
     m.add_wrapped(wrap_pyfunction!(sign_file_detached_on_card))?;
     m.add_wrapped(wrap_pyfunction!(set_name))?;
