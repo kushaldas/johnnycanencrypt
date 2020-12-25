@@ -162,9 +162,14 @@ class KeyStore:
                 key_id = cursor.lastrowid
 
             # Now let us add the subkey and keyid details
-            sql = "INSERT INTO subkeys (key_id, fingerprint, keyid) VALUES(?, ?, ?)"
+            sql = "INSERT INTO subkeys (key_id, fingerprint, keyid, expiration, creation, keytype, revoked) VALUES(?, ?, ?, ?, ?, ?, ?)"
             for subkey in subkeys:
-                cursor.execute(sql, (key_id, subkey[1], subkey[0]))
+                ctime = str(subkey[2].timestamp()) if subkey[2] else ""
+                etime = str(subkey[3].timestamp()) if subkey[3] else ""
+                cursor.execute(
+                    sql,
+                    (key_id, subkey[1], subkey[0], etime, ctime, subkey[4], subkey[5]),
+                )
 
             # TODO: Now for each of the uid, add to the right dictionary
             for uid_keyname in ["name", "value", "email", "uri"]:
@@ -338,13 +343,32 @@ class KeyStore:
                     )
 
                 # Get the subkeys
-                sql = "SELECT fingerprint, keyid FROM subkeys WHERE key_id=?"
+                sql = "SELECT fingerprint, keyid, expiration, creation, keytype, revoked FROM subkeys WHERE key_id=?"
                 cursor.execute(sql, (key_id,))
                 rows = cursor.fetchall()
                 othervalues = {}
                 subs = {}
+                # Each subkey is added as a tuple
+                # Remember that there can be many expired subkeys.
+                # TODO: Add a value to mark if it was alive at the time of the call
                 for row in rows:
-                    subs[row["keyid"]] = row["fingerprint"]
+                    etime = (
+                        datetime.fromtimestamp(float(row["expiration"]))
+                        if row["expiration"]
+                        else None
+                    )
+                    ctime = (
+                        datetime.fromtimestamp(float(row["creation"]))
+                        if row["creation"]
+                        else None
+                    )
+                    subs[row["keyid"]] = (
+                        row["fingerprint"],
+                        etime,
+                        ctime,
+                        row["keytype"],
+                        row["revoked"],
+                    )
                 othervalues["subkeys"] = subs
 
                 finalresult.append(
@@ -445,6 +469,7 @@ class KeyStore:
         ciphersuite: Cipher = Cipher.RSA4k,
         creation=None,
         expiration=None,
+        subkeys_expiration=False,
     ) -> Key:
         """Returns a public `Key` object after creating a new key in the store
 
@@ -453,6 +478,7 @@ class KeyStore:
         :param ciphersuite: Default Cipher.RSA4k, other values are Cipher.RSA2k, Cipher.Cv25519
         :param creation: datetime.datetime, default datetime.now() (via rust)
         :param expiration: datetime.datetime, default 0 (Never)
+        :param subkeys_expiration: Bool (default False), pass True if you want to set the expiary date to the subkeys instead of master key.
         """
         if creation:
             ctime = creation.timestamp()
@@ -471,7 +497,12 @@ class KeyStore:
             finaluids = uids
 
         public, secret, fingerprint = create_newkey(
-            password, finaluids, ciphersuite.value, int(ctime), int(etime)
+            password,
+            finaluids,
+            ciphersuite.value,
+            int(ctime),
+            int(etime),
+            subkeys_expiration,
         )
         # Now save the secret key
         key_filename = os.path.join(self.path, f"{fingerprint}.sec")

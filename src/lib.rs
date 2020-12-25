@@ -39,6 +39,7 @@ use crate::openpgp::types::SymmetricAlgorithm;
 use crate::openpgp::Packet;
 use chrono::prelude::*;
 use openpgp::cert::prelude::*;
+use openpgp::types::RevocationStatus;
 use talktosc::*;
 
 mod scard;
@@ -225,15 +226,15 @@ fn get_card_details(py: Python) -> PyResult<PyObject> {
     Ok(pd.into())
 }
 
-
 /// Change user pin (PW1)
 #[pyfunction]
 #[text_signature = "(adminpin, newpin)"]
-pub fn change_user_pin(adminpin: Vec<u8>, newpin: Vec<u8>) -> PyResult<bool>
-{
+pub fn change_user_pin(adminpin: Vec<u8>, newpin: Vec<u8>) -> PyResult<bool> {
     // check for minimum length of 6 chars
     if newpin.len() < 6 {
-        return Err(PyValueError::new_err("The new pin should be 6 chars length minimum."));
+        return Err(PyValueError::new_err(
+            "The new pin should be 6 chars length minimum.",
+        ));
     }
     let pw3_apdu = talktosc::apdus::create_apdu_verify_pw3(adminpin);
     let newuserpin_apdu = talktosc::apdus::create_apdu_change_pw1(newpin);
@@ -247,11 +248,12 @@ pub fn change_user_pin(adminpin: Vec<u8>, newpin: Vec<u8>) -> PyResult<bool>
 /// Change admin pin (PW3)
 #[pyfunction]
 #[text_signature = "(adminpin, newadminpin)"]
-pub fn change_admin_pin(adminpin: Vec<u8>, newadminpin: Vec<u8>) -> PyResult<bool>
-{
+pub fn change_admin_pin(adminpin: Vec<u8>, newadminpin: Vec<u8>) -> PyResult<bool> {
     // check for minimum length of 6 chars
     if newadminpin.len() < 8 {
-        return Err(PyValueError::new_err("The new pin should be 6 chars length minimum."));
+        return Err(PyValueError::new_err(
+            "The new pin should be 6 chars length minimum.",
+        ));
     }
     let newadminpin_apdu = talktosc::apdus::create_apdu_change_pw3(adminpin, newadminpin);
 
@@ -260,7 +262,6 @@ pub fn change_admin_pin(adminpin: Vec<u8>, newadminpin: Vec<u8>) -> PyResult<boo
         Err(value) => Err(CardError::new_err(format!("Error {}", value))),
     }
 }
-
 
 /// Sets the name of the card holder.
 /// Requires the name as bytes in b"surname<<Firstname" format, and should be less than 39 in size.
@@ -1046,9 +1047,50 @@ fn internal_parse_cert(
     }
 
     let subkeys = PyList::empty(py);
-    for ka in cert.keys().subkeys() {
+    for ka in cert.keys().with_policy(&p, None).subkeys() {
+        let expirationtime = match ka.key_expiration_time() {
+            Some(etime) => {
+                let dt: DateTime<Utc> = DateTime::from(etime);
+                let pd = Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None).unwrap());
+                pd
+            }
+            _ => None,
+        };
+
+        let creationtime = {
+            let dt: DateTime<Utc> = DateTime::from(ka.creation_time());
+            let pd = Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None).unwrap());
+            pd
+        };
+
+        // To find what kind of subkey is this.
+        let keytype = if ka.for_storage_encryption() | ka.for_transport_encryption() {
+            String::from("encryption")
+        } else if ka.for_signing() {
+            String::from("signing")
+        } else if ka.for_authentication() {
+            String::from("authentication")
+        } else {
+            String::from("unknown")
+        };
+
+        // To check if it is revoked or not
+        // Just the oppostie from the filter values in
+        // https://docs.sequoia-pgp.org/1.0.0/sequoia_openpgp/cert/amalgamation/struct.ValidComponentAmalgamationIter.html#method.revoked
+        let revoked = match ka.revocation_status() {
+            RevocationStatus::Revoked(_) => true,
+            RevocationStatus::CouldBe(_) => false,
+            RevocationStatus::NotAsFarAsWeKnow => false,
+        };
         subkeys
-            .append((ka.keyid().to_hex(), ka.fingerprint().to_hex()))
+            .append((
+                ka.keyid().to_hex(),
+                ka.fingerprint().to_hex(),
+                creationtime,
+                expirationtime,
+                keytype,
+                revoked,
+            ))
             .unwrap();
     }
 
@@ -1071,13 +1113,14 @@ fn internal_parse_cert(
 /// This function takes a password and an userid as strings, returns a tuple of public and private
 /// key and the fingerprint in hex. Remember to save the keys for future use.
 #[pyfunction]
-#[text_signature = "(password, userid, cipher)"]
+#[text_signature = "(password, userid, cipher, creation, expiration)"]
 fn create_newkey(
     password: String,
     userids: Vec<String>,
     cipher: String,
     creation: i64,
     expiration: i64,
+    subkeys_expiration: bool,
 ) -> PyResult<(String, String, String)> {
     // Default we create RSA4k keys
     let mut ciphervalue = CipherSuite::RSA4k;
@@ -1088,9 +1131,6 @@ fn create_newkey(
     }
 
     let mut crtbuilder = CertBuilder::new()
-        .add_storage_encryption_subkey()
-        .add_signing_subkey()
-        .add_authentication_subkey()
         .set_cipher_suite(ciphervalue)
         .set_password(Some(openpgp::crypto::Password::from(password)));
 
@@ -1110,10 +1150,27 @@ fn create_newkey(
     };
 
     let crtbuilder = match expiration {
-        0 => crtbuilder,
+        0 => crtbuilder
+            .add_storage_encryption_subkey()
+            .add_transport_encryption_subkey()
+            .add_signing_subkey()
+            .add_authentication_subkey(),
         _ => {
             let validity = Duration::new(expiration as u64 - creation as u64, 0);
-            crtbuilder.set_validity_period(validity)
+            if subkeys_expiration == false {
+                crtbuilder.set_validity_period(validity)
+            } else {
+                crtbuilder
+                    .add_subkey(
+                        KeyFlags::empty()
+                            .set_storage_encryption()
+                            .set_transport_encryption(),
+                        validity,
+                        None,
+                    )
+                    .add_subkey(KeyFlags::empty().set_signing(), validity, None)
+                    .add_subkey(KeyFlags::empty().set_authentication(), validity, None)
+            }
         }
     };
 

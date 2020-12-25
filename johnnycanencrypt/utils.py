@@ -15,6 +15,10 @@ CREATE TABLE subkeys (
 	key_id INTEGER,
 	fingerprint TEXT NOT NULL,
 	keyid TEXT NOT NULL,
+	expiration TEXT,
+	creation TEXT,
+	keytype TEXT,
+	revoked INTEGER,
 	FOREIGN KEY (key_id)
 	REFERENCES keys (id)
 		ON DELETE CASCADE

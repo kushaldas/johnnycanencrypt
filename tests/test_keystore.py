@@ -310,6 +310,20 @@ def test_ks_creation_expiration_time():
     assert ctime.date() == newk.creationtime.date()
     assert etime.date() == newk.expirationtime.date()
 
+    # Now both creation and expirationtime for subkeys
+    ctime = datetime.datetime(2008, 10, 10, 20, 53, 47)
+    etime = datetime.datetime(2029, 12, 15, 20, 53, 47)
+    newk = ks.create_newkey(
+        "redhat",
+        "Test key with subkey expiration",
+        creation=ctime,
+        expiration=etime,
+        subkeys_expiration=True,
+    )
+    assert ctime.date() == newk.creationtime.date()
+    for skeyid, subkey in newk.othervalues["subkeys"].items():
+        assert subkey[1].date() == etime.date()
+
 
 def test_get_all_keys():
     ks = jce.KeyStore("./tests/files/store")
@@ -359,14 +373,16 @@ def test_key_with_multiple_uids():
     uids, fp, secret, et, ct, othervalues = jce.parse_cert_bytes(k.keyvalue)
     assert len(uids) == 3
 
+
 def test_get_encrypted_for():
     ks = jce.KeyStore("tests/files/store/")
     keyids = rjce.file_encrypted_for("tests/files/double_recipient.asc")
-    assert keyids == ['1CF980B8E69E112A', '5A7A1560D46ED4F6']
+    assert keyids == ["1CF980B8E69E112A", "5A7A1560D46ED4F6"]
     with open("tests/files/double_recipient.asc", "rb") as fobj:
         data = fobj.read()
     keyids = rjce.bytes_encrypted_for(data)
-    assert keyids == ['1CF980B8E69E112A', '5A7A1560D46ED4F6']
+    assert keyids == ["1CF980B8E69E112A", "5A7A1560D46ED4F6"]
+
 
 def test_error_at_sha1_based_key():
     tempdir = tempfile.TemporaryDirectory()

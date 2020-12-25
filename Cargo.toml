@@ -24,8 +24,8 @@ default = ["pyo3/extension-module"]
 sequoia-openpgp = "0.20.0"
 anyhow = "1.0.31"
 chrono = "0.4.19"
-#talktosc = { git = "https://github.com/kushaldas/talktosc", branch="main"}
-talktosc = "0.1.0"
+talktosc = { git = "https://github.com/kushaldas/talktosc", branch="main"}
+#talktosc = "0.1.0"
  
 [dependencies.pyo3]
 version = "0.12.1"
