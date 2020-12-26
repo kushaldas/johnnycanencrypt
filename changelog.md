@@ -4,6 +4,14 @@
 
 ### Added
 
+- 
+- `move_subkey_to_card` function to move all 3 subkeys to the card.
+- We can also decrypt based on RSA keys on a smartcard.
+- `sign_bytes_detached_on_card` and `sign_file_detached_on_card` to sign using smartcard.
+- `set_name` to set the card holder's name in the card.
+- `set_url` to set the URL to the public key of the card.
+- `get_card_details` function in rjce to get smartcard details.
+- `bytes_encrypted_for` and `file_encrypted_for` functions were added (these are costly function calls).
 - `get_keys_by_keyid` to get keys for a given keyid
 - `fetch_key_by_email` can fetch key from keys.openpgp.org for a given email id.
 - `fetch_key_by_fingerprint` can fetch key from keys.openpgp.org for a given fingerprint.
