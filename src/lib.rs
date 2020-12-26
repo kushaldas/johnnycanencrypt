@@ -584,7 +584,7 @@ fn merge_keys(_py: Python, certdata: Vec<u8>, newcertdata: Vec<u8>) -> PyResult<
     }
     // Now let us merge the new one into old one.
     // Remember, the opposite is a security risk.
-    let mergred_cert = cert.merge(newcert).unwrap();
+    let mergred_cert = cert.merge_public_and_secret(newcert).unwrap();
     let cert_packets = mergred_cert.armored().to_vec().unwrap();
     let res = PyBytes::new(_py, &cert_packets);
     return Ok(res.into());
@@ -974,9 +974,13 @@ fn internal_parse_cert(
     cert: openpgp::Cert,
 ) -> PyResult<(PyObject, String, bool, PyObject, PyObject, PyObject)> {
     let p = P::new();
-    let creationtime = match find_creation_time(cert.clone()) {
-        Some(ctime) => Some(PyDateTime::from_timestamp(py, ctime, None).unwrap()),
-        None => None,
+    let creationtime = match cert.primary_key().with_policy(&p, None) {
+        Ok(value) => {
+            let ctime = value.creation_time();
+            let dt: DateTime<Utc> = DateTime::from(ctime);
+            Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None).unwrap())
+        }
+        _ => None,
     };
 
     let expirationtime = match cert.primary_key().with_policy(&p, None) {
@@ -1145,6 +1149,7 @@ fn create_newkey(
                 NaiveDateTime::from_timestamp_opt(creation, 0).unwrap(),
                 Utc,
             );
+            dbg!("We are adding a creation time {:#?}", cdt.clone());
             crtbuilder.set_creation_time(SystemTime::from(cdt))
         }
     };

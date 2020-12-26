@@ -297,7 +297,9 @@ def test_ks_creation_expiration_time():
 
     # now with a new key and creation time
     ctime = datetime.datetime(2010, 10, 10, 20, 53, 47)
-    newk = ks.create_newkey("redhat", "Another test key", creation=ctime)
+    newk = ks.create_newkey(
+        "redhat", "Another test key", ciphersuite=jce.Cipher.Cv25519, creation=ctime
+    )
     assert ctime.date() == newk.creationtime.date()
     assert not newk.expirationtime
 
@@ -382,19 +384,6 @@ def test_get_encrypted_for():
         data = fobj.read()
     keyids = rjce.bytes_encrypted_for(data)
     assert keyids == ["1CF980B8E69E112A", "5A7A1560D46ED4F6"]
-
-
-def test_error_at_sha1_based_key():
-    tempdir = tempfile.TemporaryDirectory()
-    ks = jce.KeyStore(tempdir.name)
-    with pytest.raises(jce.CryptoError) as err:
-        ks.import_cert("tests/files/test_journalist_key.pub")
-
-    errstr = str(err.value)
-    assert errstr.startswith("No binding signature at time")
-    assert errstr.endswith(
-        "Policy rejected non-revocation signature (PositiveCertification), SHA1 is not considered secure since 2013-01-01T00:00:00Z"
-    )
 
 
 @vcr.use_cassette("tests/files/test_fetch_key_by_fingerprint.yml")
