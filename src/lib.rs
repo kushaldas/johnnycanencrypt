@@ -560,20 +560,6 @@ fn sign_bytes_detached_internal(
     Ok(String::from_utf8(result).unwrap())
 }
 
-fn find_creation_time(cert: openpgp::Cert) -> Option<f64> {
-    for packet in cert.clone().into_packets() {
-        match packet {
-            openpgp::Packet::PublicKey(k) => {
-                let dt: DateTime<Utc> = DateTime::from(k.creation_time());
-                return Some(dt.timestamp() as f64);
-            }
-            _ => (),
-        };
-    }
-
-    None
-}
-
 #[pyfunction]
 #[text_signature = "(certdata, newcertdata)"]
 fn merge_keys(_py: Python, certdata: Vec<u8>, newcertdata: Vec<u8>) -> PyResult<PyObject> {
