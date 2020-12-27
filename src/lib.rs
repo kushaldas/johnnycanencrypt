@@ -157,6 +157,68 @@ fn decrypt_bytes_on_card(
 }
 
 #[pyfunction]
+fn reset_yubikey() -> PyResult<bool> {
+    let card = talktosc::create_connection();
+    let card = match card {
+        Ok(card) => card,
+        Err(value) => return Err(CardError::new_err(format!("{}", value))),
+    };
+
+    let select_openpgp = apdus::create_apdu_select_openpgp();
+    let resp = talktosc::send_and_parse(&card, select_openpgp);
+    match resp {
+        Ok(_) => (),
+        Err(value) => return Err(CardError::new_err(format!("{}", value))),
+    }
+
+    let badpin = vec![0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+    // First kill pw1
+    for _i in 0..3 {
+        let badpw1 = apdus::create_apdu_verify_pw1_for_others(badpin.clone());
+        let resp = talktosc::send_and_parse(&card, badpw1);
+        match resp {
+            Ok(_) => (),
+            Err(value) => return Err(CardError::new_err(format!("{}", value))),
+        }
+    }
+    // next kill pw3 (admin pin)
+    for _i in 0..3 {
+        let badpw3 = apdus::create_apdu_verify_pw3(badpin.clone());
+        let resp = talktosc::send_and_parse(&card, badpw3);
+        match resp {
+            Ok(_) => (),
+            Err(value) => return Err(CardError::new_err(format!("{}", value))),
+        }
+    }
+
+    let kill = vec![0x00, 0xE6, 0x00, 0x00, 0x00];
+    let iapdus = vec![kill.clone()];
+    let opgp_kill = apdus::APDU {
+        cla: 0x00,
+        ins: 0xE6,
+        p1: 0x00,
+        p2: 0x00,
+        data: vec![0x00],
+        iapdus,
+    };
+    talktosc::send_and_parse(&card, opgp_kill).unwrap();
+
+    let activate = vec![0x00, 0x44, 0x00, 0x00, 0x00];
+    let iapdus = vec![activate.clone()];
+    let opgp_activate = apdus::APDU {
+        cla: 0x00,
+        ins: 0x44,
+        p1: 0x00,
+        p2: 0x00,
+        data: vec![0x00],
+        iapdus,
+    };
+    talktosc::send_and_parse(&card, opgp_activate).unwrap();
+
+    Ok(true)
+}
+
+#[pyfunction]
 fn get_card_details(py: Python) -> PyResult<PyObject> {
     let card = talktosc::create_connection();
     let card = match card {
@@ -1685,6 +1747,7 @@ impl Johnny {
 /// A Python module implemented in Rust.
 #[pymodule]
 fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
+    m.add_wrapped(wrap_pyfunction!(reset_yubikey))?;
     m.add_wrapped(wrap_pyfunction!(change_admin_pin))?;
     m.add_wrapped(wrap_pyfunction!(change_user_pin))?;
     m.add_wrapped(wrap_pyfunction!(sign_bytes_detached_on_card))?;
