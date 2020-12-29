@@ -470,6 +470,7 @@ class KeyStore:
         creation=None,
         expiration=None,
         subkeys_expiration=False,
+        whichkeys=7
     ) -> Key:
         """Returns a public `Key` object after creating a new key in the store
 
@@ -479,6 +480,7 @@ class KeyStore:
         :param creation: datetime.datetime, default datetime.now() (via rust)
         :param expiration: datetime.datetime, default 0 (Never)
         :param subkeys_expiration: Bool (default False), pass True if you want to set the expiary date to the subkeys instead of master key.
+        :param whichkeys: Decides which all subkeys to generate, 1 (for encryption), 2 for signing, 4 for authentication. Add the numbers for mixed result.
         """
         if creation:
             ctime = creation.timestamp()
@@ -503,6 +505,7 @@ class KeyStore:
             int(ctime),
             int(etime),
             subkeys_expiration,
+            whichkeys,
         )
         # Now save the secret key
         key_filename = os.path.join(self.path, f"{fingerprint}.sec")

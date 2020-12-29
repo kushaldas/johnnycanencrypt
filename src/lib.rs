@@ -1173,6 +1173,7 @@ fn create_newkey(
     creation: i64,
     expiration: i64,
     subkeys_expiration: bool,
+    whichkeys: u8,
 ) -> PyResult<(String, String, String)> {
     // Default we create RSA4k keys
     let mut ciphervalue = CipherSuite::RSA4k;
@@ -1203,26 +1204,62 @@ fn create_newkey(
     };
 
     let crtbuilder = match expiration {
-        0 => crtbuilder
-            .add_storage_encryption_subkey()
-            .add_transport_encryption_subkey()
-            .add_signing_subkey()
-            .add_authentication_subkey(),
+        0 => {
+            let crtbuilder = if (whichkeys & 0x01) == 0x01 {
+                dbg!("Creating enc");
+                crtbuilder.add_subkey(
+                    KeyFlags::empty()
+                        .set_storage_encryption()
+                        .set_transport_encryption(),
+                    None,
+                    None,
+                )
+            } else {
+                crtbuilder
+            };
+            let crtbuilder = if (whichkeys & 0x02) == 0x02 {
+                dbg!("Creating singing");
+                crtbuilder.add_signing_subkey()
+            } else {
+                crtbuilder
+            };
+            let crtbuilder = if (whichkeys & 0x04) == 0x04 {
+                dbg!("Creating auth");
+                crtbuilder.add_authentication_subkey()
+            } else {
+                crtbuilder
+            };
+            crtbuilder
+        }
+
         _ => {
             let validity = Duration::new(expiration as u64 - creation as u64, 0);
             if subkeys_expiration == false {
                 crtbuilder.set_validity_period(validity)
             } else {
-                crtbuilder
-                    .add_subkey(
+                let crtbuilder = if (whichkeys & 0x01) == 0x01 {
+                    crtbuilder.add_subkey(
                         KeyFlags::empty()
                             .set_storage_encryption()
                             .set_transport_encryption(),
                         validity,
                         None,
                     )
-                    .add_subkey(KeyFlags::empty().set_signing(), validity, None)
-                    .add_subkey(KeyFlags::empty().set_authentication(), validity, None)
+                } else {
+                    crtbuilder
+                };
+                let crtbuilder = if (whichkeys & 0x02) == 0x02 {
+                    crtbuilder.add_subkey(KeyFlags::empty().set_signing(), validity, None)
+                } else {
+                    crtbuilder
+                };
+
+                let crtbuilder = if (whichkeys & 0x04) == 0x04 {
+                    crtbuilder.add_subkey(KeyFlags::empty().set_authentication(), validity, None)
+                } else {
+                    crtbuilder
+                };
+                crtbuilder
             }
         }
     };
