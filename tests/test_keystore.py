@@ -326,6 +326,19 @@ def test_ks_creation_expiration_time():
     for skeyid, subkey in newk.othervalues["subkeys"].items():
         assert subkey[1].date() == etime.date()
 
+    # Now only providing expirationtime for subkeys
+    etime = datetime.datetime(2030, 6, 5, 20, 53, 47)
+    newk = ks.create_newkey(
+        "redhat",
+        "Test key with subkey expiration",
+        expiration=etime,
+        subkeys_expiration=True,
+    )
+    assert datetime.datetime.now().date() == newk.creationtime.date()
+    for skeyid, subkey in newk.othervalues["subkeys"].items():
+        assert subkey[1].date() == etime.date()
+
+
 
 def test_get_all_keys():
     ks = jce.KeyStore("./tests/files/store")

@@ -470,7 +470,7 @@ class KeyStore:
         creation=None,
         expiration=None,
         subkeys_expiration=False,
-        whichkeys=7
+        whichkeys=7,
     ) -> Key:
         """Returns a public `Key` object after creating a new key in the store
 

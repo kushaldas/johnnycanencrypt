@@ -11,7 +11,7 @@ use std::io;
 use std::io::Write;
 use std::path::Path;
 use std::str;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 extern crate anyhow;
 extern crate sequoia_openpgp as openpgp;
@@ -1175,6 +1175,7 @@ fn create_newkey(
     subkeys_expiration: bool,
     whichkeys: u8,
 ) -> PyResult<(String, String, String)> {
+    let mut cdt: Option<DateTime<Utc>> = None;
     // Default we create RSA4k keys
     let mut ciphervalue = CipherSuite::RSA4k;
     if cipher == String::from("RSA2k") {
@@ -1194,19 +1195,17 @@ fn create_newkey(
     let crtbuilder = match creation {
         0 => crtbuilder,
         _ => {
-            let cdt = DateTime::<Utc>::from_utc(
+            cdt = Some(DateTime::<Utc>::from_utc(
                 NaiveDateTime::from_timestamp_opt(creation, 0).unwrap(),
                 Utc,
-            );
-            dbg!("We are adding a creation time {:#?}", cdt.clone());
-            crtbuilder.set_creation_time(SystemTime::from(cdt))
+            ));
+            crtbuilder.set_creation_time(SystemTime::from(cdt.unwrap()))
         }
     };
 
     let crtbuilder = match expiration {
         0 => {
             let crtbuilder = if (whichkeys & 0x01) == 0x01 {
-                dbg!("Creating enc");
                 crtbuilder.add_subkey(
                     KeyFlags::empty()
                         .set_storage_encryption()
@@ -1218,13 +1217,11 @@ fn create_newkey(
                 crtbuilder
             };
             let crtbuilder = if (whichkeys & 0x02) == 0x02 {
-                dbg!("Creating singing");
                 crtbuilder.add_signing_subkey()
             } else {
                 crtbuilder
             };
             let crtbuilder = if (whichkeys & 0x04) == 0x04 {
-                dbg!("Creating auth");
                 crtbuilder.add_authentication_subkey()
             } else {
                 crtbuilder
@@ -1232,8 +1229,20 @@ fn create_newkey(
             crtbuilder
         }
 
+        // Let us calculate the creation time we used
         _ => {
-            let validity = Duration::new(expiration as u64 - creation as u64, 0);
+            let validity = match cdt {
+                Some(cdt) => Duration::new(expiration as u64 - cdt.timestamp() as u64, 0),
+
+                None => Duration::new(
+                    expiration as u64
+                        - SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .unwrap()
+                            .as_secs(),
+                    0,
+                ),
+            };
             if subkeys_expiration == false {
                 crtbuilder.set_validity_period(validity)
             } else {
