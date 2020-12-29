@@ -697,17 +697,33 @@ fn upload_to_smartcard(
     certdata: Vec<u8>,
     pin: Vec<u8>,
     password: String,
+    whichkeys: u8,
 ) -> PyResult<bool> {
     let cert = openpgp::Cert::from_bytes(&certdata).unwrap();
+
+    // whichkeys, 1 for encryption, 2 for signing, 4 for authentication
+    // 3 - both enc and signing
+    // 5 - both enc and authentication.
+    // 6 - both signing and authentication
+    // 7 - all three subkeys
+    //
 
     // Here the keytype is something I decided
     // 1 -- encryption key
     // 2 -- singing key
     // 3 -- authentication key
+    let mut result = false;
+    if (whichkeys & 0x01) == 0x01 {
+        result = parse_and_move_a_subkey(cert.clone(), 1, pin.clone(), password.clone())?;
+    }
 
-    parse_and_move_a_subkey(cert.clone(), 1, pin.clone(), password.clone())?;
-    parse_and_move_a_subkey(cert.clone(), 2, pin.clone(), password.clone())?;
-    parse_and_move_a_subkey(cert.clone(), 3, pin.clone(), password.clone())
+    if (whichkeys & 0x02) == 0x02 {
+        result = parse_and_move_a_subkey(cert.clone(), 2, pin.clone(), password.clone())?;
+    }
+    if (whichkeys & 0x04) == 0x04 {
+        result = parse_and_move_a_subkey(cert.clone(), 3, pin.clone(), password.clone())?;
+    }
+    Ok(result)
 }
 
 #[allow(unused)]
