@@ -81,6 +81,30 @@ class Key:
         "Returns the public key part as string"
         return get_pub_key(self.keyvalue)
 
+    def available_subkeys(self) -> (bool, bool, bool):
+        "Returns bool tuple (enc, signing, auth)"
+        subkeys_sorted = self.othervalues["subkeys_sorted"]
+        got_enc = False
+        got_sign = False
+        got_auth = False
+        # Loop over on the subkeys
+        for subkey in subkeys_sorted:
+            if subkey["revoked"]:
+                continue
+            if subkey["expiration"] is not None and subkey["expiration"].date() > datetime.now().date():
+                if subkey["keytype"] == "encryption":
+                    got_enc = True
+                    continue
+                if subkey["keytype"] == "signing":
+                    got_sign = True
+                    continue
+                if subkey["keytype"] == "authentication":
+                    got_auth = True
+                    continue
+        # Now return the data
+        return (got_enc, got_sign, got_auth)
+
+
 
 class KeyStore:
     """Returns `KeyStore` class object, takes the directory path as string."""

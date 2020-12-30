@@ -212,6 +212,11 @@ For the rest of the documentation we assume that you imported the module as foll
 
                 A dictionary containing subkeys's keyids and fingerprints.
 
+        .. method:: available_subkeys() -> (bool, bool, bool):
+
+                Returns a tuple with 3 boolean values as (got_enc, got_sign, got_auth) to tell us which all subkeys are available.
+                The subkeys will not be expired (based on the date of the system) and also not revoked.
+
 .. class:: KeyType() -> KeyType:
 
         Enum class to mark if a key is public or private. Possible values are **KeyType.PUBLIC** and **KeyType.SECRET**.
