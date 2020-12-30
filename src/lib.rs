@@ -1549,7 +1549,7 @@ fn encrypt_bytes_to_bytes(
     }
 }
 
-#[pyclass]
+#[pyclass(module="johnnycanencrypt")]
 #[derive(Debug)]
 struct Johnny {
     cert: openpgp::cert::Cert,
