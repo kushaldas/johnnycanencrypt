@@ -1,3 +1,5 @@
+import datetime
+
 createdb = """
 CREATE TABLE keys (
 	id INTEGER PRIMARY KEY,
@@ -92,3 +94,9 @@ def convert_fingerprint(data):
     for x in data:
         s += format(x, "02x")
     return s.upper()
+
+def to_sort_by_expiary(date):
+    "To help to sort based on expiration date"
+    if date["expiration"] is not None:
+        return date["expiration"]
+    return datetime.datetime(2050, 3, 24, 23, 49, 1)

@@ -27,7 +27,7 @@ from .johnnycanencrypt import (
 
 import johnnycanencrypt.johnnycanencrypt as rjce
 
-from .utils import _get_cert_data, createdb, convert_fingerprint
+from .utils import _get_cert_data, createdb, convert_fingerprint, to_sort_by_expiary
 
 
 class KeyType(Enum):
@@ -348,6 +348,7 @@ class KeyStore:
                 rows = cursor.fetchall()
                 othervalues = {}
                 subs = {}
+                sort_subkeys = []
                 # Each subkey is added as a tuple
                 # Remember that there can be many expired subkeys.
                 # TODO: Add a value to mark if it was alive at the time of the call
@@ -367,9 +368,23 @@ class KeyStore:
                         etime,
                         ctime,
                         row["keytype"],
-                        row["revoked"],
+                        bool(row["revoked"]),
                     )
+                    sort_subkeys.append(
+                        {
+                            "keyid": row["keyid"],
+                            "fingerprint": row["fingerprint"],
+                            "expiration": etime,
+                            "creation": ctime,
+                            "keytype": row["keytype"],
+                            "revoked": bool(row["revoked"]),
+                        }
+                    )
+
+                sort_subkeys.sort(key=lambda x: to_sort_by_expiary(x), reverse=True)
                 othervalues["subkeys"] = subs
+                # TODO: We need a testcase for the sorted subkeys
+                othervalues["subkeys_sorted"] = sort_subkeys
 
                 finalresult.append(
                     Key(
