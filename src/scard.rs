@@ -33,6 +33,30 @@ pub fn chagne_admin_pin(pw3change: apdus::APDU) -> Result<bool, errors::TalktoSC
     Ok(true)
 }
 
+#[allow(unused)]
+pub fn is_smartcard_connected() -> Result<bool, errors::TalktoSCError> {
+    let card = talktosc::create_connection();
+    let card = match card {
+        Ok(card) => card,
+        Err(value) => return Err(value),
+    };
+
+    let select_openpgp = apdus::create_apdu_select_openpgp();
+    let resp = talktosc::send_and_parse(&card, select_openpgp);
+    let resp = match resp {
+        Ok(_) => resp.unwrap(),
+        Err(value) => return Err(value),
+    };
+    // Verify if the admin pin worked or not.
+    if resp.is_okay() == false {
+        return Err(errors::TalktoSCError::PinError);
+    }
+
+    talktosc::disconnect(card);
+    Ok(true)
+}
+
+
 // Sets the name to the card
 #[allow(unused)]
 pub fn set_data(pw3_apdu: apdus::APDU, data: apdus::APDU) -> Result<bool, errors::TalktoSCError> {

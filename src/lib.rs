@@ -1806,9 +1806,19 @@ impl Johnny {
     }
 }
 
+#[pyfunction]
+pub fn is_smartcard_connected() -> PyResult<bool> {
+    match scard::is_smartcard_connected() {
+        Ok(value) => Ok(value),
+        Err(_) => Ok(false),
+    }
+}
+
+
 /// A Python module implemented in Rust.
 #[pymodule]
 fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
+    m.add_wrapped(wrap_pyfunction!(is_smartcard_connected))?;
     m.add_wrapped(wrap_pyfunction!(reset_yubikey))?;
     m.add_wrapped(wrap_pyfunction!(change_admin_pin))?;
     m.add_wrapped(wrap_pyfunction!(change_user_pin))?;
