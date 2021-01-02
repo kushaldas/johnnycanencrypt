@@ -1,6 +1,6 @@
 # Changlelog
 
-## Unreleased
+## [0.5.0] - 2021-01-03
 
 ### Added
 
