@@ -27,7 +27,7 @@ For the rest of the documentation we assume that you imported the module as foll
                 >>> "HEXFINGERPRINT" in ks
 
 
-        .. method:: create_newkey(password: str, uids: Optional[Union[List[str], str]] = [], ciphersuite: Cipher = Cipher.RSA4k, creation: Optional[datetime.datetime] = None, expiration: Optional[datetime.datetime] = None) -> Key:
+        .. method:: create_newkey(password: str, uids: Optional[Union[List[str], str]] = [], ciphersuite: Cipher = Cipher.RSA4k, creation: Optional[datetime.datetime] = None, expiration: Optional[datetime.datetime] = None, subkeys_expiration= False, whichkeys = 7) -> Key:
 
                 Returns the public part of the newly created `Key` in the store
                 directory. You can mention ciphersuite :class:`Cipher`  as
@@ -38,6 +38,9 @@ For the rest of the documentation we assume that you imported the module as foll
                 and keys don't expire. You can provide a string for uid, or multiple
                 strings using a List for multiple uids. It can also create a key without
                 any uids.
+
+                You can pass `whichkeys = 1` to generate only the encryption subkey, 2 for signing, 4 for authentication.
+                By default it will create all three subkeys (7).
 
                 ::
 
@@ -212,10 +215,10 @@ For the rest of the documentation we assume that you imported the module as foll
 
                 A dictionary containing subkeys's keyids and fingerprints.
 
-        .. method:: available_subkeys() -> (bool, bool, bool):
+        .. method:: available_subkeys() -> Tuple[bool, bool, bool]:
 
                 Returns a tuple with 3 boolean values as (got_enc, got_sign, got_auth) to tell us which all subkeys are available.
-                The subkeys will not be expired (based on the date of the system) and also not revoked.
+                The subkeys will not be expired keys (based on the date of the system) and also not revoked.
 
 .. class:: KeyType() -> KeyType:
 
