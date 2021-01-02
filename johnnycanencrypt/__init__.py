@@ -5,7 +5,7 @@ import urllib.parse
 from datetime import datetime
 from enum import Enum
 from pprint import pprint
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, Tuple
 
 import requests
 
@@ -81,7 +81,7 @@ class Key:
         "Returns the public key part as string"
         return get_pub_key(self.keyvalue)
 
-    def available_subkeys(self) -> (bool, bool, bool):
+    def available_subkeys(self) -> Tuple[bool, bool, bool]:
         "Returns bool tuple (enc, signing, auth)"
         subkeys_sorted = self.othervalues["subkeys_sorted"]
         got_enc = False
@@ -91,7 +91,10 @@ class Key:
         for subkey in subkeys_sorted:
             if subkey["revoked"]:
                 continue
-            if subkey["expiration"] is not None and subkey["expiration"].date() > datetime.now().date():
+            if (
+                subkey["expiration"] is not None
+                and subkey["expiration"].date() > datetime.now().date()
+            ):
                 if subkey["keytype"] == "encryption":
                     got_enc = True
                     continue
@@ -103,7 +106,6 @@ class Key:
                     continue
         # Now return the data
         return (got_enc, got_sign, got_auth)
-
 
 
 class KeyStore:
