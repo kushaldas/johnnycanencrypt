@@ -1,11 +1,29 @@
+import datetime
+
 createdb = """
 CREATE TABLE keys (
 	id INTEGER PRIMARY KEY,
 	keyvalue BLOB NOT NULL,
 	fingerprint TEXT NOT NULL,
+	keyid TEXT NOT NULL,
 	expiration TEXT,
 	creation TEXT,
-	keytype INTEGER
+	keytype INTEGER,
+    oncard TEXT
+);
+
+CREATE TABLE subkeys (
+	id INTEGER PRIMARY KEY,
+	key_id INTEGER,
+	fingerprint TEXT NOT NULL,
+	keyid TEXT NOT NULL,
+	expiration TEXT,
+	creation TEXT,
+	keytype TEXT,
+	revoked INTEGER,
+	FOREIGN KEY (key_id)
+	REFERENCES keys (id)
+		ON DELETE CASCADE
 );
 
 CREATE TABLE uidvalues (
@@ -62,3 +80,23 @@ def _get_cert_data(filepath):
     "Returns the filepath content as bytes"
     with open(filepath, "rb") as fobj:
         return fobj.read()
+
+
+def __get_cert_data(filepath):
+    "Returns the filepath content as bytes"
+    with open(filepath, "rb") as fobj:
+        return fobj.read()
+
+
+def convert_fingerprint(data):
+    "Converts binary data to fingerprint string"
+    s = ""
+    for x in data:
+        s += format(x, "02x")
+    return s.upper()
+
+def to_sort_by_expiary(date):
+    "To help to sort based on expiration date"
+    if date["expiration"] is not None:
+        return date["expiration"]
+    return datetime.datetime(2050, 3, 24, 23, 49, 1)

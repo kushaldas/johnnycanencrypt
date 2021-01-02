@@ -7,6 +7,7 @@ import pytest
 import vcr
 
 import johnnycanencrypt as jce
+import johnnycanencrypt.johnnycanencrypt as rjce
 
 from .utils import clean_outputfiles, verify_files
 
@@ -74,7 +75,7 @@ def test_keystore_contains_key():
     ks = jce.KeyStore(tmpdirname.name)
     keypath = "tests/files/store/secret.asc"
     k = ks.import_cert(keypath)
-    _, fingerprint, keytype, exp, ctime = jce.parse_cert_file(keypath)
+    _, fingerprint, keytype, exp, ctime, othervalues = jce.parse_cert_file(keypath)
 
     # First only the fingerprint
     assert fingerprint in ks
@@ -87,6 +88,20 @@ def test_keystore_contains_key():
 def test_keystore_details():
     ks = jce.KeyStore("./tests/files/store")
     assert (1, 2) == ks.details()
+
+
+def test_keystore_keyids():
+    ks = jce.KeyStore("./tests/files/store")
+    key = ks.get_key("A85FF376759C994A8A1168D8D8219C8C43F6C5E1")
+    assert key.keyid == "D8219C8C43F6C5E1"
+
+
+def test_keystore_get_via_keyids():
+    ks = jce.KeyStore("./tests/files/store")
+    key = ks.get_key("A85FF376759C994A8A1168D8D8219C8C43F6C5E1")
+    keys = ks.get_keys_by_keyid("FB82AA5D326DA75D")
+    assert len(keys) == 1
+    assert key == keys[0]
 
 
 def test_keystore_key_uids():
@@ -282,7 +297,9 @@ def test_ks_creation_expiration_time():
 
     # now with a new key and creation time
     ctime = datetime.datetime(2010, 10, 10, 20, 53, 47)
-    newk = ks.create_newkey("redhat", "Another test key", creation=ctime)
+    newk = ks.create_newkey(
+        "redhat", "Another test key", ciphersuite=jce.Cipher.Cv25519, creation=ctime
+    )
     assert ctime.date() == newk.creationtime.date()
     assert not newk.expirationtime
 
@@ -294,6 +311,33 @@ def test_ks_creation_expiration_time():
     )
     assert ctime.date() == newk.creationtime.date()
     assert etime.date() == newk.expirationtime.date()
+
+    # Now both creation and expirationtime for subkeys
+    ctime = datetime.datetime(2008, 10, 10, 20, 53, 47)
+    etime = datetime.datetime(2029, 12, 15, 20, 53, 47)
+    newk = ks.create_newkey(
+        "redhat",
+        "Test key with subkey expiration",
+        creation=ctime,
+        expiration=etime,
+        subkeys_expiration=True,
+    )
+    assert ctime.date() == newk.creationtime.date()
+    for skeyid, subkey in newk.othervalues["subkeys"].items():
+        assert subkey[1].date() == etime.date()
+
+    # Now only providing expirationtime for subkeys
+    etime = datetime.datetime(2030, 6, 5, 20, 53, 47)
+    newk = ks.create_newkey(
+        "redhat",
+        "Test key with subkey expiration",
+        expiration=etime,
+        subkeys_expiration=True,
+    )
+    assert datetime.datetime.now().date() == newk.creationtime.date()
+    for skeyid, subkey in newk.othervalues["subkeys"].items():
+        assert subkey[1].date() == etime.date()
+
 
 
 def test_get_all_keys():
@@ -328,7 +372,7 @@ def test_key_without_uid():
     tempdir = tempfile.TemporaryDirectory()
     ks = jce.KeyStore(tempdir.name)
     k = ks.create_newkey("redhat")
-    uids, fp, secret, et, ct = jce.parse_cert_bytes(k.keyvalue)
+    uids, fp, secret, et, ct, othervalues = jce.parse_cert_bytes(k.keyvalue)
     assert len(uids) == 0
 
 
@@ -341,21 +385,18 @@ def test_key_with_multiple_uids():
         "This is also Kushal",
     ]
     k = ks.create_newkey("redhat", uids)
-    uids, fp, secret, et, ct = jce.parse_cert_bytes(k.keyvalue)
+    uids, fp, secret, et, ct, othervalues = jce.parse_cert_bytes(k.keyvalue)
     assert len(uids) == 3
 
 
-def test_error_at_sha1_based_key():
-    tempdir = tempfile.TemporaryDirectory()
-    ks = jce.KeyStore(tempdir.name)
-    with pytest.raises(jce.CryptoError) as err:
-        ks.import_cert("tests/files/test_journalist_key.pub")
-
-    errstr = str(err.value)
-    assert errstr.startswith("No binding signature at time")
-    assert errstr.endswith(
-        "Policy rejected non-revocation signature (PositiveCertification), SHA1 is not considered secure since 2013-01-01T00:00:00Z"
-    )
+def test_get_encrypted_for():
+    ks = jce.KeyStore("tests/files/store/")
+    keyids = rjce.file_encrypted_for("tests/files/double_recipient.asc")
+    assert keyids == ["1CF980B8E69E112A", "5A7A1560D46ED4F6"]
+    with open("tests/files/double_recipient.asc", "rb") as fobj:
+        data = fobj.read()
+    keyids = rjce.bytes_encrypted_for(data)
+    assert keyids == ["1CF980B8E69E112A", "5A7A1560D46ED4F6"]
 
 
 @vcr.use_cassette("tests/files/test_fetch_key_by_fingerprint.yml")

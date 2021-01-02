@@ -14,7 +14,7 @@ We will import the module as jce.
 The KeyStore
 -------------
 
-The module interacts over a `KeyStore` object, which points ot a directory path
+The module interacts over a `KeyStore` object, which points to a directory path
 on the system. Inside of the directory, it will create a `jce.db` sqlite3
 database if missing. Below is an example where we are creating a keystore in an
 empty directory at "/var/lib/myapplication/keys", and then we will import a few
@@ -24,11 +24,11 @@ keys in there. For our example, we will use the keys from our tests directory.
 
         >>> ks = jce.KeyStore("/var/lib/myapplication/keys")
         >>> ks.import_cert("tests/files/store/secret.asc")
-        <Key fingerprint=BB2D3F20233286371C3123D5209940B9669ED621 keytype=1>
+        <Key fingerprint=F4F388BBB194925AE301F844C52B42177857DD79 type=SECRET>
         >>> ks.import_cert("tests/files/store/pgp_keys.asc")
-        <Key fingerprint=A85FF376759C994A8A1168D8D8219C8C43F6C5E1 keytype=0>
+        <Key fingerprint=A85FF376759C994A8A1168D8D8219C8C43F6C5E1 type=PUBLIC>
         >>> ks.import_cert("tests/files/store/public.asc")
-        <Key fingerprint=BB2D3F20233286371C3123D5209940B9669ED621 keytype=0>
+        <Key fingerprint=F4F388BBB194925AE301F844C52B42177857DD79 type=PUBLIC>
 
 Now, if we check the directory from the shell, we will find the keys imported there.
 
@@ -58,7 +58,7 @@ Encrypting and decrypting some bytes for a given fingerprint
 
 ::
 
-        >>> key = ks.get_key("BB2D3F20233286371C3123D5209940B9669ED621")
+        >>> key = ks.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
         >>> enc = ks.encrypt(key, "Sequoia is amazing.")
         >>> print(enc[:27])
         b'-----BEGIN PGP MESSAGE-----'
@@ -86,7 +86,7 @@ Now let us import the key and verify.
 
         >>> torkey = ks.import_cert("./kounek7zrdx745qydx6p59t9mqjpuhdf.pub")
         >>> torkey
-        <Key fingerprint=EF6E286DDA85EA2A4BA7DE684E2C6E8793298290 keytype=0>
+        <Key fingerprint=EF6E286DDA85EA2A4BA7DE684E2C6E8793298290 type=PUBLIC>
         >>> filepath="./tor-browser-linux64-10.0_en-US.tar.xz"
         >>> signaturepath="./tor-browser-linux64-10.0_en-US.tar.xz.asc"
         >>> ks.verify_file(torkey, filepath, signaturepath)

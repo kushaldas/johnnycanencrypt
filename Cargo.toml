@@ -1,6 +1,6 @@
 [package]
 name = "johnnycanencrypt"
-version = "0.4.0"
+version = "0.5.0"
 authors = ["Kushal Das <mail@kushaldas.in>"]
 edition = "2018"
 description = "Python module for OpenPGP."
@@ -9,6 +9,7 @@ readme = "README.md"
 homepage = "https://johnnycanencrypt.readthedocs.io/en/latest/introduction.html"
 repository = "https://github.com/kushaldas/johnnycanencrypt"
 license-file = "LICENSE"
+exclude = ["examples/**/*.py", "*.patch"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -21,23 +22,26 @@ default = ["pyo3/extension-module"]
 
 
 [dependencies]
-sequoia-openpgp = "0.20.0"
+sequoia-openpgp = "1.0.0"
 anyhow = "1.0.31"
 chrono = "0.4.19"
-
+#talktosc = { git = "https://github.com/kushaldas/talktosc", branch="main"}
+talktosc = "0.1.1"
+ 
 [dependencies.pyo3]
-version = "0.12.1"
+version = "0.13.0"
 
 
 [package.metadata.maturin]
 classifier = [
-  "Development Status :: 3 - Alpha",
+  "Development Status :: 4 - Beta",
   "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
   "Programming Language :: Rust",
   "Programming Language :: Python",
   "Programming Language :: Python :: 3 :: Only",
   "Programming Language :: Python :: 3.7",
   "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: Implementation :: CPython",
   "Topic :: Software Development :: Libraries",
   "Topic :: Software Development :: Libraries :: Python Modules"

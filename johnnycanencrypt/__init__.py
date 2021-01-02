@@ -5,7 +5,7 @@ import urllib.parse
 from datetime import datetime
 from enum import Enum
 from pprint import pprint
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, Tuple
 
 import requests
 
@@ -24,7 +24,10 @@ from .johnnycanencrypt import (
     parse_cert_bytes,
     parse_cert_file,
 )
-from .utils import _get_cert_data, createdb
+
+import johnnycanencrypt.johnnycanencrypt as rjce
+
+from .utils import _get_cert_data, createdb, convert_fingerprint, to_sort_by_expiary
 
 
 class KeyType(Enum):
@@ -45,13 +48,17 @@ class Key:
         self,
         keyvalue: bytes,
         fingerprint: str,
+        keyid: str,
         uids: Dict[str, str] = {},
         keytype: KeyType = KeyType.PUBLIC,
         expirationtime=None,
         creationtime=None,
+        othervalues={},
+        oncard: str = "",
     ):
         self.keyvalue = keyvalue
         self.keytype = keytype
+        self.keyid = keyid
         self.fingerprint = fingerprint
         self.uids = uids
         self.expirationtime = (
@@ -60,6 +67,8 @@ class Key:
         self.creationtime = (
             datetime.fromtimestamp(float(creationtime)) if creationtime else None
         )
+        self.othervalues = othervalues
+        self.oncard = oncard
 
     def __repr__(self):
         return f"<Key fingerprint={self.fingerprint} type={self.keytype.name}>"
@@ -71,6 +80,32 @@ class Key:
     def get_pub_key(self) -> str:
         "Returns the public key part as string"
         return get_pub_key(self.keyvalue)
+
+    def available_subkeys(self) -> Tuple[bool, bool, bool]:
+        "Returns bool tuple (enc, signing, auth)"
+        subkeys_sorted = self.othervalues["subkeys_sorted"]
+        got_enc = False
+        got_sign = False
+        got_auth = False
+        # Loop over on the subkeys
+        for subkey in subkeys_sorted:
+            if subkey["revoked"]:
+                continue
+            if (
+                subkey["expiration"] is not None
+                and subkey["expiration"].date() > datetime.now().date()
+            ):
+                if subkey["keytype"] == "encryption":
+                    got_enc = True
+                    continue
+                if subkey["keytype"] == "signing":
+                    got_sign = True
+                    continue
+                if subkey["keytype"] == "authentication":
+                    got_auth = True
+                    continue
+        # Now return the data
+        return (got_enc, got_sign, got_auth)
 
 
 class KeyStore:
@@ -96,22 +131,32 @@ class KeyStore:
         keytype,
         expirationtime=None,
         creationtime=None,
+        subkeys=[],
     ):
         "Populates the internal cache of the store"
         with open(fullpath, "rb") as fobj:
             cert = fobj.read()
         self._add_key_to_cache(
-            cert, uids, fingerprint, keytype, expirationtime, creationtime
+            cert, uids, fingerprint, keytype, expirationtime, creationtime, subkeys
         )
 
     def _add_key_to_cache(
-        self, cert, uids, fingerprint, keytype, expirationtime, creationtime
+        self,
+        cert,
+        uids,
+        fingerprint,
+        keytype,
+        expirationtime,
+        creationtime,
+        othervalues,
     ):
         etime = str(expirationtime.timestamp()) if expirationtime else ""
         ctime = str(creationtime.timestamp()) if creationtime else ""
         con = sqlite3.connect(self.dbpath)
         con.row_factory = sqlite3.Row
         ktype = 1 if keytype else 0
+        subkeys = othervalues["subkeys"]
+        mainkeyid = othervalues["keyid"]
         with con:
             cursor = con.cursor()
             # First let us check if a key already exists
@@ -126,7 +171,7 @@ class KeyStore:
                 ):  # only update if there is a public key in the store
                     key = self.get_key(fingerprint)
                     newcert = merge_keys(key.keyvalue, cert)
-                    uids, fp, kt, et, ct = parse_cert_bytes(newcert)
+                    uids, fp, kt, et, ct, othervalues = parse_cert_bytes(newcert)
                     etime = str(et.timestamp()) if et else ""
                     ctime = str(ct.timestamp()) if ct else ""
                 else:  # Means another secret to replace
@@ -138,9 +183,19 @@ class KeyStore:
                 cursor.execute(sql, (cert, ktype, etime, ctime, key_id))
             else:
                 # Now insert the new key
-                sql = "INSERT INTO keys (keyvalue, fingerprint, keytype, expiration, creation) VALUES(?, ?, ?, ?, ?)"
-                cursor.execute(sql, (cert, fingerprint, ktype, etime, ctime))
+                sql = "INSERT INTO keys (keyvalue, fingerprint, keyid, keytype, expiration, creation) VALUES(?, ?, ?, ?, ?, ?)"
+                cursor.execute(sql, (cert, fingerprint, mainkeyid, ktype, etime, ctime))
                 key_id = cursor.lastrowid
+
+            # Now let us add the subkey and keyid details
+            sql = "INSERT INTO subkeys (key_id, fingerprint, keyid, expiration, creation, keytype, revoked) VALUES(?, ?, ?, ?, ?, ?, ?)"
+            for subkey in subkeys:
+                ctime = str(subkey[2].timestamp()) if subkey[2] else ""
+                etime = str(subkey[3].timestamp()) if subkey[3] else ""
+                cursor.execute(
+                    sql,
+                    (key_id, subkey[1], subkey[0], etime, ctime, subkey[4], subkey[5]),
+                )
 
             # TODO: Now for each of the uid, add to the right dictionary
             for uid_keyname in ["name", "value", "email", "uri"]:
@@ -189,12 +244,23 @@ class KeyStore:
         :param path: Path to the pgp key file.
         :param onplace: Default value is False, if True means the keyfile is in the right directory
         """
-        uids, fingerprint, keytype, expirationtime, creationtime = parse_cert_file(
-            keypath
-        )
+        (
+            uids,
+            fingerprint,
+            keytype,
+            expirationtime,
+            creationtime,
+            othervalues,
+        ) = parse_cert_file(keypath)
 
         self.add_key_to_cache(
-            keypath, uids, fingerprint, keytype, expirationtime, creationtime
+            keypath,
+            uids,
+            fingerprint,
+            keytype,
+            expirationtime,
+            creationtime,
+            othervalues,
         )
         return self.get_key(fingerprint)
 
@@ -224,7 +290,6 @@ class KeyStore:
     def _internal_get_key(self, fingerprint="", key_id=None, allkeys=False):
         con = sqlite3.connect(self.dbpath)
         con.row_factory = sqlite3.Row
-        finalresult = []
         with con:
             cursor = con.cursor()
             if fingerprint:
@@ -237,52 +302,132 @@ class KeyStore:
                 sql = "SELECT * FROM keys"
                 cursor.execute(sql)
             rows = cursor.fetchall()
-            for result in rows:
-                if result:
-                    key_id = result["id"]
-                    cert = result["keyvalue"]
-                    fingerprint = result["fingerprint"]
-                    expirationtime = result["expiration"]
-                    creationtime = result["creation"]
-                    keytype = KeyType.SECRET if result["keytype"] else KeyType.PUBLIC
+            return self._internal_build_key_list(rows, cursor)
 
-                    # Now get the uids
-                    sql = "SELECT id, value FROM uidvalues WHERE key_id=?"
-                    cursor.execute(sql, (key_id,))
-                    rows = cursor.fetchall()
-                    uids = []
-                    for row in rows:
-                        value_id = row["id"]
-                        email = self._get_one_row_from_table(
-                            cursor, "uidemails", value_id
-                        )
-                        name = self._get_one_row_from_table(
-                            cursor, "uidnames", value_id
-                        )
-                        uri = self._get_one_row_from_table(cursor, "uiduris", value_id)
-                        uids.append(
-                            {
-                                "value": row["value"],
-                                "email": email,
-                                "name": name,
-                                "uri": uri,
-                            }
-                        )
+    def get_keys_by_keyid(self, keyid: str):
+        "Returns a list of keys for a given KeyID"
+        # TODO: This has bad SQL, we can improve in future.
+        con = sqlite3.connect(self.dbpath)
+        con.row_factory = sqlite3.Row
+        list_of_db_ids = set()
+        with con:
+            cursor = con.cursor()
+            sql = "SELECT * FROM keys WHERE keyid=?"
+            cursor.execute(sql, (keyid,))
+            rows = cursor.fetchall()
+            for row in rows:
+                list_of_db_ids.add(row["id"])
 
-                    finalresult.append(
-                        Key(
-                            cert,
-                            fingerprint,
-                            uids,
-                            keytype,
-                            expirationtime,
-                            creationtime,
-                        )
+            sql = "SELECT * FROM subkeys WHERE keyid=?"
+            cursor.execute(sql, (keyid,))
+            rows = cursor.fetchall()
+            for row in rows:
+                list_of_db_ids.add(row["key_id"])
+            # Now the final search
+            result = []
+            sql = "SELECT * FROM keys WHERE id=?"
+            for key_id in list(list_of_db_ids):
+                cursor.execute(sql, (key_id,))
+                rows = cursor.fetchall()
+                result.extend(self._internal_build_key_list(rows, cursor))
+
+            if not result:
+                KeyNotFoundError(f"The key with keyid {keyid} is not found.")
+            return result
+
+    def _internal_build_key_list(self, rows, cursor):
+        "Internal method to create a list of keys from db result rows"
+        finalresult = []
+        for result in rows:
+            if result:
+                key_id = result["id"]
+                cert = result["keyvalue"]
+                fingerprint = result["fingerprint"]
+                keyid = result["keyid"]
+                expirationtime = result["expiration"]
+                creationtime = result["creation"]
+                keytype = KeyType.SECRET if result["keytype"] else KeyType.PUBLIC
+                oncard = result["oncard"]
+
+                # Now get the uids
+                sql = "SELECT id, value FROM uidvalues WHERE key_id=?"
+                cursor.execute(sql, (key_id,))
+                rows = cursor.fetchall()
+                uids = []
+                for row in rows:
+                    value_id = row["id"]
+                    email = self._get_one_row_from_table(cursor, "uidemails", value_id)
+                    name = self._get_one_row_from_table(cursor, "uidnames", value_id)
+                    uri = self._get_one_row_from_table(cursor, "uiduris", value_id)
+                    uids.append(
+                        {
+                            "value": row["value"],
+                            "email": email,
+                            "name": name,
+                            "uri": uri,
+                        }
                     )
-            if finalresult:
-                return finalresult
 
-            raise KeyNotFoundError(f"The key(s) not found in the keystore.")
+                # Get the subkeys
+                sql = "SELECT fingerprint, keyid, expiration, creation, keytype, revoked FROM subkeys WHERE key_id=?"
+                cursor.execute(sql, (key_id,))
+                rows = cursor.fetchall()
+                othervalues = {}
+                subs = {}
+                sort_subkeys = []
+                # Each subkey is added as a tuple
+                # Remember that there can be many expired subkeys.
+                # TODO: Add a value to mark if it was alive at the time of the call
+                for row in rows:
+                    etime = (
+                        datetime.fromtimestamp(float(row["expiration"]))
+                        if row["expiration"]
+                        else None
+                    )
+                    ctime = (
+                        datetime.fromtimestamp(float(row["creation"]))
+                        if row["creation"]
+                        else None
+                    )
+                    subs[row["keyid"]] = (
+                        row["fingerprint"],
+                        etime,
+                        ctime,
+                        row["keytype"],
+                        bool(row["revoked"]),
+                    )
+                    sort_subkeys.append(
+                        {
+                            "keyid": row["keyid"],
+                            "fingerprint": row["fingerprint"],
+                            "expiration": etime,
+                            "creation": ctime,
+                            "keytype": row["keytype"],
+                            "revoked": bool(row["revoked"]),
+                        }
+                    )
+
+                sort_subkeys.sort(key=lambda x: to_sort_by_expiary(x), reverse=True)
+                othervalues["subkeys"] = subs
+                # TODO: We need a testcase for the sorted subkeys
+                othervalues["subkeys_sorted"] = sort_subkeys
+
+                finalresult.append(
+                    Key(
+                        cert,
+                        fingerprint,
+                        keyid,
+                        uids,
+                        keytype,
+                        expirationtime,
+                        creationtime,
+                        othervalues,
+                        oncard,
+                    )
+                )
+        if finalresult:
+            return finalresult
+        raise KeyNotFoundError(f"The key(s) not found in the keystore.")
 
     def _get_one_row_from_table(self, cursor, tablename, value_id):
         "Internal function to select different uid items"
@@ -365,6 +510,8 @@ class KeyStore:
         ciphersuite: Cipher = Cipher.RSA4k,
         creation=None,
         expiration=None,
+        subkeys_expiration=False,
+        whichkeys=7,
     ) -> Key:
         """Returns a public `Key` object after creating a new key in the store
 
@@ -373,6 +520,8 @@ class KeyStore:
         :param ciphersuite: Default Cipher.RSA4k, other values are Cipher.RSA2k, Cipher.Cv25519
         :param creation: datetime.datetime, default datetime.now() (via rust)
         :param expiration: datetime.datetime, default 0 (Never)
+        :param subkeys_expiration: Bool (default False), pass True if you want to set the expiary date to the subkeys instead of master key.
+        :param whichkeys: Decides which all subkeys to generate, 1 (for encryption), 2 for signing, 4 for authentication. Add the numbers for mixed result.
         """
         if creation:
             ctime = creation.timestamp()
@@ -391,7 +540,13 @@ class KeyStore:
             finaluids = uids
 
         public, secret, fingerprint = create_newkey(
-            password, finaluids, ciphersuite.value, int(ctime), int(etime)
+            password,
+            finaluids,
+            ciphersuite.value,
+            int(ctime),
+            int(etime),
+            subkeys_expiration,
+            whichkeys,
         )
         # Now save the secret key
         key_filename = os.path.join(self.path, f"{fingerprint}.sec")
@@ -662,7 +817,7 @@ class KeyStore:
         return jp.verify_file(filepath, signature_in_bytes)
 
     def fetch_key_by_fingerprint(self, fingerprint: str):
-        """Fetches key from keys.openpgp.org based on the fingerpint.
+        """Fetches key from keys.openpgp.org based on the fingerprint.
 
         :param fingerprint: The fingerprint string without the leading 0x and in upper case.
 
@@ -677,7 +832,7 @@ class KeyStore:
         return self._internal_fetch_from_server(url, fingerprint)
 
     def fetch_key_by_email(self, email: str):
-        """Fetches key from keys.openpgp.org based on the fingerpint.
+        """Fetches key from keys.openpgp.org based on the fingerprint.
 
         :param email: The email address to search
 
@@ -697,13 +852,50 @@ class KeyStore:
 
         elif resp.status_code == 200:
             cert = resp.text.encode("utf-8")
-            uids, fingerprint, keytype, expirationtime, creationtime = parse_cert_bytes(
-                cert
-            )
+            (
+                uids,
+                fingerprint,
+                keytype,
+                expirationtime,
+                creationtime,
+                othervalues,
+            ) = parse_cert_bytes(cert)
 
             self._add_key_to_cache(
-                cert, uids, fingerprint, keytype, expirationtime, creationtime
+                cert,
+                uids,
+                fingerprint,
+                keytype,
+                expirationtime,
+                creationtime,
+                othervalues,
             )
             return self.get_key(fingerprint)
         else:
             raise FetchingError(f"Server returned: {resp.status_code}")
+
+    def sync_smartcard(self):
+        """
+        Syncs the attached smartcard to the right public keys in the KeyStore.
+
+        :returns: The fingerprint of the primary key.
+        """
+        data = rjce.get_card_details()
+        if not data["serial_number"]:
+            return "No data found."
+        con = sqlite3.connect(self.dbpath)
+        con.row_factory = sqlite3.Row
+        with con:
+            cursor = con.cursor()
+            # First let us check if a key already exists
+            sql = "SELECT DISTINCT key_id, fingerprint FROM subkeys where fingerprint IN (?, ?, ?)"
+            sig_f = convert_fingerprint(data["sig_f"])
+            enc_f = convert_fingerprint(data["enc_f"])
+            auth_f = convert_fingerprint(data["auth_f"])
+            cursor.execute(sql, (sig_f, enc_f, auth_f))
+            fromdb = cursor.fetchone()
+            if fromdb:
+                # Means we found the main key, now we have to mark it with the serial number of the card
+                sql = "UPDATE keys SET oncard=? WHERE id=?"
+                cursor.execute(sql, (data["serial_number"], fromdb["key_id"]))
+                return fromdb["fingerprint"]
