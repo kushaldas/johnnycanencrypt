@@ -20,13 +20,13 @@
 # -- Project information -----------------------------------------------------
 
 project = 'Johnny Can Encrypt'
-copyright = '2020, Kushal Das'
+copyright = '2020-2021, Kushal Das'
 author = 'Kushal Das'
 
 # The short X.Y version
-version = '0.4.0'
+version = '0.5.0'
 # The full version, including alpha/beta/rc tags
-release = '0.4.0'
+release = '0.5.0'
 
 
 # -- General configuration ---------------------------------------------------

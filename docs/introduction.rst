@@ -1,6 +1,10 @@
 Introduction to johnnycanencrypt
 ================================
 
+Johnnycanencrypt provides only a few selected operations from the OpenPGP spec.
+If you need more and better granular access to the operations, this may not be
+the module for you.
+
 The module has 2 parts, one high level API, which can be directly accessed via importing the module. There is another
 internal module with the same name (which is native in Rust), and has all the low level functions and classes.
 

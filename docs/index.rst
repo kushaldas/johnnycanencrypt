@@ -18,6 +18,7 @@ depend on the existing `gpg` tooling.
    introduction
    api
    rustimplementation
+   smartcard
 
 
 Indices and tables
