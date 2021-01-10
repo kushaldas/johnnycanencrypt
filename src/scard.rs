@@ -56,7 +56,6 @@ pub fn is_smartcard_connected() -> Result<bool, errors::TalktoSCError> {
     Ok(true)
 }
 
-
 // Sets the name to the card
 #[allow(unused)]
 pub fn set_data(pw3_apdu: apdus::APDU, data: apdus::APDU) -> Result<bool, errors::TalktoSCError> {
@@ -280,7 +279,7 @@ impl<'a> KeyPair<'a> {
     }
 }
 
-#[allow(unused)]
+#[allow(unused, non_snake_case)]
 impl<'a> crypto::Decryptor for KeyPair<'a> {
     fn public(&self) -> &Key<key::PublicParts, key::UnspecifiedRole> {
         self.public
@@ -318,8 +317,29 @@ impl<'a> crypto::Decryptor for KeyPair<'a> {
                 let sk = openpgp::crypto::SessionKey::from(&dec[..]);
                 return Ok(sk.clone());
             }
+            (
+                openpgp::crypto::mpi::Ciphertext::ECDH { ref e, .. },
+                openpgp::crypto::mpi::PublicKey::ECDH { ref curve, .. },
+            ) => {
+                // Now page 68 of the openpgp smartcard spec 3.4.1
+                // We have to build the DO properly.
+                // The first byte of e is 40, we have to skip it.
+                let values = e.value();
+                let mut enc: Vec<u8> = Vec::new();
+                enc.extend_from_slice(&values[1..33]);
+                // Now we hardcode away everything for Cv25519
+                //
+                let mut c = vec![0xA6, 0x25, 0x7F, 0x49, 0x22, 0x86, 0x20];
+                c.extend_from_slice(&enc[..]);
+                c.push(0x00);
 
-            (public, ciphertext) => Err(openpgp::Error::InvalidOperation(format!(
+                // Send this for decryption on the card
+                let dec = decrypt_the_secret_in_card(c, self.pin.clone()).unwrap();
+                let S: openpgp::crypto::mem::Protected = dec.into();
+                Ok(openpgp::crypto::ecdh::decrypt_unwrap(self.public, &S, ciphertext).unwrap())
+            }
+
+            (ciphertext, public) => Err(openpgp::Error::InvalidOperation(format!(
                 "unsupported combination of key pair {:?} \
                      and ciphertext {:?}",
                 public, ciphertext
