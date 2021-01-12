@@ -121,12 +121,12 @@ impl VerificationHelper for YuBi {
 }
 
 #[pyfunction]
-#[text_signature = "(data, pin, certdata)"]
+#[text_signature = "(certdata, data, pin)"]
 fn decrypt_bytes_on_card(
     _py: Python,
+    certdata: Vec<u8>,
     data: Vec<u8>,
     pin: Vec<u8>,
-    certdata: Vec<u8>,
 ) -> PyResult<PyObject> {
     //let keys: HashMap<openpgp::KeyID, String> = HashMap::new();
     //for (key, val) in keys_from_py.iter() {
