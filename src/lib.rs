@@ -121,6 +121,7 @@ impl VerificationHelper for YuBi {
 }
 
 #[pyfunction]
+#[text_signature = "(data, pin, certdata)"]
 fn decrypt_bytes_on_card(
     _py: Python,
     data: Vec<u8>,
@@ -154,6 +155,28 @@ fn decrypt_bytes_on_card(
     std::io::copy(&mut decryptor, &mut result).unwrap();
     let res = PyBytes::new(_py, &result);
     Ok(res.into())
+}
+
+#[pyfunction]
+#[text_signature = "(certdata, filepath, output, pin)"]
+pub fn decrypt_file_on_card(
+    _py: Python,
+    certdata: Vec<u8>,
+    filepath: Vec<u8>,
+    output: Vec<u8>,
+    pin: Vec<u8>,
+) -> PyResult<bool> {
+    let p = P::new();
+
+    let input = File::open(str::from_utf8(&filepath[..]).unwrap()).unwrap();
+    let mut outfile = File::create(str::from_utf8(&output[..]).unwrap()).unwrap();
+
+    let mut decryptor = DecryptorBuilder::from_reader(input)
+        .unwrap()
+        .with_policy(&p, None, YuBi::new(&p, certdata, pin))
+        .unwrap();
+    std::io::copy(&mut decryptor, &mut outfile).unwrap();
+    Ok(true)
 }
 
 #[pyfunction]
@@ -514,6 +537,7 @@ fn get_keys(cert: &openpgp::cert::Cert, password: String) -> Vec<openpgp::crypto
 }
 
 #[pyfunction]
+#[text_signature = "(certdata, data, pin)"]
 pub fn sign_bytes_detached_on_card(
     certdata: Vec<u8>,
     data: Vec<u8>,
@@ -524,6 +548,7 @@ pub fn sign_bytes_detached_on_card(
 }
 
 #[pyfunction]
+#[text_signature = "(certdata, filepath, pin)"]
 pub fn sign_file_detached_on_card(
     certdata: Vec<u8>,
     filepath: Vec<u8>,
@@ -1549,7 +1574,7 @@ fn encrypt_bytes_to_bytes(
     }
 }
 
-#[pyclass(module="johnnycanencrypt")]
+#[pyclass(module = "johnnycanencrypt")]
 #[derive(Debug)]
 struct Johnny {
     cert: openpgp::cert::Cert,
@@ -1814,7 +1839,6 @@ pub fn is_smartcard_connected() -> PyResult<bool> {
     }
 }
 
-
 /// A Python module implemented in Rust.
 #[pymodule]
 fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
@@ -1828,6 +1852,7 @@ fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(set_url))?;
     m.add_wrapped(wrap_pyfunction!(get_card_details))?;
     m.add_wrapped(wrap_pyfunction!(decrypt_bytes_on_card))?;
+    m.add_wrapped(wrap_pyfunction!(decrypt_file_on_card))?;
     m.add_wrapped(wrap_pyfunction!(create_newkey))?;
     m.add_wrapped(wrap_pyfunction!(upload_to_smartcard))?;
     m.add_wrapped(wrap_pyfunction!(get_pub_key))?;
