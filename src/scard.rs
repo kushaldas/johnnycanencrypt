@@ -334,9 +334,9 @@ impl<'a> crypto::Decryptor for KeyPair<'a> {
                 c.push(0x00);
 
                 // Send this for decryption on the card
-                let dec = decrypt_the_secret_in_card(c, self.pin.clone()).unwrap();
+                let dec = decrypt_the_secret_in_card(c, self.pin.clone())?;
                 let S: openpgp::crypto::mem::Protected = dec.into();
-                Ok(openpgp::crypto::ecdh::decrypt_unwrap(self.public, &S, ciphertext).unwrap())
+                Ok(openpgp::crypto::ecdh::decrypt_unwrap(self.public, &S, ciphertext)?)
             }
 
             (ciphertext, public) => Err(openpgp::Error::InvalidOperation(format!(
