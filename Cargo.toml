@@ -9,7 +9,7 @@ readme = "README.md"
 homepage = "https://johnnycanencrypt.readthedocs.io/en/latest/introduction.html"
 repository = "https://github.com/kushaldas/johnnycanencrypt"
 license-file = "LICENSE"
-exclude = ["examples/**/*.py", "*.patch"]
+exclude = ["examples/**/*.py", "*.patch", "smartcardtests/jce.db"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
