@@ -373,7 +373,7 @@ impl<'a> crypto::Signer for KeyPair<'a> {
                         ];
                         data_for_rsa.extend(digest);
                         data_for_rsa.push(0x00);
-                        let result = sign_hash_in_card(data_for_rsa, self.pin.clone()).unwrap();
+                        let result = sign_hash_in_card(data_for_rsa, self.pin.clone())?;
                         let mpi = openpgp::crypto::mpi::MPI::new(&result[..]);
                         return Ok(openpgp::crypto::mpi::Signature::RSA { s: mpi });
                     }
@@ -383,7 +383,7 @@ impl<'a> crypto::Signer for KeyPair<'a> {
                             0x04, 0x02, 0x03, 0x05, 0x00, 0x04, 0x40,
                         ];
                         data_for_rsa.extend(digest);
-                        let result = sign_hash_in_card(data_for_rsa, self.pin.clone()).unwrap();
+                        let result = sign_hash_in_card(data_for_rsa, self.pin.clone())?;
                         let mpi = openpgp::crypto::mpi::MPI::new(&result[..]);
                         return Ok(openpgp::crypto::mpi::Signature::RSA { s: mpi });
                     }
@@ -398,7 +398,7 @@ impl<'a> crypto::Signer for KeyPair<'a> {
             }
             (EdDSA, PublicKey::EdDSA { .. }) => {
                 let data_for_eddsa: Vec<u8> = digest.iter().map(|x| x).copied().collect();
-                let result = sign_hash_in_card(data_for_eddsa, self.pin.clone()).unwrap();
+                let result = sign_hash_in_card(data_for_eddsa, self.pin.clone())?;
                 let r = openpgp::crypto::mpi::MPI::new(&result[..32]);
                 let s = openpgp::crypto::mpi::MPI::new(&result[32..]);
                 return Ok(openpgp::crypto::mpi::Signature::EdDSA { r, s });
