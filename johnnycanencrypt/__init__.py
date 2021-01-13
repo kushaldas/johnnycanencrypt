@@ -636,6 +636,11 @@ class KeyStore:
         else:
             k = key
 
+        # now let us check if the key is public and has a corresponding smartcard with secret
+        if k.keytype == KeyType.PUBLIC and k.oncard is not None:
+            return rjce.decrypt_bytes_on_card(k.keyvalue, data, password.encode("utf-8"))
+
+        # Otherwise, we use the standard ondisk secret
         jp = Johnny(k.keyvalue)
         return jp.decrypt_bytes(data, password)
 
@@ -711,6 +716,13 @@ class KeyStore:
             outputpath = outputfile.encode("utf-8")
         else:
             outputpath = outputfile
+
+        # now let us check if the key is public and has a corresponding smartcard with secret
+        if k.keytype == KeyType.PUBLIC and k.oncard is not None:
+            if use_filehandler:
+                return rjce.decrypt_filehandler_on_card(k.keyvalue, fh, outputpath, password.encode("utf-8"))
+            else:
+                return rjce.decrypt_file_on_card(k.keyvalue, inputfile, outputpath, password.encode("utf-8"))
 
         jp = Johnny(k.keyvalue)
         if not use_filehandler:
@@ -898,4 +910,7 @@ class KeyStore:
                 # Means we found the main key, now we have to mark it with the serial number of the card
                 sql = "UPDATE keys SET oncard=? WHERE id=?"
                 cursor.execute(sql, (data["serial_number"], fromdb["key_id"]))
-                return fromdb["fingerprint"]
+                sql = "SELECT fingerprint from keys where id=?"
+                cursor.execute(sql, (fromdb["key_id"],))
+                result = cursor.fetchone()
+                return result["fingerprint"]
