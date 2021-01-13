@@ -636,7 +636,10 @@ fn sign_internal_detached_on_card(
     io::copy(input, &mut signer).expect("Failed to sign data");
 
     // Finally, teardown the stack to ensure all the data is written.
-    signer.finalize().expect("Failed to write data");
+    match signer.finalize() {
+        Ok(_) => (),
+        Err(msg) => return Err(CardError::new_err(msg.to_string())),
+    }
 
     // Finalize the armor writer.
     sink.finalize().expect("Failed to write data");
