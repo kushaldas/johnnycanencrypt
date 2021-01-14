@@ -32,7 +32,7 @@ After you have the dependencies mentioned above, you can follow the steps below 
 
         python3 -m venv .venv
         source .venv/bin/activate
-        python3 -m pip install requirements-dev.txt
+        python3 -m pip install -r requirements-dev.txt
         maturin build --manylinux=off
 
 Only to build and test locally, you should execute
