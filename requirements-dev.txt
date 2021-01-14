@@ -1,5 +1,5 @@
 pytest
 maturin
 mypy
-requests
+httpx
 vcrpy
