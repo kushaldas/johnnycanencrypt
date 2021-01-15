@@ -1,5 +1,13 @@
 # Changlelog
 
+## [unreleased]
+
+### Added
+
+- ECDH decryption on smartcard for Curve25519 only
+- Adds `decrypt_file_on_card` function
+- Adds `decrypt_bytes_on_card` function
+
 ## [0.5.0] - 2021-01-03
 
 ### Added

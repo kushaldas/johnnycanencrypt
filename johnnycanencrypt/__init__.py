@@ -636,6 +636,13 @@ class KeyStore:
         else:
             k = key
 
+        # now let us check if the key is public and has a corresponding smartcard with secret
+        if k.keytype == KeyType.PUBLIC and k.oncard is not None:
+            return rjce.decrypt_bytes_on_card(
+                k.keyvalue, data, password.encode("utf-8")
+            )
+
+        # Otherwise, we use the standard ondisk secret
         jp = Johnny(k.keyvalue)
         return jp.decrypt_bytes(data, password)
 
@@ -712,6 +719,17 @@ class KeyStore:
         else:
             outputpath = outputfile
 
+        # now let us check if the key is public and has a corresponding smartcard with secret
+        if k.keytype == KeyType.PUBLIC and k.oncard is not None:
+            if use_filehandler:
+                return rjce.decrypt_filehandler_on_card(
+                    k.keyvalue, fh, outputpath, password.encode("utf-8")
+                )
+            else:
+                return rjce.decrypt_file_on_card(
+                    k.keyvalue, inputfile, outputpath, password.encode("utf-8")
+                )
+
         jp = Johnny(k.keyvalue)
         if not use_filehandler:
             return jp.decrypt_file(inputfile, outputpath, password)
@@ -734,6 +752,12 @@ class KeyStore:
 
         if type(data) == str:
             data = data.encode("utf-8")
+
+        if k.keytype == KeyType.PUBLIC and k.oncard is not None:
+            return rjce.sign_bytes_detached_on_card(
+                k.keyvalue, data, password.encode("utf-8")
+            )
+
         jp = Johnny(k.keyvalue)
         return jp.sign_bytes_detached(data, password)
 
@@ -766,6 +790,7 @@ class KeyStore:
 
         :returns: The signature as string
         """
+        signature = ""
         if type(key) == str:  # Means we have a fingerprint
             k = self.get_key(key)
         else:
@@ -775,8 +800,15 @@ class KeyStore:
             filepath_in_bytes = filepath.encode("utf-8")
         else:
             filepath_in_bytes = filepath
-        jp = Johnny(k.keyvalue)
-        signature = jp.sign_file_detached(filepath_in_bytes, password)
+
+        if k.keytype == KeyType.PUBLIC and k.oncard is not None:
+            signature = rjce.sign_file_detached_on_card(
+                k.keyvalue, filepath_in_bytes, password.encode("utf-8")
+            )
+
+        else:
+            jp = Johnny(k.keyvalue)
+            signature = jp.sign_file_detached(filepath_in_bytes, password)
 
         # Now check if we have to write the file on disk
         if write:
@@ -898,4 +930,7 @@ class KeyStore:
                 # Means we found the main key, now we have to mark it with the serial number of the card
                 sql = "UPDATE keys SET oncard=? WHERE id=?"
                 cursor.execute(sql, (data["serial_number"], fromdb["key_id"]))
-                return fromdb["fingerprint"]
+                sql = "SELECT fingerprint from keys where id=?"
+                cursor.execute(sql, (fromdb["key_id"],))
+                result = cursor.fetchone()
+                return result["fingerprint"]

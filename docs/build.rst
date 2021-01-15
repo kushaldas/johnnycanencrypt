@@ -57,3 +57,17 @@ After you did the `maturin develop` as mentioned above, execute the following co
 
         python3 -m pytest -vvv
 
+
+How to run the smartcard related tests?
+---------------------------------------
+
+.. warning:: The following test will reset any Yubikey or smartcard connected to the system. Use it carefully.
+
+All of these tests are right now kept as a Python script, and requires Yubikey series 5 hardware to test.
+
+::
+
+        python3 smartcardtests/smartcards.py
+
+When asked, please make sure that only the test smartcard is conneccted to the system, and then type "Yes", without quotes.
+

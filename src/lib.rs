@@ -121,11 +121,12 @@ impl VerificationHelper for YuBi {
 }
 
 #[pyfunction]
+#[text_signature = "(certdata, data, pin)"]
 fn decrypt_bytes_on_card(
     _py: Python,
+    certdata: Vec<u8>,
     data: Vec<u8>,
     pin: Vec<u8>,
-    certdata: Vec<u8>,
 ) -> PyResult<PyObject> {
     //let keys: HashMap<openpgp::KeyID, String> = HashMap::new();
     //for (key, val) in keys_from_py.iter() {
@@ -154,6 +155,65 @@ fn decrypt_bytes_on_card(
     std::io::copy(&mut decryptor, &mut result).unwrap();
     let res = PyBytes::new(_py, &result);
     Ok(res.into())
+}
+
+#[pyfunction]
+#[text_signature = "(certdata, filepath, output, pin)"]
+pub fn decrypt_file_on_card(
+    _py: Python,
+    certdata: Vec<u8>,
+    filepath: Vec<u8>,
+    output: Vec<u8>,
+    pin: Vec<u8>,
+) -> PyResult<bool> {
+    let p = P::new();
+
+    let input = File::open(str::from_utf8(&filepath[..]).unwrap()).unwrap();
+    let mut outfile = File::create(str::from_utf8(&output[..]).unwrap()).unwrap();
+
+    let mut decryptor = DecryptorBuilder::from_reader(input)
+        .unwrap()
+        .with_policy(&p, None, YuBi::new(&p, certdata, pin))
+        .unwrap();
+    std::io::copy(&mut decryptor, &mut outfile).unwrap();
+    Ok(true)
+}
+
+#[pyfunction]
+#[text_signature = "(certdata, fh, output, pin)"]
+pub fn decrypt_filehandler_on_card(
+    _py: Python,
+    certdata: Vec<u8>,
+    fh: PyObject,
+    output: Vec<u8>,
+    pin: Vec<u8>,
+) -> PyResult<bool> {
+    let p = P::new();
+
+    let filedata = fh.call_method(_py, "read", (), None).unwrap();
+    let pbytes: &PyBytes = filedata.cast_as(_py).expect("Excepted bytes");
+    let data: Vec<u8> = Vec::from(pbytes.as_bytes());
+
+    let reader = std::io::BufReader::new(&data[..]);
+    let dec = DecryptorBuilder::from_reader(reader);
+    let dec2 = match dec {
+        Ok(dec) => dec,
+        Err(msg) => {
+            return Err(PySystemError::new_err(format!(
+                "Can not create decryptor: {}",
+                msg
+            )))
+        }
+    };
+    let mut decryptor = match dec2.with_policy(&p, None, YuBi::new(&p, certdata, pin)) {
+        Ok(decr) => decr,
+        Err(msg) => return Err(CryptoError::new_err(format!("Failed to decrypt: {}", msg))),
+    };
+
+    let mut outfile = File::create(str::from_utf8(&output[..]).unwrap()).unwrap();
+
+    std::io::copy(&mut decryptor, &mut outfile).unwrap();
+    Ok(true)
 }
 
 #[pyfunction]
@@ -514,6 +574,7 @@ fn get_keys(cert: &openpgp::cert::Cert, password: String) -> Vec<openpgp::crypto
 }
 
 #[pyfunction]
+#[text_signature = "(certdata, data, pin)"]
 pub fn sign_bytes_detached_on_card(
     certdata: Vec<u8>,
     data: Vec<u8>,
@@ -524,6 +585,7 @@ pub fn sign_bytes_detached_on_card(
 }
 
 #[pyfunction]
+#[text_signature = "(certdata, filepath, pin)"]
 pub fn sign_file_detached_on_card(
     certdata: Vec<u8>,
     filepath: Vec<u8>,
@@ -574,7 +636,10 @@ fn sign_internal_detached_on_card(
     io::copy(input, &mut signer).expect("Failed to sign data");
 
     // Finally, teardown the stack to ensure all the data is written.
-    signer.finalize().expect("Failed to write data");
+    match signer.finalize() {
+        Ok(_) => (),
+        Err(msg) => return Err(CardError::new_err(msg.to_string())),
+    }
 
     // Finalize the armor writer.
     sink.finalize().expect("Failed to write data");
@@ -1549,7 +1614,7 @@ fn encrypt_bytes_to_bytes(
     }
 }
 
-#[pyclass(module="johnnycanencrypt")]
+#[pyclass(module = "johnnycanencrypt")]
 #[derive(Debug)]
 struct Johnny {
     cert: openpgp::cert::Cert,
@@ -1814,7 +1879,6 @@ pub fn is_smartcard_connected() -> PyResult<bool> {
     }
 }
 
-
 /// A Python module implemented in Rust.
 #[pymodule]
 fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
@@ -1828,6 +1892,8 @@ fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(set_url))?;
     m.add_wrapped(wrap_pyfunction!(get_card_details))?;
     m.add_wrapped(wrap_pyfunction!(decrypt_bytes_on_card))?;
+    m.add_wrapped(wrap_pyfunction!(decrypt_file_on_card))?;
+    m.add_wrapped(wrap_pyfunction!(decrypt_filehandler_on_card))?;
     m.add_wrapped(wrap_pyfunction!(create_newkey))?;
     m.add_wrapped(wrap_pyfunction!(upload_to_smartcard))?;
     m.add_wrapped(wrap_pyfunction!(get_pub_key))?;
