@@ -7,7 +7,7 @@ from enum import Enum
 from pprint import pprint
 from typing import Dict, List, Optional, Union, Tuple
 
-import requests
+import httpx
 
 from .exceptions import FetchingError, KeyNotFoundError
 from .johnnycanencrypt import (
@@ -844,7 +844,7 @@ class KeyStore:
         return self._internal_fetch_from_server(url, email)
 
     def _internal_fetch_from_server(self, url: str, term: str) -> Key:
-        resp = requests.get(url)
+        resp = httpx.get(url)
         if resp.status_code == 404:
             raise KeyNotFoundError(
                 f"The given search term {term} was found in the server."

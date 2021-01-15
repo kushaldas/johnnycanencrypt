@@ -1,22 +1,21 @@
 interactions:
 - request:
-    body: null
+    body: ''
     headers:
-      Accept:
+      accept:
       - '*/*'
-      Accept-Encoding:
+      accept-encoding:
       - gzip, deflate
-      Connection:
+      connection:
       - keep-alive
-      User-Agent:
-      - python-requests/2.24.0
+      host:
+      - keys.openpgp.org
+      user-agent:
+      - python-httpx/0.16.1
     method: GET
     uri: https://keys.openpgp.org/vks/v1/by-email/doesnotexists%40kushaldas.in
   response:
-    body:
-      string: !!binary |
-        H4sIAAAAAAAAA/PLV8hOrVRIyy/NSwGSRQqpurmJmTkKiSkpRanFxQop+anFefklqRWZxSXFDtml
-        xRmJOSmJxXqZeQDKXCP8OgAAAA==
+    content: No key found for e-mail address doesnotexists@kushaldas.in
     headers:
       Access-Control-Allow-Origin:
       - '*'
@@ -29,14 +28,13 @@ interactions:
       Content-Type:
       - text/html; charset=utf-8
       Date:
-      - Thu, 05 Nov 2020 05:27:29 GMT
+      - Thu, 14 Jan 2021 15:05:20 GMT
       Server:
       - nginx/1.14.2
       Transfer-Encoding:
       - chunked
       Vary:
       - Accept-Encoding
-    status:
-      code: 404
-      message: Not Found
+    http_version: HTTP/1.1
+    status_code: 404
 version: 1
