@@ -352,6 +352,7 @@ class KeyStore:
         key_filename = os.path.join(self.path, f"{fingerprint}.sec")
         with open(key_filename, "wb") as fobj:
             fobj.write(newcert)
+        # TODO: In future we can just update the database rows.
         # Next remove the old key
         self.delete_key(key)
         # Now import the modified key
