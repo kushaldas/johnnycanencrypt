@@ -62,6 +62,7 @@ Encrypting and decrypting some bytes for a given fingerprint
 
 ::
 
+        >>> ks = jce.KeyStore("tests/files/store")
         >>> key = ks.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
         >>> enc = ks.encrypt(key, "Sequoia is amazing.")
         >>> print(enc[:27])
