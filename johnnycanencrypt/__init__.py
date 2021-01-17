@@ -328,6 +328,44 @@ class KeyStore:
             return False
         return False
 
+    def add_userid(self, key: Key, uid: str, password: str) -> Key:
+        """Adds a new user id to the given key, saves on the database. Then returns the modified key object
+
+        :param key: The secret key object
+        :param uid: The string value to add the keybobject
+        :param password: The password for the secret key
+
+        :returns: Key object
+        """
+        if key.keytype != KeyType.SECRET:
+            raise ValueError(f"The {key} is not a secret key.")
+        newcert = rjce.add_uid_in_cert(key.keyvalue, uid.encode("utf-8"), password)
+        (
+            uids,
+            fingerprint,
+            keytype,
+            expirationtime,
+            creationtime,
+            othervalues,
+        ) = parse_cert_bytes(newcert)
+        # Let us write the new keydata to the disk
+        key_filename = os.path.join(self.path, f"{fingerprint}.sec")
+        with open(key_filename, "wb") as fobj:
+            fobj.write(newcert)
+        # Next remove the old key
+        self.delete_key(key)
+        # Now import the modified key
+        self._add_key_to_cache(
+            newcert,
+            uids,
+            fingerprint,
+            keytype,
+            expirationtime,
+            creationtime,
+            othervalues,
+        )
+        return self.get_key(fingerprint)
+
     def import_cert(self, keypath: str, onplace=False) -> Key:
         """Imports a given cert from the given path.
 
