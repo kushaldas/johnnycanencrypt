@@ -53,6 +53,66 @@ create_exception!(johnnycanencrypt, SameKeyError, PyException);
 // Error in selecting OpenPGP applet in the card
 create_exception!(johnnycanencrypt, CardError, PyException);
 
+
+#[pyfunction]
+#[text_signature = "(certdata, uid, pass)"]
+pub fn add_uid_in_cert(
+    py: Python,
+    certdata: Vec<u8>,
+    uid: Vec<u8>,
+    pass: String,
+) -> PyResult<PyObject> {
+    // This is where we will store all the signing keys
+    let cert = openpgp::Cert::from_bytes(&certdata).unwrap();
+
+    // To find the secret keypair
+    let mut keypair = match cert
+        .primary_key()
+        .key()
+        .clone()
+        .parts_into_secret()
+        .unwrap()
+        .secret()
+        .is_encrypted()
+    {
+        true => {
+            // When the secret is encrypted with a password
+            cert.primary_key()
+                .key()
+                .clone()
+                .parts_into_secret()
+                .unwrap()
+                .decrypt_secret(&openpgp::crypto::Password::from(pass))
+                .unwrap()
+                .into_keypair()
+                .unwrap()
+        }
+        false => {
+            // When the secret is not encrypted
+            cert.primary_key()
+                .key()
+                .clone()
+                .parts_into_secret()
+                .unwrap()
+                .into_keypair()
+                .unwrap()
+        }
+    };
+    let userid = openpgp::packet::UserID::from(uid);
+    let builder = openpgp::packet::signature::SignatureBuilder::new(
+        openpgp::types::SignatureType::PositiveCertification,
+    );
+    let binding = userid.bind(&mut keypair, &cert, builder).unwrap();
+    let cert = cert
+        .insert_packets(vec![Packet::from(userid), binding.into()])
+        .unwrap();
+
+    // Let us return the cert data which can be saved in the database
+    let result = cert.to_vec().unwrap();
+    let res = PyBytes::new(py, &result);
+    Ok(res.into())
+}
+
 #[pyfunction]
 pub fn update_password(
     py: Python,
@@ -2001,6 +2061,7 @@ fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(encrypt_bytes_to_bytes))?;
     m.add_wrapped(wrap_pyfunction!(encrypt_file_internal))?;
     m.add_wrapped(wrap_pyfunction!(update_password))?;
+    m.add_wrapped(wrap_pyfunction!(add_uid_in_cert))?;
     m.add("CryptoError", _py.get_type::<CryptoError>())?;
     m.add("SameKeyError", _py.get_type::<SameKeyError>())?;
     m.add_class::<Johnny>()?;

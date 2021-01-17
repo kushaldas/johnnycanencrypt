@@ -368,6 +368,34 @@ def test_get_pub_key():
     assert pub_key.startswith("-----BEGIN PGP PUBLIC KEY BLOCK-----")
 
 
+def test_add_userid():
+    """Verifies that we can add uid to a cert"""
+    tempdir = tempfile.TemporaryDirectory()
+    ks = jce.KeyStore(tempdir.name)
+    key = ks.import_cert("tests/files/store/secret.asc")
+    # check that there is only one userid
+    assert len(key.uids) == 1
+
+    # now add a new userid
+    key2 = ks.add_userid(key, "Off Spinner <spin@example.com>", "redhat")
+
+    assert key2.fingerprint == key.fingerprint
+    assert len(key2.uids) == 2
+
+
+def test_add_userid_fails_for_public():
+    """Verifies that adding uid to a public key fails"""
+    tempdir = tempfile.TemporaryDirectory()
+    ks = jce.KeyStore(tempdir.name)
+    key = ks.import_cert("tests/files/store/public.asc")
+    # verify that the key is a secret
+    assert len(key.uids) == 1
+
+    # now add a new userid
+    with pytest.raises(ValueError):
+        key2 = ks.add_userid(key, "Off Spinner <spin@example.com>", "redhat")
+
+
 def test_same_key_import_error():
     tempdir = tempfile.TemporaryDirectory()
     ks = jce.KeyStore(tempdir.name)

@@ -341,6 +341,73 @@ class KeyStore:
             return False
         return False
 
+    def add_userid(self, key: Key, uid: str, password: str) -> Key:
+        """Adds a new user id to the given key, saves on the database. Then returns the modified key object
+
+        :param key: The secret key object
+        :param uid: The string value to add the keybobject
+        :param password: The password for the secret key
+
+        :returns: Key object
+        """
+        if key.keytype != KeyType.SECRET:
+            raise ValueError(f"The {key} is not a secret key.")
+        # A list of UID values which is already in the database
+        olduids = [uid["value"] for uid in key.uids]
+        # Now add the new userid to the cert in binary formart
+        newcert = rjce.add_uid_in_cert(key.keyvalue, uid.encode("utf-8"), password)
+
+        # Now we will parse the new cert bytes so that we can get the actual value for the user id
+        # Expensive, but works.
+        (
+            uids,
+            fingerprint,
+            keytype,
+            expirationtime,
+            creationtime,
+            othervalues,
+        ) = parse_cert_bytes(newcert)
+        # Let us write the new keydata to the disk
+        key_filename = os.path.join(self.path, f"{fingerprint}.sec")
+        with open(key_filename, "wb") as fobj:
+            fobj.write(newcert)
+        con = sqlite3.connect(self.dbpath)
+        with con:
+            cursor = con.cursor()
+            # First let us update the actual keyvalue
+            sql = "UPDATE keys set keyvalue=? where fingerprint=?"
+            cursor.execute(sql, (newcert, key.fingerprint))
+            # Now we need the key_id from the database table
+            cursor.execute(
+                "SELECT id from keys where fingerprint=?", (key.fingerprint,)
+            )
+            fromdb = cursor.fetchone()
+            key_id = fromdb[0]
+            # Now loop through the new userids and find the new one
+            for uid in uids:
+                if "value" in uid and uid["value"]:
+                    # First check if we are already there in the old list or not.
+                    if uid["value"] in olduids:
+                        continue
+                    # Ok, now we have a new user id, we can start adding this value to the database
+                    # this next line does not make sense for a new user id :)
+                    revoked = 1 if uid["revoked"] else 0
+                    sql = f"INSERT INTO uidvalues (value, revoked, key_id) values (?, ?, ?)"
+                    cursor.execute(sql, (uid["value"], revoked, key_id))
+                    value_id = cursor.lastrowid
+                else:
+                    # If no value, then we can skip the rest
+                    continue
+                for uid_keyname in ["name", "email", "uri"]:
+                    if uid_keyname in uid and uid[uid_keyname]:
+                        tablename = f"uid{uid_keyname}s"
+                        value = uid[uid_keyname]
+                        sql = f"INSERT INTO {tablename} (value, key_id, value_id) values (?, ?, ?)"
+                        cursor.execute(sql, (value, key_id, value_id))
+
+        # Regnerate the key object and return it
+        return self.get_key(fingerprint)
+
     def import_cert(self, keypath: str, onplace=False) -> Key:
         """Imports a given cert from the given path.
 
