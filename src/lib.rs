@@ -1176,6 +1176,12 @@ fn internal_parse_cert(
             },
             Err(_) => (),
         }
+        let mut revoked = false;
+        // Based on https://docs.sequoia-pgp.org/1.0.0/sequoia_openpgp/cert/struct.UserIDRevocationBuilder.html#examples
+        if let RevocationStatus::Revoked(_) = ua.revocation_status(&p, None) {
+            revoked = true;
+        };
+        pd.set_item("revoked", revoked).unwrap();
         plist.append(pd).unwrap();
     }
 
