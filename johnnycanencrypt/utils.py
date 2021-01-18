@@ -29,6 +29,7 @@ CREATE TABLE subkeys (
 CREATE TABLE uidvalues (
 	id INTEGER PRIMARY KEY,
 	value TEXT,
+	revoked INTEGER,
 	key_id INTEGER,
 	FOREIGN KEY (key_id)
 	REFERENCES keys (id)
@@ -73,7 +74,11 @@ CREATE TABLE uiduris (
 	REFERENCES uidvalues (id)
 		ON DELETE CASCADE
 );
+
+CREATE TABLE dbupgrade (upgradedate TEXT)
 """
+
+DB_UPGRADE_DATE = "20210118"
 
 
 def _get_cert_data(filepath):
@@ -94,6 +99,7 @@ def convert_fingerprint(data):
     for x in data:
         s += format(x, "02x")
     return s.upper()
+
 
 def to_sort_by_expiary(date):
     "To help to sort based on expiration date"

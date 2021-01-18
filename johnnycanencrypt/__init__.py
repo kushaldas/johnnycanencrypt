@@ -27,7 +27,13 @@ from .johnnycanencrypt import (
 
 import johnnycanencrypt.johnnycanencrypt as rjce
 
-from .utils import _get_cert_data, createdb, convert_fingerprint, to_sort_by_expiary
+from .utils import (
+    _get_cert_data,
+    createdb,
+    convert_fingerprint,
+    to_sort_by_expiary,
+    DB_UPGRADE_DATE,
+)
 
 
 class KeyType(Enum):
@@ -122,6 +128,88 @@ class KeyStore:
             with con:
                 cursor = con.cursor()
                 cursor.executescript(createdb)
+                # we have to insert the date when this database schema was generated
+                cursor.execute(
+                    f"INSERT INTO dbupgrade (upgradedate) values (?)",
+                    (DB_UPGRADE_DATE,),
+                )
+        else:
+            # Now we have db already
+            # verify if it has the same database schema
+            self.upgrade_if_required()
+
+    def upgrade_if_required(self):
+        "Upgrades the database schema if required"
+        SHOULD_WE = False
+        existing_records = []
+        con = sqlite3.connect(self.dbpath)
+        con.row_factory = sqlite3.Row
+        # First we will check if this db schema is old or not
+        with con:
+            cursor = con.cursor()
+            sql = "SELECT * from dbupgrade"
+            try:
+                cursor.execute(sql)
+                fromdb = cursor.fetchone()
+                if fromdb["upgradedate"] < DB_UPGRADE_DATE:  # Means old db schema
+                    SHOULD_WE = True
+            except sqlite3.OperationalError:  # Means the table is not there.
+                SHOULD_WE = True
+            # Now check if we should upgrade if yes, then do this.
+            if SHOULD_WE:
+                # First read all the existing keys
+                cursor.execute("SELECT * from KEYS")
+                existing_records = cursor.fetchall()
+            else:
+                return
+        # Temporay db setup
+        oldpath = self.dbpath
+        self.dbpath = os.path.join(self.path, "jce_upgrade.db")
+        if os.path.exists(self.dbpath):  # Means the upgrade db already exist.
+            # Unrecoverable error
+            raise RuntimeError(
+                f"{self.dbpath} already exists, please remove and then try again."
+            )
+        con = sqlite3.connect(self.dbpath)
+        con.row_factory = sqlite3.Row
+        with con:
+            cursor = con.cursor()
+            cursor.executescript(createdb)
+            # we have to insert the date when this database schema was generated
+            cursor.execute(
+                f"INSERT INTO dbupgrade (upgradedate) values (?)", (DB_UPGRADE_DATE,)
+            )
+        # now let us insert our existing data
+        for row in existing_records:
+            (
+                uids,
+                fingerprint,
+                keytype,
+                expirationtime,
+                creationtime,
+                othervalues,
+            ) = parse_cert_bytes(row["keyvalue"])
+            self._add_key_to_cache(
+                row["keyvalue"],
+                uids,
+                fingerprint,
+                keytype,
+                expirationtime,
+                creationtime,
+                othervalues,
+            )
+        con = sqlite3.connect(self.dbpath)
+        con.row_factory = sqlite3.Row
+        with con:
+            cursor = con.cursor()
+            for row in existing_records:
+                oncard = row["oncard"]
+                fingerprint = row["fingerprint"]
+                sql = "UPDATE keys set oncard=? where fingerprint=?"
+                cursor.execute(sql, (oncard, fingerprint))
+        # Now let us rename the file
+        os.rename(self.dbpath, oldpath)
+        self.dbpath = oldpath
 
     def add_key_to_cache(
         self,
@@ -205,8 +293,9 @@ class KeyStore:
             for uid in uids:
                 # First we will insert the value
                 if "value" in uid and uid["value"]:
-                    sql = f"INSERT INTO uidvalues (value, key_id) values (?, ?)"
-                    cursor.execute(sql, (uid["value"], key_id))
+                    revoked = 1 if uid["revoked"] else 0
+                    sql = f"INSERT INTO uidvalues (value, revoked, key_id) values (?, ?, ?)"
+                    cursor.execute(sql, (uid["value"], revoked, key_id))
                     value_id = cursor.lastrowid
                 else:
                     # If no value, then we can skip the rest
@@ -350,18 +439,20 @@ class KeyStore:
                 oncard = result["oncard"]
 
                 # Now get the uids
-                sql = "SELECT id, value FROM uidvalues WHERE key_id=?"
+                sql = "SELECT id, value, revoked FROM uidvalues WHERE key_id=?"
                 cursor.execute(sql, (key_id,))
                 rows = cursor.fetchall()
                 uids = []
                 for row in rows:
                     value_id = row["id"]
+                    revoked = True if row["revoked"] == 1 else False
                     email = self._get_one_row_from_table(cursor, "uidemails", value_id)
                     name = self._get_one_row_from_table(cursor, "uidnames", value_id)
                     uri = self._get_one_row_from_table(cursor, "uiduris", value_id)
                     uids.append(
                         {
                             "value": row["value"],
+                            "revoked": revoked,
                             "email": email,
                             "name": name,
                             "uri": uri,

@@ -2,6 +2,7 @@ import datetime
 import os
 import shutil
 import tempfile
+import sqlite3
 
 import pytest
 import vcr
@@ -339,7 +340,6 @@ def test_ks_creation_expiration_time():
         assert subkey[1].date() == etime.date()
 
 
-
 def test_get_all_keys():
     ks = jce.KeyStore("./tests/files/store")
     keys = ks.get_all_keys()
@@ -387,6 +387,33 @@ def test_key_with_multiple_uids():
     k = ks.create_newkey("redhat", uids)
     uids, fp, secret, et, ct, othervalues = jce.parse_cert_bytes(k.keyvalue)
     assert len(uids) == 3
+
+
+def test_ks_upgrade():
+    "tests db upgrade from an old db"
+    tempdir = tempfile.TemporaryDirectory()
+    shutil.copy("tests/files/store/oldjce.db", os.path.join(tempdir.name, "jce.db"))
+    ks = jce.KeyStore(tempdir.name)
+    con = sqlite3.connect(ks.dbpath)
+    con.row_factory = sqlite3.Row
+    # First we will check if this db schema is old or not
+    with con:
+        cursor = con.cursor()
+        sql = "SELECT * from dbupgrade"
+        cursor.execute(sql)
+        fromdb = cursor.fetchone()
+        assert fromdb["upgradedate"] == jce.DB_UPGRADE_DATE
+
+
+def test_ks_upgrade_failure():
+    "tests db upgrade failure from an old db because of existing file"
+    tempdir = tempfile.TemporaryDirectory()
+    shutil.copy("tests/files/store/oldjce.db", os.path.join(tempdir.name, "jce.db"))
+    shutil.copy(
+        "tests/files/store/oldjce.db", os.path.join(tempdir.name, "jce_upgrade.db")
+    )
+    with pytest.raises(RuntimeError):
+        ks = jce.KeyStore(tempdir.name)
 
 
 def test_get_encrypted_for():
