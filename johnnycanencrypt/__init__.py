@@ -189,7 +189,7 @@ class KeyStore:
                 creationtime,
                 othervalues,
             ) = parse_cert_bytes(row["keyvalue"])
-            self._add_key_to_cache(
+            self._save_key_info_to_db(
                 row["keyvalue"],
                 uids,
                 fingerprint,
@@ -211,7 +211,7 @@ class KeyStore:
         os.rename(self.dbpath, oldpath)
         self.dbpath = oldpath
 
-    def add_key_to_cache(
+    def add_key_file_to_db(
         self,
         fullpath,
         uids,
@@ -221,14 +221,14 @@ class KeyStore:
         creationtime=None,
         subkeys=[],
     ):
-        "Populates the internal cache of the store"
+        "Populates the internal database of the store from a keyfile"
         with open(fullpath, "rb") as fobj:
             cert = fobj.read()
-        self._add_key_to_cache(
+        self._save_key_info_to_db(
             cert, uids, fingerprint, keytype, expirationtime, creationtime, subkeys
         )
 
-    def _add_key_to_cache(
+    def _save_key_info_to_db(
         self,
         cert,
         uids,
@@ -238,6 +238,7 @@ class KeyStore:
         creationtime,
         othervalues,
     ):
+        "Saves all information given to the SQLite3 database"
         etime = str(expirationtime.timestamp()) if expirationtime else ""
         ctime = str(creationtime.timestamp()) if creationtime else ""
         con = sqlite3.connect(self.dbpath)
@@ -342,7 +343,7 @@ class KeyStore:
             othervalues,
         ) = parse_cert_file(keypath)
 
-        self.add_key_to_cache(
+        self.add_key_file_to_db(
             keypath,
             uids,
             fingerprint,
@@ -984,7 +985,7 @@ class KeyStore:
                 othervalues,
             ) = parse_cert_bytes(cert)
 
-            self._add_key_to_cache(
+            self._save_key_info_to_db(
                 cert,
                 uids,
                 fingerprint,
