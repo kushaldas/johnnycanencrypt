@@ -356,7 +356,7 @@ class KeyStore:
         # Next remove the old key
         self.delete_key(key)
         # Now import the modified key
-        self._add_key_to_cache(
+        self._save_key_info_to_db(
             newcert,
             uids,
             fingerprint,
