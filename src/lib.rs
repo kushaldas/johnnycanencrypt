@@ -1078,6 +1078,19 @@ fn parse_and_move_a_subkey(
     //Ok(true)
 }
 
+/// Parses the given file path, and returns a tuple with various data.
+///
+/// - The first item is a list of user ids as dictionary.
+///    [{"value": xxx, "comment": "xxx", "email": "xxx", "uri": "xxx", "revoked": boolean}, ]
+/// - Second item is the `fingerprint` as string.
+/// - Boolean  to mark if secret key or public
+/// - expirationtime as datetime.datetime
+/// - creationtime as datetime.datetime
+/// - othervalues is another dictionary, inside of it.
+///   - "subkeys": [("subkey keyid as hex", "fingerprint as hex", creationtime, expirationtime,
+///                "keytype", "revoked as boolean")]. The subkey type can be of "encryption", "signing",
+///                "authentication", or "unknown".
+///   - "keyid": "primary key id in hex"
 #[pyfunction]
 #[text_signature = "(certpath)"]
 fn parse_cert_file(
@@ -1088,6 +1101,19 @@ fn parse_cert_file(
     internal_parse_cert(py, cert)
 }
 
+/// Parses the given bytes, and returns a tuple with various data.
+///
+/// - The first item is a list of user ids as dictionary.
+///    [{"value": xxx, "comment": "xxx", "email": "xxx", "uri": "xxx", "revoked": boolean}, ]
+/// - Second item is the `fingerprint` as string.
+/// - Boolean  to mark if secret key or public
+/// - expirationtime as datetime.datetime
+/// - creationtime as datetime.datetime
+/// - othervalues is another dictionary, inside of it.
+///   - "subkeys": [("subkey keyid as hex", "fingerprint as hex", creationtime, expirationtime,
+///                "keytype", "revoked as boolean")]. The subkey type can be of "encryption", "signing",
+///                "authentication", or "unknown".
+///   - "keyid": "primary key id in hex"
 #[pyfunction]
 #[text_signature = "(certpath)"]
 fn parse_cert_bytes(
