@@ -4,6 +4,8 @@
 
 ### Added
 
+- `update_password` for KeyStore to change password of a certificate
+- `add_userid` function
 - ECDH decryption on smartcard for Curve25519 only
 - Adds `decrypt_file_on_card` function
 - Adds `decrypt_bytes_on_card` function
