@@ -54,6 +54,68 @@ create_exception!(johnnycanencrypt, SameKeyError, PyException);
 create_exception!(johnnycanencrypt, CardError, PyException);
 
 #[pyfunction]
+pub fn update_password(
+    py: Python,
+    certdata: Vec<u8>,
+    pass: String,
+    newpass: String,
+) -> PyResult<PyObject> {
+    let p = P::new();
+    let mut cert = openpgp::Cert::from_bytes(&certdata).unwrap();
+    let mut keys = Vec::new();
+    // First let us change the password for the primary key
+    let key = cert
+        .primary_key()
+        .key()
+        .clone()
+        .parts_into_secret()
+        .unwrap()
+        .decrypt_secret(&openpgp::crypto::Password::from(pass.clone()))
+        .unwrap();
+    let pkey = key
+        .encrypt_secret(&openpgp::crypto::Password::from(newpass.clone()))
+        .unwrap();
+
+    for key in cert
+        .keys()
+        .subkeys()
+        .with_policy(&p, None)
+        .alive()
+        .revoked(false)
+        .map(|kd| kd.key())
+    {
+        let k = key
+            .clone()
+            .parts_into_secret()
+            .unwrap()
+            .decrypt_secret(&openpgp::crypto::Password::from(pass.clone()))
+            .unwrap();
+        let newk = k
+            .encrypt_secret(&openpgp::crypto::Password::from(newpass.clone()))
+            .unwrap();
+        keys.push(newk.clone());
+    }
+
+    // First let us merge the changed primary key and then the subkeys
+    cert = cert.insert_packets(Packet::from(pkey)).unwrap();
+    // here we are merging the subkeys back
+    for k in keys {
+        cert = cert.insert_packets(Packet::from(k)).unwrap();
+    }
+
+    let mut buf = Vec::new();
+    let mut buffer = Vec::new();
+
+    let mut writer = Writer::new(&mut buf, Kind::SecretKey).unwrap();
+    cert.as_tsk().serialize(&mut buffer).unwrap();
+    writer.write_all(&buffer).unwrap();
+    writer.finalize().unwrap();
+    // Let us return the cert data which can be saved in the database
+    let res = PyBytes::new(py, &buf);
+    Ok(res.into())
+}
+
+#[pyfunction]
 #[text_signature = "(certdata, uid, pass)"]
 pub fn add_uid_in_cert(
     py: Python,
@@ -1998,6 +2060,7 @@ fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(encrypt_bytes_to_bytes))?;
     m.add_wrapped(wrap_pyfunction!(encrypt_file_internal))?;
     m.add_wrapped(wrap_pyfunction!(add_uid_in_cert))?;
+    m.add_wrapped(wrap_pyfunction!(update_password))?;
     m.add("CryptoError", _py.get_type::<CryptoError>())?;
     m.add("SameKeyError", _py.get_type::<SameKeyError>())?;
     m.add_class::<Johnny>()?;
