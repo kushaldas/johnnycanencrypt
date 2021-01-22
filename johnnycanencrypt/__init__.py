@@ -211,6 +211,19 @@ class KeyStore:
         os.rename(self.dbpath, oldpath)
         self.dbpath = oldpath
 
+    def update_password(self, key: Key, password: str, newpassword: str) -> Key:
+        """Updates the password of the given key and saves to the database"""
+        cert = rjce.update_password(key.keyvalue, password, newpassword)
+        con = sqlite3.connect(self.dbpath)
+        con.row_factory = sqlite3.Row
+        with con:
+            cursor = con.cursor()
+            sql = "UPDATE keys set keyvalue=? where fingerprint=?"
+            cursor.execute(sql, (cert, key.fingerprint))
+        assert cert != key.keyvalue
+        key.keyvalue = cert
+        return key
+
     def add_key_file_to_db(
         self,
         fullpath,

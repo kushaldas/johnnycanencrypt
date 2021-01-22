@@ -112,6 +112,14 @@ def test_keystore_key_uids():
     assert "mail@kushaldas.in" == key.uids[-1]["email"]
 
 
+def test_key_password_change():
+    tempdir = tempfile.TemporaryDirectory()
+    ks = jce.KeyStore(tempdir.name)
+    k = ks.import_cert("tests/files/store/secret.asc")
+    k2 = ks.update_password(k, "redhat", "byebye")
+    data = ks.sign(k2, b"hello", "byebye")
+
+
 def test_key_deletion():
     tempdir = tempfile.TemporaryDirectory()
     ks = jce.KeyStore(tempdir.name)
