@@ -5,7 +5,7 @@ import urllib.parse
 from datetime import datetime
 from enum import Enum
 from pprint import pprint
-from typing import Dict, List, Optional, Union, Tuple
+from typing import Dict, List, Optional, Union, Tuple, Any
 
 import httpx
 
@@ -55,7 +55,7 @@ class Key:
         keyvalue: bytes,
         fingerprint: str,
         keyid: str,
-        uids: Dict[str, str] = {},
+        uids: List[Dict[str, Any]] = [],
         keytype: KeyType = KeyType.PUBLIC,
         expirationtime=None,
         creationtime=None,
@@ -341,7 +341,7 @@ class KeyStore:
             return False
         return False
 
-    def add_userid(self, key: Key, uid: str, password: str) -> Key:
+    def add_userid(self, key: Key, userid: str, password: str) -> Key:
         """Adds a new user id to the given key, saves on the database. Then returns the modified key object
 
         :param key: The secret key object
@@ -355,7 +355,7 @@ class KeyStore:
         # A list of UID values which is already in the database
         olduids = [uid["value"] for uid in key.uids]
         # Now add the new userid to the cert in binary formart
-        newcert = rjce.add_uid_in_cert(key.keyvalue, uid.encode("utf-8"), password)
+        newcert = rjce.add_uid_in_cert(key.keyvalue, userid.encode("utf-8"), password)
 
         # Now we will parse the new cert bytes so that we can get the actual value for the user id
         # Expensive, but works.
