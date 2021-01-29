@@ -367,6 +367,8 @@ class KeyStore:
             creationtime,
             othervalues,
         ) = parse_cert_bytes(newcert)
+        # To make sure we actually have a secret key
+        assert keytype == True
         # Let us write the new keydata to the disk
         key_filename = os.path.join(self.path, f"{fingerprint}.sec")
         with open(key_filename, "wb") as fobj:

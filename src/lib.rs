@@ -107,9 +107,16 @@ pub fn add_uid_in_cert(
         .insert_packets(vec![Packet::from(userid), binding.into()])
         .unwrap();
 
+    let mut buf = Vec::new();
+    let mut buffer = Vec::new();
+
+    let mut writer = Writer::new(&mut buf, Kind::SecretKey).unwrap();
+    cert.as_tsk().serialize(&mut buffer).unwrap();
+    writer.write_all(&buffer).unwrap();
+    writer.finalize().unwrap();
+
     // Let us return the cert data which can be saved in the database
-    let result = cert.to_vec().unwrap();
-    let res = PyBytes::new(py, &result);
+    let res = PyBytes::new(py, &buf);
     Ok(res.into())
 }
 
