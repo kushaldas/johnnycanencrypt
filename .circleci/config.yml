@@ -13,7 +13,7 @@ common-steps:
   - &install_system_packages
     run:
       name: Install system dependencies
-      command: sudo apt install -y python3-dev libnettle6 nettle-dev libhogweed4 python3-pip python3-venv clang libpcsclite-dev libpcsclite1
+      command: sudo apt install -y python3-dev libnettle6 nettle-dev libhogweed4 python3-pip python3-venv clang libpcsclite-dev libpcsclite1 libclang-7-dev
 
   - &install_dependencies
     run:
@@ -34,6 +34,7 @@ common-steps:
       command: |
         . .venv/bin/activate
         source /home/circleci/.cargo/env
+        export PATH=/usr/lib/llvm-7/bin:$PATH
         maturin develop
         maturin build --manylinux=off
 
