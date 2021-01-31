@@ -105,7 +105,7 @@ pub fn revoke_uid_in_cert(
         let value = ua.value().to_vec();
         if value == uid {
             // We found the uid which we can now revoke
-            println!("we have a match");           let sig = UserIDRevocationBuilder::new()
+            let sig = UserIDRevocationBuilder::new()
                 .set_reason_for_revocation(ReasonForRevocation::UIDRetired, b"Revoked via code.")
                 .unwrap()
                 .build(&mut keypair, &cert, ua.userid(), None)
@@ -122,7 +122,6 @@ pub fn revoke_uid_in_cert(
     cert.as_tsk().serialize(&mut buffer).unwrap();
     writer.write_all(&buffer).unwrap();
     writer.finalize().unwrap();
-
 
     // Let us return the cert data which can be saved in the database
     let res = PyBytes::new(py, &buf);

@@ -414,16 +414,14 @@ class KeyStore:
         """Revokes the given user id to the given key, saves on the database. Then returns the modified key object
 
         :param key: The secret key object
-        :param uid: The string value to add the keybobject
+        :param userid: The string value to add the keybobject
         :param password: The password for the secret key
 
         :returns: Key object
         """
         if key.keytype != KeyType.SECRET:
             raise ValueError(f"The {key} is not a secret key.")
-        # A list of UID values which is already in the database
-        olduids = [uid["value"] for uid in key.uids]
-        # Now add the new userid to the cert in binary formart
+        # Now revoke the given userid to the cert in binary formart
         newcert = rjce.revoke_uid_in_cert(
             key.keyvalue, userid.encode("utf-8"), password
         )
@@ -450,26 +448,17 @@ class KeyStore:
             # First let us update the actual keyvalue
             sql = "UPDATE keys set keyvalue=? where fingerprint=?"
             cursor.execute(sql, (newcert, key.fingerprint))
-            # Now we need the key_id from the database table
-            cursor.execute(
-                "SELECT id from keys where fingerprint=?", (key.fingerprint,)
-            )
-            fromdb = cursor.fetchone()
-            key_id = fromdb[0]
+            sql = "SELECT id FROM uidvalues WHERE key_id=(SELECT id FROM keys where fingerprint=?) AND value=?"
             # Now loop through the new userids and find the new one
-            for uid in uids:
-                if "value" in uid and uid["value"] and uid["value"] == userid:
-                    # Now we have to find the db id and then mark it as revoked
-                    sql = "SELECT id from uidvalues where key_id=? and value=?"
-                    cursor.execute(sql, (key_id, userid))
-                    fromdb = cursor.fetchone()
-                    value_id = fromdb[0]
-                    # Now we will mark this userid as revoked
-                    revoked = 1
-                    sql = "UPDATE uidvalues set revoked=? where id=?"
-                    cursor.execute(sql, (revoked, value_id))
-                    # all done, we can break from the loop
-                    break
+            cursor.execute(
+                sql, (key.fingerprint, userid)
+            )  # Now we will mark this userid as revoked
+            fromdb = cursor.fetchone()
+            value_id = fromdb[0]
+
+            revoked = 1
+            sql = "UPDATE uidvalues set revoked=? where id=?"
+            cursor.execute(sql, (revoked, value_id))
 
         # Regnerate the key object and return it
         return self.get_key(fingerprint)
