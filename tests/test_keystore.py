@@ -381,6 +381,38 @@ def test_add_userid():
 
     assert key2.fingerprint == key.fingerprint
     assert len(key2.uids) == 2
+    assert key2.keytype == jce.KeyType.SECRET
+
+
+def test_add_and_revoke_userid():
+    """Verifies that we can add uid to a cert"""
+    tempdir = tempfile.TemporaryDirectory()
+    ks = jce.KeyStore(tempdir.name)
+    key = ks.import_cert("tests/files/store/secret.asc")
+    # check that there is only one userid
+    assert len(key.uids) == 1
+
+    # now add a new userid
+    key2 = ks.add_userid(key, "Off Spinner <spin@example.com>", "redhat")
+
+    assert key2.fingerprint == key.fingerprint
+    assert len(key2.uids) == 2
+    assert key2.keytype == jce.KeyType.SECRET
+    # because at first all user ids are valid
+    for uid in key2.uids:
+        assert uid["revoked"] == False
+
+    # now let us reove the new user id
+    key3 = ks.revoke_userid(key2, "Off Spinner <spin@example.com>", "redhat")
+    # verify the values
+    assert key3.fingerprint == key.fingerprint
+    assert len(key3.uids) == 2
+    assert key3.keytype == jce.KeyType.SECRET
+    for uid in key3.uids:
+        if uid["value"] == "Off Spinner <spin@example.com>":
+            assert uid["revoked"] == True
+        else:
+            assert uid["revoked"] == False
 
 
 def test_add_userid_fails_for_public():

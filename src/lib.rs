@@ -39,7 +39,9 @@ use crate::openpgp::types::SymmetricAlgorithm;
 use crate::openpgp::Packet;
 use chrono::prelude::*;
 use openpgp::cert::prelude::*;
+use openpgp::types::ReasonForRevocation;
 use openpgp::types::RevocationStatus;
+use openpgp::types::SignatureType;
 use talktosc::*;
 
 mod scard;
@@ -53,6 +55,78 @@ create_exception!(johnnycanencrypt, SameKeyError, PyException);
 // Error in selecting OpenPGP applet in the card
 create_exception!(johnnycanencrypt, CardError, PyException);
 
+#[pyfunction]
+#[text_signature = "(certdata, uid, pass)"]
+pub fn revoke_uid_in_cert(
+    py: Python,
+    certdata: Vec<u8>,
+    uid: Vec<u8>,
+    pass: String,
+) -> PyResult<PyObject> {
+    // This is where we will store all the signing keys
+    let mut cert = openpgp::Cert::from_bytes(&certdata).unwrap();
+
+    // To find the secret keypair
+    let mut keypair = match cert
+        .primary_key()
+        .key()
+        .clone()
+        .parts_into_secret()
+        .unwrap()
+        .secret()
+        .is_encrypted()
+    {
+        true => {
+            // When the secret is encrypted with a password
+            cert.primary_key()
+                .key()
+                .clone()
+                .parts_into_secret()
+                .unwrap()
+                .decrypt_secret(&openpgp::crypto::Password::from(pass))
+                .unwrap()
+                .into_keypair()
+                .unwrap()
+        }
+        false => {
+            // When the secret is not encrypted
+            cert.primary_key()
+                .key()
+                .clone()
+                .parts_into_secret()
+                .unwrap()
+                .into_keypair()
+                .unwrap()
+        }
+    };
+
+    // now let us find the user id from the cert.
+    for ua in cert.clone().userids() {
+        let value = ua.value().to_vec();
+        if value == uid {
+            // We found the uid which we can now revoke
+            let sig = UserIDRevocationBuilder::new()
+                .set_reason_for_revocation(ReasonForRevocation::UIDRetired, b"Revoked via code.")
+                .unwrap()
+                .build(&mut keypair, &cert, ua.userid(), None)
+                .unwrap();
+            // Now merge this back
+            cert = cert.insert_packets(sig.clone()).unwrap();
+        }
+    }
+
+    let mut buf = Vec::new();
+    let mut buffer = Vec::new();
+
+    let mut writer = Writer::new(&mut buf, Kind::SecretKey).unwrap();
+    cert.as_tsk().serialize(&mut buffer).unwrap();
+    writer.write_all(&buffer).unwrap();
+    writer.finalize().unwrap();
+
+    // Let us return the cert data which can be saved in the database
+    let res = PyBytes::new(py, &buf);
+    Ok(res.into())
+}
 
 #[pyfunction]
 #[text_signature = "(certdata, uid, pass)"]
@@ -107,9 +181,16 @@ pub fn add_uid_in_cert(
         .insert_packets(vec![Packet::from(userid), binding.into()])
         .unwrap();
 
+    let mut buf = Vec::new();
+    let mut buffer = Vec::new();
+
+    let mut writer = Writer::new(&mut buf, Kind::SecretKey).unwrap();
+    cert.as_tsk().serialize(&mut buffer).unwrap();
+    writer.write_all(&buffer).unwrap();
+    writer.finalize().unwrap();
+
     // Let us return the cert data which can be saved in the database
-    let result = cert.to_vec().unwrap();
-    let res = PyBytes::new(py, &result);
+    let res = PyBytes::new(py, &buf);
     Ok(res.into())
 }
 
@@ -2062,6 +2143,7 @@ fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(encrypt_file_internal))?;
     m.add_wrapped(wrap_pyfunction!(update_password))?;
     m.add_wrapped(wrap_pyfunction!(add_uid_in_cert))?;
+    m.add_wrapped(wrap_pyfunction!(revoke_uid_in_cert))?;
     m.add("CryptoError", _py.get_type::<CryptoError>())?;
     m.add("SameKeyError", _py.get_type::<SameKeyError>())?;
     m.add_class::<Johnny>()?;

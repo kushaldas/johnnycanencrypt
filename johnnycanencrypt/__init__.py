@@ -367,6 +367,8 @@ class KeyStore:
             creationtime,
             othervalues,
         ) = parse_cert_bytes(newcert)
+        # To make sure we actually have a secret key
+        assert keytype == True
         # Let us write the new keydata to the disk
         key_filename = os.path.join(self.path, f"{fingerprint}.sec")
         with open(key_filename, "wb") as fobj:
@@ -404,6 +406,59 @@ class KeyStore:
                         value = uid[uid_keyname]
                         sql = f"INSERT INTO {tablename} (value, key_id, value_id) values (?, ?, ?)"
                         cursor.execute(sql, (value, key_id, value_id))
+
+        # Regnerate the key object and return it
+        return self.get_key(fingerprint)
+
+    def revoke_userid(self, key: Key, userid: str, password: str) -> Key:
+        """Revokes the given user id to the given key, saves on the database. Then returns the modified key object
+
+        :param key: The secret key object
+        :param userid: The string value to add the keybobject
+        :param password: The password for the secret key
+
+        :returns: Key object
+        """
+        if key.keytype != KeyType.SECRET:
+            raise ValueError(f"The {key} is not a secret key.")
+        # Now revoke the given userid to the cert in binary formart
+        newcert = rjce.revoke_uid_in_cert(
+            key.keyvalue, userid.encode("utf-8"), password
+        )
+
+        # Now we will parse the new cert bytes so that we can get the actual value for the user id
+        # Expensive, but works.
+        (
+            uids,
+            fingerprint,
+            keytype,
+            expirationtime,
+            creationtime,
+            othervalues,
+        ) = parse_cert_bytes(newcert)
+        # To make sure we actually have a secret key
+        assert keytype == True
+        # Let us write the new keydata to the disk
+        key_filename = os.path.join(self.path, f"{fingerprint}.sec")
+        with open(key_filename, "wb") as fobj:
+            fobj.write(newcert)
+        con = sqlite3.connect(self.dbpath)
+        with con:
+            cursor = con.cursor()
+            # First let us update the actual keyvalue
+            sql = "UPDATE keys set keyvalue=? where fingerprint=?"
+            cursor.execute(sql, (newcert, key.fingerprint))
+            sql = "SELECT id FROM uidvalues WHERE key_id=(SELECT id FROM keys where fingerprint=?) AND value=?"
+            # Now loop through the new userids and find the new one
+            cursor.execute(
+                sql, (key.fingerprint, userid)
+            )  # Now we will mark this userid as revoked
+            fromdb = cursor.fetchone()
+            value_id = fromdb[0]
+
+            revoked = 1
+            sql = "UPDATE uidvalues set revoked=? where id=?"
+            cursor.execute(sql, (revoked, value_id))
 
         # Regnerate the key object and return it
         return self.get_key(fingerprint)
