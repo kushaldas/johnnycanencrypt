@@ -510,6 +510,9 @@ class KeyStore:
 
         :param fingerprint: The fingerprint as str.
         """
+        if not fingerprint:
+            return None
+
         return self._internal_get_key(fingerprint)[0]
 
     def _internal_get_key(self, fingerprint="", key_id=None, allkeys=False):

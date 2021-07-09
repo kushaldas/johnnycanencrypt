@@ -432,7 +432,6 @@ def test_update_subkey_expiry_time():
     "Updates the expirytime for a given subkey"
     ks = jce.KeyStore("tests/files/store")
     key = ks.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
-    key = ks.get_key("")
     fps = ["102EBD23BD5D2D340FBBDE0ADFD1C55926648D2F",]
     newkeyvalue = rjce.update_subkeys_expiry_in_cert(key.keyvalue, fps, 60 * 60 * 24, "redhat" )
     _, _, _, _, _, othervalues = rjce.parse_cert_bytes(newkeyvalue)
