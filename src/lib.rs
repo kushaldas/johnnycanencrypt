@@ -41,7 +41,6 @@ use chrono::prelude::*;
 use openpgp::cert::prelude::*;
 use openpgp::types::ReasonForRevocation;
 use openpgp::types::RevocationStatus;
-use openpgp::types::SignatureType;
 use talktosc::*;
 
 mod scard;
@@ -86,7 +85,6 @@ pub fn update_subkeys_expiry_in_cert(
     for key in cert.with_policy(p, None).unwrap().keys().subkeys() {
         let fp = key.fingerprint().to_hex();
         if !fingerprints.contains(&fp) {
-            println!("Skipping {}", fp);
             continue;
         }
         // This reuses any existing backsignature.

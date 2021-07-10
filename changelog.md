@@ -4,6 +4,7 @@
 
 ### Added
 
+- `update_expiary_in_subkeys` method for the keystrore
 - `update_subkeys_expiry_in_cert` function in rjce
 - `revoke_userid` method for keystore
 - `add_userid` method for keystore

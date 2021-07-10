@@ -151,6 +151,27 @@ def test_key_equality():
     assert key.fingerprint == "F51C310E02DC1B7771E176D8A1C5C364EB5B9A20"
 
 
+def test_ks_update_expiary_time_for_subkeys():
+    "Updates expiary time for a given subkey"
+    tempdir = tempfile.TemporaryDirectory()
+    ks = jce.KeyStore(tempdir.name)
+    ks.import_cert("tests/files/store/hellosecret.asc")
+    ks.import_cert("tests/files/store/secret.asc")
+
+    key = ks.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
+    subkeys = [
+        "102EBD23BD5D2D340FBBDE0ADFD1C55926648D2F",
+    ]
+    newexpiration = datetime.datetime(2050, 10, 25, 10)
+    newkey = ks.update_expiary_in_subkeys(key, subkeys, newexpiration, "redhat")
+    for _, skey in newkey.othervalues["subkeys"].items():
+        if skey[0] == "102EBD23BD5D2D340FBBDE0ADFD1C55926648D2F":
+            date = skey[1]
+            assert date.date() == datetime.date(2050, 10, 25)
+
+    with pytest.raises(ValueError):
+        newkey = ks.update_expiary_in_subkeys(key, subkeys, None, "redhat")
+
 def test_ks_encrypt_decrypt_bytes():
     "Encrypts and decrypt some bytes"
     ks = jce.KeyStore("tests/files/store")
@@ -428,14 +449,23 @@ def test_add_userid_fails_for_public():
     with pytest.raises(ValueError):
         key2 = ks.add_userid(key, "Off Spinner <spin@example.com>", "redhat")
 
+
 def test_update_subkey_expiry_time():
     "Updates the expirytime for a given subkey"
     ks = jce.KeyStore("tests/files/store")
     key = ks.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
-    fps = ["102EBD23BD5D2D340FBBDE0ADFD1C55926648D2F",]
-    newkeyvalue = rjce.update_subkeys_expiry_in_cert(key.keyvalue, fps, 60 * 60 * 24, "redhat" )
+    fps = [
+        "102EBD23BD5D2D340FBBDE0ADFD1C55926648D2F",
+    ]
+    newkeyvalue = rjce.update_subkeys_expiry_in_cert(
+        key.keyvalue, fps, 60 * 60 * 24, "redhat"
+    )
     _, _, _, _, _, othervalues = rjce.parse_cert_bytes(newkeyvalue)
-    pprint(othervalues)
+    tomorrow = datetime.date.today() + datetime.timedelta(days=1)
+    for skey in othervalues["subkeys"]:
+        if skey[1] == "102EBD23BD5D2D340FBBDE0ADFD1C55926648D2F":
+            date = skey[3]
+            assert date.date() == tomorrow
 
 
 def test_same_key_import_error():
