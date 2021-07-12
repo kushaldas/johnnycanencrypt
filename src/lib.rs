@@ -952,7 +952,9 @@ fn sign_bytes_detached_internal(
 fn merge_keys(_py: Python, certdata: Vec<u8>, newcertdata: Vec<u8>) -> PyResult<PyObject> {
     let cert = openpgp::Cert::from_bytes(&certdata).unwrap();
     let newcert = openpgp::Cert::from_bytes(&newcertdata).unwrap();
-    if cert == newcert {
+    // The following hack is in place till https://gitlab.com/sequoia-pgp/sequoia/-/issues/701
+    // gets fixed.
+    if cert.clone().into_packets().collect::<Vec<_>>() == newcert.clone().into_packets().collect::<Vec<_>>() {
         return Err(SameKeyError::new_err("Both keys are same. Can not merge."));
     }
     // Now let us merge the new one into old one.
