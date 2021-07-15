@@ -4,7 +4,7 @@
 
 ### Added
 
-- `update_expiary_in_subkeys` method for the keystrore
+- `update_expiry_in_subkeys` method for the keystrore
 - `update_subkeys_expiry_in_cert` function in rjce
 - `revoke_userid` method for keystore
 - `add_userid` method for keystore
@@ -15,7 +15,8 @@
 
 ### Fixed
 
-- `get_key` method will return `None` in case no fingerprint is provided
+- `get_key` method will return `None` in case no fingerprint is provided.
+- Spelling mistake in API & docs about `expiary` -> `expiry`.
 
 ## [0.5.0] - 2021-01-03
 

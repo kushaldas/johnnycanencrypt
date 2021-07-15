@@ -31,7 +31,7 @@ from .utils import (
     _get_cert_data,
     createdb,
     convert_fingerprint,
-    to_sort_by_expiary,
+    to_sort_by_expiry,
     DB_UPGRADE_DATE,
 )
 
@@ -341,7 +341,7 @@ class KeyStore:
             return False
         return False
 
-    def update_expiary_in_subkeys(
+    def update_expiry_in_subkeys(
         self, key: Key, subkeys: List[str], expiration: datetime, password: str
     ) -> Key:
         """Adds a new user id to the given key, saves on the database. Then returns the modified key object
@@ -691,7 +691,7 @@ class KeyStore:
                         }
                     )
 
-                sort_subkeys.sort(key=lambda x: to_sort_by_expiary(x), reverse=True)
+                sort_subkeys.sort(key=lambda x: to_sort_by_expiry(x), reverse=True)
                 othervalues["subkeys"] = subs
                 # TODO: We need a testcase for the sorted subkeys
                 othervalues["subkeys_sorted"] = sort_subkeys
@@ -804,7 +804,7 @@ class KeyStore:
         :param ciphersuite: Default Cipher.RSA4k, other values are Cipher.RSA2k, Cipher.Cv25519
         :param creation: datetime.datetime, default datetime.now() (via rust)
         :param expiration: datetime.datetime, default 0 (Never)
-        :param subkeys_expiration: Bool (default False), pass True if you want to set the expiary date to the subkeys instead of master key.
+        :param subkeys_expiration: Bool (default False), pass True if you want to set the expiry date to the subkeys instead of master key.
         :param whichkeys: Decides which all subkeys to generate, 1 (for encryption), 2 for signing, 4 for authentication. Add the numbers for mixed result.
         """
         if creation:

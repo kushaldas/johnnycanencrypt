@@ -151,8 +151,8 @@ def test_key_equality():
     assert key.fingerprint == "F51C310E02DC1B7771E176D8A1C5C364EB5B9A20"
 
 
-def test_ks_update_expiary_time_for_subkeys():
-    "Updates expiary time for a given subkey"
+def test_ks_update_expiry_time_for_subkeys():
+    "Updates expiry time for a given subkey"
     tempdir = tempfile.TemporaryDirectory()
     ks = jce.KeyStore(tempdir.name)
     ks.import_cert("tests/files/store/hellosecret.asc")
@@ -163,14 +163,15 @@ def test_ks_update_expiary_time_for_subkeys():
         "102EBD23BD5D2D340FBBDE0ADFD1C55926648D2F",
     ]
     newexpiration = datetime.datetime(2050, 10, 25, 10)
-    newkey = ks.update_expiary_in_subkeys(key, subkeys, newexpiration, "redhat")
+    newkey = ks.update_expiry_in_subkeys(key, subkeys, newexpiration, "redhat")
     for _, skey in newkey.othervalues["subkeys"].items():
         if skey[0] == "102EBD23BD5D2D340FBBDE0ADFD1C55926648D2F":
             date = skey[1]
             assert date.date() == datetime.date(2050, 10, 25)
 
     with pytest.raises(ValueError):
-        newkey = ks.update_expiary_in_subkeys(key, subkeys, None, "redhat")
+        newkey = ks.update_expiry_in_subkeys(key, subkeys, None, "redhat")
+
 
 def test_ks_encrypt_decrypt_bytes():
     "Encrypts and decrypt some bytes"
