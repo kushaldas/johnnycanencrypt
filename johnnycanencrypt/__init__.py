@@ -344,7 +344,7 @@ class KeyStore:
     def update_expiry_in_subkeys(
         self, key: Key, subkeys: List[str], expiration: datetime, password: str
     ) -> Key:
-        """Adds a new user id to the given key, saves on the database. Then returns the modified key object
+        """Updates the expiry date for the given subkeys, saves on the database. Then returns the modified key object
 
         :param key: The secret key object
         :param subkeys: List of strings for subkey fingerprints.
