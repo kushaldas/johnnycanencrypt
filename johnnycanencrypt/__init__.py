@@ -342,7 +342,7 @@ class KeyStore:
         return False
 
     def update_expiary_in_subkeys(
-        self, key: Key, subkeys: [str], expiration: datetime, password: str
+        self, key: Key, subkeys: List[str], expiration: datetime, password: str
     ) -> Key:
         """Adds a new user id to the given key, saves on the database. Then returns the modified key object
 
@@ -389,10 +389,10 @@ class KeyStore:
             # Now let us add the subkey and keyid details
             sql = "UPDATE subkeys set expiration=? where fingerprint=?"
             for subkey in newsubkeys:
-                etime = str(subkey[3].timestamp()) if subkey[3] else ""
+                etime_str = str(subkey[3].timestamp()) if subkey[3] else ""
                 cursor.execute(
                     sql,
-                    (etime, subkey[1]),
+                    (etime_str, subkey[1]),
                 )
 
         # Regnerate the key object and return it
@@ -562,14 +562,11 @@ class KeyStore:
                     public += 1
         return public, secret
 
-    def get_key(self, fingerprint: str = "") -> Key:
+    def get_key(self, fingerprint: str) -> Key:
         """Finds an existing public key based on the fingerprint. If the key can not be found on disk, then raises OSError.
 
         :param fingerprint: The fingerprint as str.
         """
-        if not fingerprint:
-            return None
-
         return self._internal_get_key(fingerprint)[0]
 
     def _internal_get_key(self, fingerprint="", key_id=None, allkeys=False):
