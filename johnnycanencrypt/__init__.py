@@ -31,7 +31,7 @@ from .utils import (
     _get_cert_data,
     createdb,
     convert_fingerprint,
-    to_sort_by_expiary,
+    to_sort_by_expiry,
     DB_UPGRADE_DATE,
 )
 
@@ -287,8 +287,8 @@ class KeyStore:
                 # Now insert the new key
                 sql = "INSERT INTO keys (keyvalue, fingerprint, keyid, keytype, expiration, creation) VALUES(?, ?, ?, ?, ?, ?)"
                 cursor.execute(sql, (cert, fingerprint, mainkeyid, ktype, etime, ctime))
+                # This `key_id` is the database id
                 key_id = cursor.lastrowid
-
             # Now let us add the subkey and keyid details
             sql = "INSERT INTO subkeys (key_id, fingerprint, keyid, expiration, creation, keytype, revoked) VALUES(?, ?, ?, ?, ?, ?, ?)"
             for subkey in subkeys:
@@ -340,6 +340,63 @@ class KeyStore:
         except KeyNotFoundError:
             return False
         return False
+
+    def update_expiry_in_subkeys(
+        self, key: Key, subkeys: List[str], expiration: datetime, password: str
+    ) -> Key:
+        """Updates the expiry date for the given subkeys, saves on the database. Then returns the modified key object
+
+        :param key: The secret key object
+        :param subkeys: List of strings for subkey fingerprints.
+        :param expiration: datetime.datetime for the new expiration date and time, can not be none
+        :param password: The password for the secret key
+
+        :returns: Key object
+        """
+        if key.keytype != KeyType.SECRET:
+            raise ValueError(f"The {key} is not a secret key.")
+
+        fingerprint = key.fingerprint
+
+        if expiration:
+            etime = expiration.timestamp()
+            now = datetime.now()
+            # We need to send in the difference between expiration time and now
+            etime = int(etime - now.timestamp())
+        else:
+            raise ValueError("The expiration must not be none.")
+
+        # Now get the key material
+        newcert = rjce.update_subkeys_expiry_in_cert(
+            key.keyvalue, subkeys, etime, password
+        )
+        # We only need get the subkeys and get the expiration time from them
+        _, _, _, _, _, othervalues = rjce.parse_cert_bytes(newcert)
+        newsubkeys = othervalues["subkeys"]
+        # Now save the key
+        con = sqlite3.connect(self.dbpath)
+        with con:
+            cursor = con.cursor()
+            # First let us update the actual keyvalue
+            sql = "UPDATE keys set keyvalue=? where fingerprint=?"
+            cursor.execute(sql, (newcert, key.fingerprint))
+            # Now we need the key_id from the database table
+            cursor.execute(
+                "SELECT id from keys where fingerprint=?", (key.fingerprint,)
+            )
+            fromdb = cursor.fetchone()
+            key_id = fromdb[0]
+            # Now let us add the subkey and keyid details
+            sql = "UPDATE subkeys set expiration=? where fingerprint=?"
+            for subkey in newsubkeys:
+                etime_str = str(subkey[3].timestamp()) if subkey[3] else ""
+                cursor.execute(
+                    sql,
+                    (etime_str, subkey[1]),
+                )
+
+        # Regnerate the key object and return it
+        return self.get_key(fingerprint)
 
     def add_userid(self, key: Key, userid: str, password: str) -> Key:
         """Adds a new user id to the given key, saves on the database. Then returns the modified key object
@@ -505,7 +562,7 @@ class KeyStore:
                     public += 1
         return public, secret
 
-    def get_key(self, fingerprint: str = "") -> Key:
+    def get_key(self, fingerprint: str) -> Key:
         """Finds an existing public key based on the fingerprint. If the key can not be found on disk, then raises OSError.
 
         :param fingerprint: The fingerprint as str.
@@ -634,7 +691,7 @@ class KeyStore:
                         }
                     )
 
-                sort_subkeys.sort(key=lambda x: to_sort_by_expiary(x), reverse=True)
+                sort_subkeys.sort(key=lambda x: to_sort_by_expiry(x), reverse=True)
                 othervalues["subkeys"] = subs
                 # TODO: We need a testcase for the sorted subkeys
                 othervalues["subkeys_sorted"] = sort_subkeys
@@ -747,7 +804,7 @@ class KeyStore:
         :param ciphersuite: Default Cipher.RSA4k, other values are Cipher.RSA2k, Cipher.Cv25519
         :param creation: datetime.datetime, default datetime.now() (via rust)
         :param expiration: datetime.datetime, default 0 (Never)
-        :param subkeys_expiration: Bool (default False), pass True if you want to set the expiary date to the subkeys instead of master key.
+        :param subkeys_expiration: Bool (default False), pass True if you want to set the expiry date to the subkeys instead of master key.
         :param whichkeys: Decides which all subkeys to generate, 1 (for encryption), 2 for signing, 4 for authentication. Add the numbers for mixed result.
         """
         if creation:

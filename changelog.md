@@ -4,12 +4,19 @@
 
 ### Added
 
+- `update_expiry_in_subkeys` method for the keystrore
+- `update_subkeys_expiry_in_cert` function in rjce
 - `revoke_userid` method for keystore
 - `add_userid` method for keystore
 - `update_password` method for keystore
 - ECDH decryption on smartcard for Curve25519 only
 - Adds `decrypt_file_on_card` function
 - Adds `decrypt_bytes_on_card` function
+
+### Fixed
+
+- `get_key` method will return `None` in case no fingerprint is provided.
+- Spelling mistake in API & docs about `expiary` -> `expiry`.
 
 ## [0.5.0] - 2021-01-03
 

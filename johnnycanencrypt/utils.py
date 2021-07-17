@@ -101,7 +101,7 @@ def convert_fingerprint(data):
     return s.upper()
 
 
-def to_sort_by_expiary(date):
+def to_sort_by_expiry(date):
     "To help to sort based on expiration date"
     if date["expiration"] is not None:
         return date["expiration"]

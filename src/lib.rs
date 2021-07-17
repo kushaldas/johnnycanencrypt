@@ -41,7 +41,6 @@ use chrono::prelude::*;
 use openpgp::cert::prelude::*;
 use openpgp::types::ReasonForRevocation;
 use openpgp::types::RevocationStatus;
-use openpgp::types::SignatureType;
 use talktosc::*;
 
 mod scard;
@@ -54,6 +53,64 @@ create_exception!(johnnycanencrypt, SameKeyError, PyException);
 
 // Error in selecting OpenPGP applet in the card
 create_exception!(johnnycanencrypt, CardError, PyException);
+
+/// Returns updated key with new expiration time for subkeys
+/// Takes the secret key data, a list of subkey fingerprints as str,
+/// expirytime as the duration to be added as integer, and the secret key password.
+#[pyfunction]
+#[text_signature = "(certdata, fingerprints, expirytime, pass)"]
+pub fn update_subkeys_expiry_in_cert(
+    py: Python,
+    certdata: Vec<u8>,
+    fingerprints: Vec<String>,
+    expirytime: u64,
+    password: String,
+) -> PyResult<PyObject> {
+    let cert = openpgp::Cert::from_bytes(&certdata).unwrap();
+
+    let p = &P::new();
+    let pk = cert.primary_key().key();
+    let mut signer = pk
+        .clone()
+        .parts_into_secret()
+        .unwrap()
+        .decrypt_secret(&openpgp::crypto::Password::from(password))
+        .unwrap()
+        .into_keypair()
+        .unwrap();
+
+    // Create the binding signatures.
+    let mut sigs = Vec::new();
+
+    for key in cert.with_policy(p, None).unwrap().keys().subkeys() {
+        let fp = key.fingerprint().to_hex();
+        if !fingerprints.contains(&fp) {
+            continue;
+        }
+        // This reuses any existing backsignature.
+        let sig =
+            openpgp::packet::signature::SignatureBuilder::from(key.binding_signature().clone())
+                .set_key_expiration_time(&key, SystemTime::now() + Duration::new(expirytime, 0))
+                .unwrap()
+                .sign_subkey_binding(&mut signer, pk, &key)
+                .unwrap();
+        sigs.push(sig);
+    }
+
+    let cert = cert.insert_packets(sigs).unwrap();
+    // Now let us return the secret key as Python Bytes
+    let mut buf = Vec::new();
+    let mut buffer = Vec::new();
+
+    let mut writer = Writer::new(&mut buf, Kind::SecretKey).unwrap();
+    cert.as_tsk().serialize(&mut buffer).unwrap();
+    writer.write_all(&buffer).unwrap();
+    writer.finalize().unwrap();
+
+    // Let us return the cert data which can be saved in the database
+    let res = PyBytes::new(py, &buf);
+    Ok(res.into())
+}
 
 #[pyfunction]
 #[text_signature = "(certdata, uid, pass)"]
@@ -895,7 +952,9 @@ fn sign_bytes_detached_internal(
 fn merge_keys(_py: Python, certdata: Vec<u8>, newcertdata: Vec<u8>) -> PyResult<PyObject> {
     let cert = openpgp::Cert::from_bytes(&certdata).unwrap();
     let newcert = openpgp::Cert::from_bytes(&newcertdata).unwrap();
-    if cert == newcert {
+    // The following hack is in place till https://gitlab.com/sequoia-pgp/sequoia/-/issues/701
+    // gets fixed.
+    if cert.clone().into_packets().collect::<Vec<_>>() == newcert.clone().into_packets().collect::<Vec<_>>() {
         return Err(SameKeyError::new_err("Both keys are same. Can not merge."));
     }
     // Now let us merge the new one into old one.
@@ -2144,6 +2203,7 @@ fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(update_password))?;
     m.add_wrapped(wrap_pyfunction!(add_uid_in_cert))?;
     m.add_wrapped(wrap_pyfunction!(revoke_uid_in_cert))?;
+    m.add_wrapped(wrap_pyfunction!(update_subkeys_expiry_in_cert))?;
     m.add("CryptoError", _py.get_type::<CryptoError>())?;
     m.add("SameKeyError", _py.get_type::<SameKeyError>())?;
     m.add_class::<Johnny>()?;
