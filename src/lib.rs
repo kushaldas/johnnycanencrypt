@@ -113,7 +113,7 @@ pub fn update_subkeys_expiry_in_cert(
 }
 
 #[pyfunction]
-#[text_signature = "(certdata, uid, pass)"]
+#[pyo3(text_signature = "(certdata, uid, pass)")]
 pub fn revoke_uid_in_cert(
     py: Python,
     certdata: Vec<u8>,
@@ -186,7 +186,7 @@ pub fn revoke_uid_in_cert(
 }
 
 #[pyfunction]
-#[text_signature = "(certdata, uid, pass)"]
+#[pyo3(text_signature = "(certdata, uid, pass)")]
 pub fn add_uid_in_cert(
     py: Python,
     certdata: Vec<u8>,
@@ -381,7 +381,7 @@ impl VerificationHelper for YuBi {
 }
 
 #[pyfunction]
-#[text_signature = "(certdata, data, pin)"]
+#[pyo3(text_signature = "(certdata, data, pin)")]
 fn decrypt_bytes_on_card(
     _py: Python,
     certdata: Vec<u8>,
@@ -418,7 +418,7 @@ fn decrypt_bytes_on_card(
 }
 
 #[pyfunction]
-#[text_signature = "(certdata, filepath, output, pin)"]
+#[pyo3(text_signature = "(certdata, filepath, output, pin)")]
 pub fn decrypt_file_on_card(
     _py: Python,
     certdata: Vec<u8>,
@@ -440,7 +440,7 @@ pub fn decrypt_file_on_card(
 }
 
 #[pyfunction]
-#[text_signature = "(certdata, fh, output, pin)"]
+#[pyo3(text_signature = "(certdata, fh, output, pin)")]
 pub fn decrypt_filehandler_on_card(
     _py: Python,
     certdata: Vec<u8>,
@@ -610,7 +610,7 @@ fn get_card_details(py: Python) -> PyResult<PyObject> {
 
 /// Change user pin (PW1)
 #[pyfunction]
-#[text_signature = "(adminpin, newpin)"]
+#[pyo3(text_signature = "(adminpin, newpin)")]
 pub fn change_user_pin(adminpin: Vec<u8>, newpin: Vec<u8>) -> PyResult<bool> {
     // check for minimum length of 6 chars
     if newpin.len() < 6 {
@@ -629,7 +629,7 @@ pub fn change_user_pin(adminpin: Vec<u8>, newpin: Vec<u8>) -> PyResult<bool> {
 
 /// Change admin pin (PW3)
 #[pyfunction]
-#[text_signature = "(adminpin, newadminpin)"]
+#[pyo3(text_signature = "(adminpin, newadminpin)")]
 pub fn change_admin_pin(adminpin: Vec<u8>, newadminpin: Vec<u8>) -> PyResult<bool> {
     // check for minimum length of 6 chars
     if newadminpin.len() < 8 {
@@ -649,7 +649,7 @@ pub fn change_admin_pin(adminpin: Vec<u8>, newadminpin: Vec<u8>) -> PyResult<boo
 /// Requires the name as bytes in b"surname<<Firstname" format, and should be less than 39 in size.
 /// Also requires the admin pin in bytes.
 #[pyfunction]
-#[text_signature = "(name, pin)"]
+#[pyo3(text_signature = "(name, pin)")]
 pub fn set_name(name: Vec<u8>, pin: Vec<u8>) -> PyResult<bool> {
     let pw3_apdu = talktosc::apdus::create_apdu_verify_pw3(pin);
     let name_apdu = talktosc::apdus::APDU::new(0x00, 0xDA, 0x00, 0x5B, Some(name));
@@ -664,7 +664,7 @@ pub fn set_name(name: Vec<u8>, pin: Vec<u8>) -> PyResult<bool> {
 /// Requires the URL as buytes
 /// Also requires the admin pin in bytes.
 #[pyfunction]
-#[text_signature = "(url, pin)"]
+#[pyo3(text_signature = "(url, pin)")]
 pub fn set_url(url: Vec<u8>, pin: Vec<u8>) -> PyResult<bool> {
     let pw3_apdu = talktosc::apdus::create_apdu_verify_pw3(pin);
     let url_apdu = talktosc::apdus::APDU::new(0x00, 0xDA, 0x5F, 0x50, Some(url));
@@ -834,7 +834,7 @@ fn get_keys(cert: &openpgp::cert::Cert, password: String) -> Vec<openpgp::crypto
 }
 
 #[pyfunction]
-#[text_signature = "(certdata, data, pin)"]
+#[pyo3(text_signature = "(certdata, data, pin)")]
 pub fn sign_bytes_detached_on_card(
     certdata: Vec<u8>,
     data: Vec<u8>,
@@ -845,7 +845,7 @@ pub fn sign_bytes_detached_on_card(
 }
 
 #[pyfunction]
-#[text_signature = "(certdata, filepath, pin)"]
+#[pyo3(text_signature = "(certdata, filepath, pin)")]
 pub fn sign_file_detached_on_card(
     certdata: Vec<u8>,
     filepath: Vec<u8>,
@@ -948,7 +948,7 @@ fn sign_bytes_detached_internal(
 }
 
 #[pyfunction]
-#[text_signature = "(certdata, newcertdata)"]
+#[pyo3(text_signature = "(certdata, newcertdata)")]
 fn merge_keys(_py: Python, certdata: Vec<u8>, newcertdata: Vec<u8>) -> PyResult<PyObject> {
     let cert = openpgp::Cert::from_bytes(&certdata).unwrap();
     let newcert = openpgp::Cert::from_bytes(&newcertdata).unwrap();
@@ -967,7 +967,7 @@ fn merge_keys(_py: Python, certdata: Vec<u8>, newcertdata: Vec<u8>) -> PyResult<
 /// encrypted for. Note: It will read through the whole file and not memory happy code. Use with
 /// care.
 #[pyfunction]
-#[text_signature = "(filepath)"]
+#[pyo3(text_signature = "(filepath)")]
 fn file_encrypted_for(_py: Python, filepath: String) -> PyResult<PyObject> {
     let mut ppr = PacketParser::from_file(filepath).unwrap();
     let plist = PyList::empty(_py);
@@ -989,7 +989,7 @@ fn file_encrypted_for(_py: Python, filepath: String) -> PyResult<PyObject> {
 /// encrypted for. Note: It will keep the whole content on memory and not memory happy code. Use
 /// with care.
 #[pyfunction]
-#[text_signature = "(messagedata)"]
+#[pyo3(text_signature = "(messagedata)")]
 fn bytes_encrypted_for(_py: Python, messagedata: Vec<u8>) -> PyResult<PyObject> {
     let mut ppr = PacketParser::from_bytes(&messagedata[..]).unwrap();
     let plist = PyList::empty(_py);
@@ -1008,7 +1008,7 @@ fn bytes_encrypted_for(_py: Python, messagedata: Vec<u8>) -> PyResult<PyObject> 
 }
 
 #[pyfunction]
-#[text_signature = "(certdata)"]
+#[pyo3(text_signature = "(certdata)")]
 fn get_pub_key(_py: Python, certdata: Vec<u8>) -> PyResult<String> {
     let cert = openpgp::Cert::from_bytes(&certdata).unwrap();
     let armored = cert.armored().to_vec().unwrap();
@@ -1016,7 +1016,7 @@ fn get_pub_key(_py: Python, certdata: Vec<u8>) -> PyResult<String> {
 }
 
 #[pyfunction]
-#[text_signature = "(certdata, pin, password)"]
+#[pyo3(text_signature = "(certdata, pin, password)")]
 fn upload_to_smartcard(
     _py: Python,
     certdata: Vec<u8>,
@@ -1352,7 +1352,7 @@ fn parse_and_move_a_subkey(
 ///                "authentication", or "unknown".
 ///   - "keyid": "primary key id in hex"
 #[pyfunction]
-#[text_signature = "(certpath)"]
+#[pyo3(text_signature = "(certpath)")]
 fn parse_cert_file(
     py: Python,
     certpath: String,
@@ -1375,7 +1375,7 @@ fn parse_cert_file(
 ///                "authentication", or "unknown".
 ///   - "keyid": "primary key id in hex"
 #[pyfunction]
-#[text_signature = "(certpath)"]
+#[pyo3(text_signature = "(certpath)")]
 fn parse_cert_bytes(
     py: Python,
     certdata: Vec<u8>,
@@ -1538,7 +1538,7 @@ fn internal_parse_cert(
 /// This function takes a password and an userid as strings, returns a tuple of public and private
 /// key and the fingerprint in hex. Remember to save the keys for future use.
 #[pyfunction]
-#[text_signature = "(password, userid, cipher, creation, expiration)"]
+#[pyo3(text_signature = "(password, userid, cipher, creation, expiration)")]
 fn create_newkey(
     password: String,
     userids: Vec<String>,
@@ -1667,7 +1667,7 @@ fn create_newkey(
 /// Always remember to open the file in the Python side in "rb" mode, so that the `read()` call can
 /// return bytes.
 #[pyfunction]
-#[text_signature = "(publickeys, fh, output, armor=False)"]
+#[pyo3(text_signature = "(publickeys, fh, output, armor=False)")]
 fn encrypt_filehandler_to_file(
     _py: Python,
     publickeys: Vec<Vec<u8>>,
@@ -1684,7 +1684,7 @@ fn encrypt_filehandler_to_file(
 /// This function takes a list of public key paths, and encrypts the given data in bytes to an output
 /// file. You can also pass boolen flag armor for armored output.
 #[pyfunction]
-#[text_signature = "(publickeys, data, output, armor=False)"]
+#[pyo3(text_signature = "(publickeys, data, output, armor=False)")]
 fn encrypt_bytes_to_file(
     publickeys: Vec<Vec<u8>>,
     data: Vec<u8>,
@@ -1763,7 +1763,7 @@ fn encrypt_bytes_to_file(
 /// This function takes a list of public key paths, and encrypts the given filepath to an output
 /// file. You can also pass boolen flag armor for armored output.
 #[pyfunction]
-#[text_signature = "(publickeys, filepath, output, armor=False)"]
+#[pyo3(text_signature = "(publickeys, filepath, output, armor=False)")]
 fn encrypt_file_internal(
     publickeys: Vec<Vec<u8>>,
     filepath: Vec<u8>,
@@ -1844,7 +1844,7 @@ fn encrypt_file_internal(
 /// This function takes a list of public key paths, and encrypts the given data in bytes and returns it.
 /// You can also pass boolen flag armor for armored output.
 #[pyfunction]
-#[text_signature = "(publickeys, data, armor=False)"]
+#[pyo3(text_signature = "(publickeys, data, armor=False)")]
 fn encrypt_bytes_to_bytes(
     py: Python,
     publickeys: Vec<Vec<u8>>,
