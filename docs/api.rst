@@ -163,6 +163,10 @@ For the rest of the documentation we assume that you imported the module as foll
 
                 Revokes the given user id from the given secret key and returns the updated key.
 
+        .. method:: update_expiry_in_subkeys(key: Key, subkeys: List[str], expiration: datetime, password: str) -> Key:
+
+                Updates the expiry time for the given subkeys (as a list of fingerprints) for the given secret key.
+
         .. method:: sign(key, data, password) -> str:
 
                 Signs the given *data* (can be either str or bytes) using the secret key. Returns the armored signature string.
