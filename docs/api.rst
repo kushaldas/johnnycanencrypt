@@ -27,6 +27,11 @@ For the rest of the documentation we assume that you imported the module as foll
                 >>> "HEXFINGERPRINT" in ks
 
 
+        .. method:: add_userid(key: Key, userid: str, password: str) -> Key:
+
+                Returns the updated key with a new userid. If you need to upload the key to the https://keys.openpgp.org, then remember to
+                have to an email address in the user id.
+
         .. method:: create_newkey(password: str, uids: Optional[Union[List[str], str]] = [], ciphersuite: Cipher = Cipher.RSA4k, creation: Optional[datetime.datetime] = None, expiration: Optional[datetime.datetime] = None, subkeys_expiration= False, whichkeys = 7) -> Key:
 
                 Returns the public part of the newly created `Key` in the store
