@@ -58,7 +58,7 @@ create_exception!(johnnycanencrypt, CardError, PyException);
 /// Takes the secret key data, a list of subkey fingerprints as str,
 /// expirytime as the duration to be added as integer, and the secret key password.
 #[pyfunction]
-#[text_signature = "(certdata, fingerprints, expirytime, pass)"]
+#[pyo3(text_signature = "(certdata, fingerprints, expirytime, pass)")]
 pub fn update_subkeys_expiry_in_cert(
     py: Python,
     certdata: Vec<u8>,
