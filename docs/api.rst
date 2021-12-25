@@ -86,6 +86,11 @@ For the rest of the documentation we assume that you imported the module as foll
 
                         >>> plain_bytes = ks.decrypt(secret_key2, encrypted_bytes, password=password)
 
+        .. method:: decrypt_bytes_on_card(certdata: bytes, data: bytes, pin:bytes): -> bytes
+
+                Decryptes the given encrypted bytes using the smartcard. You will have to pass
+                the public key as the *certdata* argument.
+
         .. method:: decrypt_file(key, encrypted_path: Union[str,bytes,BinaryIO], outputfile, password=""):
 
                 Decryptes the given *encrypted_path* and wrties the output to the *outputfile* path (both given as str or bytes). In the *encrypted_path* can be an opened file handler to read
@@ -96,6 +101,11 @@ For the rest of the documentation we assume that you imported the module as foll
                         >>> ks.decrypt_file(secret_key1, "/tmp/data.txt.asc", "/tmp/plain.txt", password=password)
                         >>> with open("/tmp/hello.gpg", "rb") as fobj:
                         ...     ks.decrypt_file(secret_key1, fobj, "/tmp/plain.txt", password=password)
+        
+        .. method:: decrypt_file_on_card(certdata: bytes, filepath: bytes, output: bytes, pin:bytes):
+
+                Decryptes the given *filepath* and writes the output to the given *output* path using the smartcard. You will have to pass
+                the public key as the *certdata* argument.
 
         .. method:: delete_key(key: Union[str, Key]) -> None:
 
