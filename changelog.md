@@ -12,6 +12,7 @@
 - ECDH decryption on smartcard for Curve25519 only
 - Adds `decrypt_file_on_card` function
 - Adds `decrypt_bytes_on_card` function
+- Upgrades dependencies, including pyo3 to 0.15.1 and sequoia-openpgp to 1.6.0
 
 ### Fixed
 

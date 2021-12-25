@@ -1,6 +1,6 @@
 [package]
 name = "johnnycanencrypt"
-version = "0.5.0"
+version = "0.6.0"
 authors = ["Kushal Das <mail@kushaldas.in>"]
 edition = "2018"
 description = "Python module for OpenPGP."
@@ -23,13 +23,13 @@ default = ["pyo3/extension-module"]
 
 [dependencies]
 sequoia-openpgp = "1.0.0"
-anyhow = "1.0.31"
+anyhow = "1.0.51"
 chrono = "0.4.19"
 #talktosc = { git = "https://github.com/kushaldas/talktosc", branch="main"}
 talktosc = "0.1.1"
  
 [dependencies.pyo3]
-version = "0.13.0"
+version = "0.15.1"
 
 
 [package.metadata.maturin]

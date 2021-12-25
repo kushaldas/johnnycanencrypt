@@ -27,6 +27,11 @@ For the rest of the documentation we assume that you imported the module as foll
                 >>> "HEXFINGERPRINT" in ks
 
 
+        .. method:: add_userid(key: Key, userid: str, password: str) -> Key:
+
+                Returns the updated key with a new userid. If you need to upload the key to the https://keys.openpgp.org, then remember to
+                have to an email address in the user id.
+
         .. method:: create_newkey(password: str, uids: Optional[Union[List[str], str]] = [], ciphersuite: Cipher = Cipher.RSA4k, creation: Optional[datetime.datetime] = None, expiration: Optional[datetime.datetime] = None, subkeys_expiration= False, whichkeys = 7) -> Key:
 
                 Returns the public part of the newly created `Key` in the store
@@ -81,6 +86,7 @@ For the rest of the documentation we assume that you imported the module as foll
 
                         >>> plain_bytes = ks.decrypt(secret_key2, encrypted_bytes, password=password)
 
+
         .. method:: decrypt_file(key, encrypted_path: Union[str,bytes,BinaryIO], outputfile, password=""):
 
                 Decryptes the given *encrypted_path* and wrties the output to the *outputfile* path (both given as str or bytes). In the *encrypted_path* can be an opened file handler to read
@@ -91,6 +97,7 @@ For the rest of the documentation we assume that you imported the module as foll
                         >>> ks.decrypt_file(secret_key1, "/tmp/data.txt.asc", "/tmp/plain.txt", password=password)
                         >>> with open("/tmp/hello.gpg", "rb") as fobj:
                         ...     ks.decrypt_file(secret_key1, fobj, "/tmp/plain.txt", password=password)
+        
 
         .. method:: delete_key(key: Union[str, Key]) -> None:
 
@@ -151,6 +158,14 @@ For the rest of the documentation we assume that you imported the module as foll
 
                         >>> key = ks.import_cert("tests/files/store/public.asc")
                         >>> print(key)
+
+        .. method:: revoke_userid(key: Key, userid: str, pass: str) -> Key:
+
+                Revokes the given user id from the given secret key and returns the updated key.
+
+        .. method:: update_expiry_in_subkeys(key: Key, subkeys: List[str], expiration: datetime, password: str) -> Key:
+
+                Updates the expiry time for the given subkeys (as a list of fingerprints) for the given secret key.
 
         .. method:: sign(key, data, password) -> str:
 
