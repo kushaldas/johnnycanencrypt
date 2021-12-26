@@ -44,6 +44,26 @@ Smartcard API
 
         Changes the admin pin to the given pin. The pin must be 8 chars or more. Requires current admin pin of the card.
 
+.. function:: decrypt_bytes_on_card(certdata: bytes, data: bytes, pin:bytes): -> bytes
+
+        Decryptes the given encrypted bytes using the smartcard. You will have to pass
+        the public key as the *certdata* argument.
+
+.. function:: decrypt_file_on_card(certdata: bytes, filepath: bytes, output: bytes, pin:bytes): -> None
+
+        Decryptes the given *filepath* and writes the output to the given *output* path using the smartcard. You will have to pass
+        the public key as the *certdata* argument.
+
+.. function:: decrypt_filehandler_on_card(certdata: bytes, fh: typing.IO, output: bytes, pin:bytes): -> None
+
+        Decryptes the given opened *fh* and writes the output to the given *output* path using the smartcard. You will have to pass
+        the public key as the *certdata* argument.
+
+        .. note:: This function first reads the whole file and then decrypts it. So, try to use the `decrypt_file_on_card` function instead.
+
+.. function:: is_smartcard_connected() -> bool:
+
+        Returns `True` if it can find a Yubikey attached to the system, or else returns `False`.
 
 .. function:: set_name(name: bytes, pin: bytes) -> bool:
 
@@ -53,6 +73,13 @@ Smartcard API
 
         Sets the public key URL on the card. Requires the admin pin in bytes.
 
+.. function:: sign_bytes_detached_on_card(certdata: bytes, data: bytes, pin: bytes) -> str:
+
+        Signs the given bytes on the card, and returns the detached signature as base64 encoded string. Also requires the public key in `certdata` argument.
+
+.. function:: sign_file_detached_on_card(certdata: bytes, data: bytes, pin: bytes) -> str:
+
+        Signs the given filepath and returns the detached signature as base64 encoded string. Also requires the the public in `certdata` argument.
 
 .. function:: upload_to_smartcard(certdata: bytes, pin: bytes, password: str, whichkeys: int) -> bool:
 

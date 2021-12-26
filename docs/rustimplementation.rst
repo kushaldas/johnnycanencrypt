@@ -22,17 +22,6 @@ In most cases you don't have to use these, but if you have a reason, feel free t
 
         .. note:: Remember to save both the public and serect keys in a file to use in future.
 
-.. function:: decrypt_bytes_on_card(certdata: bytes, data: bytes, pin:bytes): -> bytes
-
-        Decryptes the given encrypted bytes using the smartcard. You will have to pass
-        the public key as the *certdata* argument.
-
-.. function:: decrypt_file_on_card(certdata: bytes, filepath: bytes, output: bytes, pin:bytes): -> None
-
-        Decryptes the given *filepath* and writes the output to the given *output* path using the smartcard. You will have to pass
-        the public key as the *certdata* argument.
-
-
 .. function:: encrypt_bytes_to_file(publickeys, data, output, armor=False)
 
         This function takes a list of public key file paths, and encrypts the given data in bytes to an output
