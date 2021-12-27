@@ -2,10 +2,11 @@
 
 [![CircleCI branch](https://img.shields.io/circleci/project/github/kushaldas/johnnycanencrypt/master.svg)](https://circleci.com/gh/kushaldas/workflows/johnnycanencrypt/tree/master)
 
-Johnnycanencrypt aka **jce** is a Python module written in Rust to do basic encryption and decryption operations.
+Johnnycanencrypt aka **jce** is a Python module written in Rust to do basic encryption and decryption, and detached signing operations.
 It uses amazing [sequoia-pgp](https://sequoia-pgp.org/) library for the actual OpenPGP operations.
 
-**NOTE** -- This is very much experimental code at the current state, please do not use it in production.
+You can also use Yubikeys for the private key operations using this module.
+
 
 ## How to build?
 
