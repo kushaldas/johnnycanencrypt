@@ -1,18 +1,19 @@
 # Changlelog
 
-## [unreleased]
+## [0.6.0] - 2021-12-27
 
 ### Added
 
-- `update_expiry_in_subkeys` method for the keystrore
-- `update_subkeys_expiry_in_cert` function in rjce
-- `revoke_userid` method for keystore
-- `add_userid` method for keystore
-- `update_password` method for keystore
-- ECDH decryption on smartcard for Curve25519 only
-- Adds `decrypt_file_on_card` function
-- Adds `decrypt_bytes_on_card` function
-- Upgrades dependencies, including pyo3 to 0.15.1 and sequoia-openpgp to 1.6.0
+- `update_expiry_in_subkeys` method for the keystrore.
+- `update_subkeys_expiry_in_cert` function in rjce.
+- `revoke_userid` method for keystore.
+- `add_userid` method for keystore.
+- `update_password` method for keystore.
+- ECDH decryption on smartcard for Curve25519 only.
+- Adds `decrypt_file_on_card` function.
+- Adds `decrypt_bytes_on_card` function.
+- Upgrades dependencies, including pyo3 to 0.15.1 and sequoia-openpgp to 1.6.0.
+- Adds `is_smartcard_connected` function in rjce.
 
 ### Fixed
 
