@@ -32,6 +32,11 @@ Smartcard API
         Available keys:
                 - `serial_number`, the serial number of the card
                 - `url`, for the public key url.
+                - `name`, the card holder's name, surname<<<firstname
+                - `PW1`, number of user pin retries left
+                - `RC`, number of reset pin retries left 
+                - `PW2`, number of user pin retries left
+                - `signatures`, total number signatures made by the card
                 - `sig_f` Signature key fingerprint
                 - `enc_f` encryption key fingerprint
                 - `auth_f` authentication key fingerprint
