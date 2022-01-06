@@ -574,7 +574,7 @@ fn get_card_details(py: Python) -> PyResult<PyObject> {
     pd.set_item("name", name).unwrap();
 
     // Let us get the URL of the public key
-    let url_apdu = apdus::APDU::new(0x00, 0xCA, 0x5F, 0x50, None);
+    let url_apdu = apdus::create_apdu_get_url();
     let resp = talktosc::send_and_parse(&card, url_apdu);
     let resp = match resp {
         Ok(resp) => resp,
@@ -603,6 +603,35 @@ fn get_card_details(py: Python) -> PyResult<PyObject> {
     pd.set_item("sig_f", sig_f).unwrap();
     pd.set_item("enc_f", enc_f).unwrap();
     pd.set_item("auth_f", auth_f).unwrap();
+
+    // For Pin retires left
+    let pininfo = tlv.get_pin_tries().unwrap();
+    pd.set_item("PW1", pininfo[4]).unwrap();
+    pd.set_item("RC", pininfo[5]).unwrap();
+    pd.set_item("PW3", pininfo[6]).unwrap();
+
+    // Now, we will get the whole of Security template
+    let mut sectemplate: Vec<u8> = Vec::new();
+
+    let mut resp =
+        talktosc::send_and_parse(&card, apdus::create_apdu_get_security_template()).unwrap();
+    sectemplate.extend(resp.get_data());
+    // This means we have more data to read.
+    while resp.sw1 == 0x61 {
+        let apdu = apdus::create_apdu_for_reading(resp.sw2.clone());
+
+        resp = talktosc::send_and_parse(&card, apdu).unwrap();
+        sectemplate.extend(resp.get_data());
+    }
+    // Now we have all the data in aiddata
+    let tlv = &tlvs::read_list(sectemplate, true)[0];
+    // For the number of signatures
+    let signumber = tlv.get_number_of_signatures().unwrap();
+    let number: u32 =
+        ((signumber[0] as u32) << 16 | (signumber[1] as u32) << 8) | signumber[2] as u32;
+
+    pd.set_item("signatures", number).unwrap();
+
     // Disconnect
     talktosc::disconnect(card);
     Ok(pd.into())
