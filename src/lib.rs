@@ -1230,30 +1230,27 @@ fn parse_and_move_a_subkey(
         //let dd: u32 = 65537;
         //dbg!(dd.to_be_bytes());
 
-        if let Some(secrets) = key.optional_secret() {
-            match secrets {
-                openpgp::packet::key::SecretKeyMaterial::Unencrypted(ref u) => {
-                    u.map(|mpis| match mpis.clone() {
-                        openpgp::crypto::mpi::SecretKeyMaterial::RSA { d, p, q, u } => {
-                            main_d = Some(d.clone());
-                            main_p = Some(p.clone());
-                            main_q = Some(q.clone());
-                            main_u = Some(u.clone());
-                            what_kind_of_key = "rsa";
-                        }
-                        openpgp::crypto::mpi::SecretKeyMaterial::ECDH { scalar } => {
-                            main_scalar = Some(scalar.clone());
-                            what_kind_of_key = "ECDH";
-                        }
-                        openpgp::crypto::mpi::SecretKeyMaterial::EdDSA { scalar } => {
-                            main_scalar = Some(scalar.clone());
-                            what_kind_of_key = "EdDSA";
-                        }
-                        _ => (),
-                    });
+        if let Some(openpgp::packet::key::SecretKeyMaterial::Unencrypted(ref u)) =
+            key.optional_secret()
+        {
+            u.map(|mpis| match mpis.clone() {
+                openpgp::crypto::mpi::SecretKeyMaterial::RSA { d, p, q, u } => {
+                    main_d = Some(d);
+                    main_p = Some(p);
+                    main_q = Some(q);
+                    main_u = Some(u);
+                    what_kind_of_key = "rsa";
+                }
+                openpgp::crypto::mpi::SecretKeyMaterial::ECDH { scalar } => {
+                    main_scalar = Some(scalar);
+                    what_kind_of_key = "ECDH";
+                }
+                openpgp::crypto::mpi::SecretKeyMaterial::EdDSA { scalar } => {
+                    main_scalar = Some(scalar);
+                    what_kind_of_key = "EdDSA";
                 }
                 _ => (),
-            }
+            });
         }
     }
     let mut result: Vec<u8> = Vec::new();
@@ -1418,7 +1415,7 @@ fn parse_and_move_a_subkey(
         0xDA,
         0x00,
         fp_p2,
-        fp.unwrap().as_bytes().iter().map(|&x| x).collect(),
+        fp.unwrap().as_bytes().to_vec(),
     );
     let time_p2 = match keytype {
         1 => 0xCF,
@@ -1525,44 +1522,23 @@ fn internal_parse_cert(
         //println!("  {}", String::from_utf8_lossy(ua.value()));
         pd.set_item("value", String::from_utf8_lossy(ua.value()))?;
         // If we have a name part in the UID
-        match ua.name() {
-            Ok(value) => match value {
-                Some(name) => {
-                    pd.set_item("name", name)?;
-                }
-                _ => (),
-            },
-            Err(_) => (),
+        if let Ok(Some(name)) = ua.name() {
+            pd.set_item("name", name)?;
         }
+
         // If we have a comment part in the UID
-        match ua.comment() {
-            Ok(value) => match value {
-                Some(comment) => {
-                    pd.set_item("comment", comment)?;
-                }
-                _ => (),
-            },
-            Err(_) => (),
+        if let Ok(Some(comment)) = ua.comment() {
+            pd.set_item("comment", comment)?;
         }
+
         // If we have a email part in the UID
-        match ua.email() {
-            Ok(value) => match value {
-                Some(email) => {
-                    pd.set_item("email", email)?;
-                }
-                _ => (),
-            },
-            Err(_) => (),
+        if let Ok(Some(email)) = ua.email() {
+            pd.set_item("email", email)?;
         }
+
         // If we have a URI part in the UID
-        match ua.uri() {
-            Ok(value) => match value {
-                Some(uri) => {
-                    pd.set_item("uri", uri)?;
-                }
-                _ => (),
-            },
-            Err(_) => (),
+        if let Ok(Some(uri)) = ua.uri() {
+            pd.set_item("uri", uri)?;
         }
         let mut revoked = false;
         // Based on https://docs.sequoia-pgp.org/1.0.0/sequoia_openpgp/cert/struct.UserIDRevocationBuilder.html#examples
@@ -1649,9 +1625,9 @@ fn create_newkey(
     let mut cdt: Option<DateTime<Utc>> = None;
     // Default we create RSA4k keys
     let mut ciphervalue = CipherSuite::RSA4k;
-    if cipher == String::from("RSA2k") {
+    if cipher == *"RSA2k" {
         ciphervalue = CipherSuite::RSA2k;
-    } else if cipher == String::from("Cv25519") {
+    } else if cipher == *"Cv25519" {
         ciphervalue = CipherSuite::Cv25519;
     }
 
@@ -1714,7 +1690,7 @@ fn create_newkey(
                     0,
                 ),
             };
-            if subkeys_expiration == false {
+            if !subkeys_expiration {
                 crtbuilder.set_validity_period(validity)
             } else {
                 let crtbuilder = if (whichkeys & 0x01) == 0x01 {
@@ -1776,7 +1752,7 @@ fn encrypt_filehandler_to_file(
     let data = fh.call_method(_py, "read", (), None)?;
     let pbytes: &PyBytes = data.cast_as(_py).expect("Excepted bytes");
     let filedata: Vec<u8> = Vec::from(pbytes.as_bytes());
-    return encrypt_bytes_to_file(publickeys, filedata, output, armor);
+    encrypt_bytes_to_file(publickeys, filedata, output, armor)
 }
 
 /// This function takes a list of public key paths, and encrypts the given data in bytes to an output
@@ -1995,11 +1971,11 @@ fn encrypt_bytes_to_bytes(
             // Finalize the armor writer.
             sink.finalize().expect("Failed to write data");
             let res = PyBytes::new(py, &result2);
-            return Ok(res.into());
+            Ok(res.into())
         }
         _ => {
             let res = PyBytes::new(py, &result);
-            return Ok(res.into());
+            Ok(res.into())
         }
     }
 }
@@ -2064,11 +2040,11 @@ impl Johnny {
                 // Finalize the armor writer.
                 sink.finalize().expect("Failed to write data");
                 let res = PyBytes::new(py, &result2);
-                return Ok(res.into());
+                Ok(res.into())
             }
             _ => {
                 let res = PyBytes::new(py, &result);
-                return Ok(res.into());
+                Ok(res.into())
             }
         }
     }
@@ -2230,9 +2206,9 @@ impl Johnny {
         let vh = VHelper::new(&self.cert);
         let mut v = DetachedVerifierBuilder::from_bytes(&sig[..])?.with_policy(&p, None, vh)?;
         match v.verify_bytes(data) {
-            Ok(()) => return Ok(true),
-            Err(_) => return Ok(false),
-        };
+            Ok(()) => Ok(true),
+            Err(_) => Ok(false),
+        }
     }
     pub fn verify_file(&self, filepath: Vec<u8>, sig: Vec<u8>) -> Result<bool> {
         let p = P::new();
@@ -2240,9 +2216,9 @@ impl Johnny {
         let mut v = DetachedVerifierBuilder::from_bytes(&sig[..])?.with_policy(&p, None, vh)?;
         let path = Path::new(str::from_utf8(&filepath[..])?);
         match v.verify_file(path) {
-            Ok(()) => return Ok(true),
-            Err(_) => return Ok(false),
-        };
+            Ok(()) => Ok(true),
+            Err(_) => Ok(false),
+        }
     }
 }
 
