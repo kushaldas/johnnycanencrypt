@@ -1072,18 +1072,18 @@ fn merge_keys(_py: Python, certdata: Vec<u8>, newcertdata: Vec<u8>) -> Result<Py
 /// care.
 #[pyfunction]
 #[pyo3(text_signature = "(filepath)")]
-fn file_encrypted_for(_py: Python, filepath: String) -> PyResult<PyObject> {
-    let mut ppr = PacketParser::from_file(filepath).unwrap();
+fn file_encrypted_for(_py: Python, filepath: String) -> Result<PyObject> {
+    let mut ppr = PacketParser::from_file(filepath)?;
     let plist = PyList::empty(_py);
     while let PacketParserResult::Some(pp) = ppr {
         // Get the packet out of the parser and start parsing the next
         // packet, recursing.
-        let (packet, next_ppr) = pp.recurse().unwrap();
+        let (packet, next_ppr) = pp.recurse()?;
         ppr = next_ppr;
 
         if let Packet::PKESK(ps) = packet {
             let id = ps.recipient().to_hex();
-            plist.append(id).unwrap();
+            plist.append(id)?;
         }
     }
     Ok(plist.into())
@@ -1094,18 +1094,18 @@ fn file_encrypted_for(_py: Python, filepath: String) -> PyResult<PyObject> {
 /// with care.
 #[pyfunction]
 #[pyo3(text_signature = "(messagedata)")]
-fn bytes_encrypted_for(_py: Python, messagedata: Vec<u8>) -> PyResult<PyObject> {
-    let mut ppr = PacketParser::from_bytes(&messagedata[..]).unwrap();
+fn bytes_encrypted_for(_py: Python, messagedata: Vec<u8>) -> Result<PyObject> {
+    let mut ppr = PacketParser::from_bytes(&messagedata[..])?;
     let plist = PyList::empty(_py);
     while let PacketParserResult::Some(pp) = ppr {
         // Get the packet out of the parser and start parsing the next
         // packet, recursing.
-        let (packet, next_ppr) = pp.recurse().unwrap();
+        let (packet, next_ppr) = pp.recurse()?;
         ppr = next_ppr;
 
         if let Packet::PKESK(ps) = packet {
             let id = ps.recipient().to_hex();
-            plist.append(id).unwrap();
+            plist.append(id)?;
         }
     }
     Ok(plist.into())
@@ -1113,10 +1113,10 @@ fn bytes_encrypted_for(_py: Python, messagedata: Vec<u8>) -> PyResult<PyObject> 
 
 #[pyfunction]
 #[pyo3(text_signature = "(certdata)")]
-fn get_pub_key(_py: Python, certdata: Vec<u8>) -> PyResult<String> {
-    let cert = openpgp::Cert::from_bytes(&certdata).unwrap();
-    let armored = cert.armored().to_vec().unwrap();
-    Ok(String::from_utf8(armored).unwrap())
+fn get_pub_key(_py: Python, certdata: Vec<u8>) -> Result<String> {
+    let cert = openpgp::Cert::from_bytes(&certdata)?;
+    let armored = cert.armored().to_vec()?;
+    Ok(String::from_utf8(armored)?)
 }
 
 #[pyfunction]
