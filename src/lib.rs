@@ -60,6 +60,9 @@ pub struct JceError {
     msg: String,
 }
 
+/// Result Generic Type for the module.
+pub type Result<T> = ::std::result::Result<T, JceError>;
+
 impl fmt::Display for JceError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.msg)
@@ -73,6 +76,7 @@ impl std::convert::From<anyhow::Error> for JceError {
         }
     }
 }
+
 impl std::convert::From<pyo3::PyErr> for JceError {
     fn from(err: pyo3::PyErr) -> JceError {
         JceError {
@@ -80,6 +84,13 @@ impl std::convert::From<pyo3::PyErr> for JceError {
         }
     }
 }
+
+impl std::convert::From<std::io::Error> for JceError {
+    fn from(err: std::io::Error) -> JceError {
+        JceError::new(err.to_string())
+    }
+}
+
 impl std::convert::From<JceError> for PyErr {
     fn from(err: JceError) -> PyErr {
         CryptoError::new_err(err.to_string())
@@ -103,24 +114,21 @@ pub fn update_subkeys_expiry_in_cert(
     fingerprints: Vec<String>,
     expirytime: u64,
     password: String,
-) -> PyResult<PyObject> {
-    let cert = openpgp::Cert::from_bytes(&certdata).unwrap();
+) -> Result<PyObject> {
+    let cert = openpgp::Cert::from_bytes(&certdata)?;
 
     let p = &P::new();
     let pk = cert.primary_key().key();
     let mut signer = pk
         .clone()
-        .parts_into_secret()
-        .unwrap()
-        .decrypt_secret(&openpgp::crypto::Password::from(password))
-        .unwrap()
-        .into_keypair()
-        .unwrap();
+        .parts_into_secret()?
+        .decrypt_secret(&openpgp::crypto::Password::from(password))?
+        .into_keypair()?;
 
     // Create the binding signatures.
     let mut sigs = Vec::new();
 
-    for key in cert.with_policy(p, None).unwrap().keys().subkeys() {
+    for key in cert.with_policy(p, None)?.keys().subkeys() {
         let fp = key.fingerprint().to_hex();
         if !fingerprints.contains(&fp) {
             continue;
@@ -128,22 +136,20 @@ pub fn update_subkeys_expiry_in_cert(
         // This reuses any existing backsignature.
         let sig =
             openpgp::packet::signature::SignatureBuilder::from(key.binding_signature().clone())
-                .set_key_expiration_time(&key, SystemTime::now() + Duration::new(expirytime, 0))
-                .unwrap()
-                .sign_subkey_binding(&mut signer, pk, &key)
-                .unwrap();
+                .set_key_expiration_time(&key, SystemTime::now() + Duration::new(expirytime, 0))?
+                .sign_subkey_binding(&mut signer, pk, &key)?;
         sigs.push(sig);
     }
 
-    let cert = cert.insert_packets(sigs).unwrap();
+    let cert = cert.insert_packets(sigs)?;
     // Now let us return the secret key as Python Bytes
     let mut buf = Vec::new();
     let mut buffer = Vec::new();
 
-    let mut writer = Writer::new(&mut buf, Kind::SecretKey).unwrap();
-    cert.as_tsk().serialize(&mut buffer).unwrap();
-    writer.write_all(&buffer).unwrap();
-    writer.finalize().unwrap();
+    let mut writer = Writer::new(&mut buf, Kind::SecretKey)?;
+    cert.as_tsk().serialize(&mut buffer)?;
+    writer.write_all(&buffer)?;
+    writer.finalize()?;
 
     // Let us return the cert data which can be saved in the database
     let res = PyBytes::new(py, &buf);
@@ -157,17 +163,16 @@ pub fn revoke_uid_in_cert(
     certdata: Vec<u8>,
     uid: Vec<u8>,
     pass: String,
-) -> PyResult<PyObject> {
+) -> Result<PyObject> {
     // This is where we will store all the signing keys
-    let mut cert = openpgp::Cert::from_bytes(&certdata).unwrap();
+    let mut cert = openpgp::Cert::from_bytes(&certdata)?;
 
     // To find the secret keypair
     let mut keypair = match cert
         .primary_key()
         .key()
         .clone()
-        .parts_into_secret()
-        .unwrap()
+        .parts_into_secret()?
         .secret()
         .is_encrypted()
     {
@@ -176,22 +181,17 @@ pub fn revoke_uid_in_cert(
             cert.primary_key()
                 .key()
                 .clone()
-                .parts_into_secret()
-                .unwrap()
-                .decrypt_secret(&openpgp::crypto::Password::from(pass))
-                .unwrap()
-                .into_keypair()
-                .unwrap()
+                .parts_into_secret()?
+                .decrypt_secret(&openpgp::crypto::Password::from(pass))?
+                .into_keypair()?
         }
         false => {
             // When the secret is not encrypted
             cert.primary_key()
                 .key()
                 .clone()
-                .parts_into_secret()
-                .unwrap()
-                .into_keypair()
-                .unwrap()
+                .parts_into_secret()?
+                .into_keypair()?
         }
     };
 
@@ -201,22 +201,20 @@ pub fn revoke_uid_in_cert(
         if value == uid {
             // We found the uid which we can now revoke
             let sig = UserIDRevocationBuilder::new()
-                .set_reason_for_revocation(ReasonForRevocation::UIDRetired, b"Revoked via code.")
-                .unwrap()
-                .build(&mut keypair, &cert, ua.userid(), None)
-                .unwrap();
+                .set_reason_for_revocation(ReasonForRevocation::UIDRetired, b"Revoked via code.")?
+                .build(&mut keypair, &cert, ua.userid(), None)?;
             // Now merge this back
-            cert = cert.insert_packets(sig.clone()).unwrap();
+            cert = cert.insert_packets(sig.clone())?;
         }
     }
 
     let mut buf = Vec::new();
     let mut buffer = Vec::new();
 
-    let mut writer = Writer::new(&mut buf, Kind::SecretKey).unwrap();
-    cert.as_tsk().serialize(&mut buffer).unwrap();
-    writer.write_all(&buffer).unwrap();
-    writer.finalize().unwrap();
+    let mut writer = Writer::new(&mut buf, Kind::SecretKey)?;
+    cert.as_tsk().serialize(&mut buffer)?;
+    writer.write_all(&buffer)?;
+    writer.finalize()?;
 
     // Let us return the cert data which can be saved in the database
     let res = PyBytes::new(py, &buf);
@@ -1423,7 +1421,7 @@ fn parse_and_move_a_subkey(
 fn parse_cert_file(
     py: Python,
     certpath: String,
-) -> Result<(PyObject, String, bool, PyObject, PyObject, PyObject), JceError> {
+) -> Result<(PyObject, String, bool, PyObject, PyObject, PyObject)> {
     let cert = openpgp::Cert::from_file(certpath)?;
     internal_parse_cert(py, cert)
 }
@@ -1446,7 +1444,7 @@ fn parse_cert_file(
 fn parse_cert_bytes(
     py: Python,
     certdata: Vec<u8>,
-) -> Result<(PyObject, String, bool, PyObject, PyObject, PyObject), JceError> {
+) -> Result<(PyObject, String, bool, PyObject, PyObject, PyObject)> {
     let cert = openpgp::Cert::from_bytes(&certdata)?;
     internal_parse_cert(py, cert)
 }
@@ -1454,7 +1452,7 @@ fn parse_cert_bytes(
 fn internal_parse_cert(
     py: Python,
     cert: openpgp::Cert,
-) -> Result<(PyObject, String, bool, PyObject, PyObject, PyObject), JceError> {
+) -> Result<(PyObject, String, bool, PyObject, PyObject, PyObject)> {
     let p = P::new();
     let creationtime = match cert.primary_key().with_policy(&p, None) {
         Ok(value) => {
