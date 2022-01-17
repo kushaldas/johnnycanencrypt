@@ -584,8 +584,7 @@ fn get_card_details(py: Python) -> PyResult<PyObject> {
     };
 
     let pd = PyDict::new(py);
-    pd.set_item("serial_number", tlvs::parse_card_serial(resp.get_data()))
-        .unwrap();
+    pd.set_item("serial_number", tlvs::parse_card_serial(resp.get_data()))?;
     // Now the name of the card holder
     let resp = talktosc::send_and_parse(&card, apdus::create_apdu_personal_information());
     let resp = match resp {
@@ -594,8 +593,12 @@ fn get_card_details(py: Python) -> PyResult<PyObject> {
     };
 
     let personal = tlvs::read_list(resp.get_data(), true)[0].clone();
-    let name = String::from_utf8(personal.get_name().unwrap()).unwrap();
-    pd.set_item("name", name).unwrap();
+    let cname = match personal.get_name() {
+        Some(value) => value,
+        None => return Err(CardError::new_err("Card reading error for name.")),
+    };
+    let name = String::from_utf8(cname)?;
+    pd.set_item("name", name)?;
 
     // Let us get the URL of the public key
     let url_apdu = apdus::create_apdu_get_url();
@@ -604,57 +607,97 @@ fn get_card_details(py: Python) -> PyResult<PyObject> {
         Ok(resp) => resp,
         Err(value) => return Err(CardError::new_err(format!("{}", value))),
     };
-    let url = String::from_utf8(resp.get_data()).unwrap();
-    pd.set_item("url", url).unwrap();
+    let url = String::from_utf8(resp.get_data())?;
+    pd.set_item("url", url)?;
 
     // Now, we will get the whole of AID
     let mut aiddata: Vec<u8> = Vec::new();
 
-    let mut resp =
-        talktosc::send_and_parse(&card, apdus::create_apdu_get_application_data()).unwrap();
+    let mut resp = match talktosc::send_and_parse(&card, apdus::create_apdu_get_application_data())
+    {
+        Ok(value) => value,
+        Err(err) => {
+            return Err(CardError::new_err(format!(
+                "Error in getting AID: {}",
+                err.to_string()
+            )))
+        }
+    };
     aiddata.extend(resp.get_data());
     // This means we have more data to read.
     while resp.sw1 == 0x61 {
         let apdu = apdus::create_apdu_for_reading(resp.sw2.clone());
 
-        resp = talktosc::send_and_parse(&card, apdu).unwrap();
+        resp = match talktosc::send_and_parse(&card, apdu) {
+            Ok(value) => value,
+            Err(err) => {
+                return Err(CardError::new_err(format!(
+                    "Error in getting AID: {}",
+                    err.to_string()
+                )))
+            }
+        };
         aiddata.extend(resp.get_data());
     }
     // Now we have all the data in aiddata
     let tlv = &tlvs::read_list(aiddata, true)[0];
     let sigdata = tlv.get_fingerprints().unwrap();
     let (sig_f, enc_f, auth_f) = tlvs::parse_fingerprints(sigdata);
-    pd.set_item("sig_f", sig_f).unwrap();
-    pd.set_item("enc_f", enc_f).unwrap();
-    pd.set_item("auth_f", auth_f).unwrap();
+    pd.set_item("sig_f", sig_f)?;
+    pd.set_item("enc_f", enc_f)?;
+    pd.set_item("auth_f", auth_f)?;
 
     // For Pin retires left
-    let pininfo = tlv.get_pin_tries().unwrap();
-    pd.set_item("PW1", pininfo[4]).unwrap();
-    pd.set_item("RC", pininfo[5]).unwrap();
-    pd.set_item("PW3", pininfo[6]).unwrap();
+    let pininfo = match tlv.get_pin_tries() {
+        Some(value) => value,
+        None => return Err(CardError::new_err("Error in getting pin retries left.")),
+    };
+    pd.set_item("PW1", pininfo[4])?;
+    pd.set_item("RC", pininfo[5])?;
+    pd.set_item("PW3", pininfo[6])?;
 
     // Now, we will get the whole of Security template
     let mut sectemplate: Vec<u8> = Vec::new();
 
-    let mut resp =
-        talktosc::send_and_parse(&card, apdus::create_apdu_get_security_template()).unwrap();
+    let mut resp = match talktosc::send_and_parse(&card, apdus::create_apdu_get_security_template())
+    {
+        Ok(value) => value,
+        Err(err) => {
+            return Err(CardError::new_err(format!(
+                "Error in getting security template: {}",
+                err.to_string()
+            )))
+        }
+    };
+
     sectemplate.extend(resp.get_data());
     // This means we have more data to read.
     while resp.sw1 == 0x61 {
         let apdu = apdus::create_apdu_for_reading(resp.sw2.clone());
 
-        resp = talktosc::send_and_parse(&card, apdu).unwrap();
+        resp = match talktosc::send_and_parse(&card, apdu) {
+            Ok(value) => value,
+            Err(err) => {
+                return Err(CardError::new_err(format!(
+                    "Error in getting security template : {}",
+                    err.to_string()
+                )))
+            }
+        };
+
         sectemplate.extend(resp.get_data());
     }
     // Now we have all the data in aiddata
     let tlv = &tlvs::read_list(sectemplate, true)[0];
     // For the number of signatures
-    let signumber = tlv.get_number_of_signatures().unwrap();
+    let signumber = match tlv.get_number_of_signatures() {
+        Some(value) => value,
+        None => return Err(CardError::new_err("Can not read the number of signatures.")),
+    };
     let number: u32 =
         ((signumber[0] as u32) << 16 | (signumber[1] as u32) << 8) | signumber[2] as u32;
 
-    pd.set_item("signatures", number).unwrap();
+    pd.set_item("signatures", number)?;
 
     // Disconnect
     talktosc::disconnect(card);
