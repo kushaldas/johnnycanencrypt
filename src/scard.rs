@@ -27,7 +27,7 @@ pub fn chagne_admin_pin(pw3change: apdus::APDU) -> Result<bool, errors::TalktoSC
     };
 
     // Verify if the admin pin worked or not.
-    if resp.is_okay() == false {
+    if !resp.is_okay() {
         return Err(errors::TalktoSCError::PinError);
     }
     Ok(true)
@@ -48,7 +48,7 @@ pub fn is_smartcard_connected() -> Result<bool, errors::TalktoSCError> {
         Err(value) => return Err(value),
     };
     // Verify if the admin pin worked or not.
-    if resp.is_okay() == false {
+    if !resp.is_okay() {
         return Err(errors::TalktoSCError::PinError);
     }
 
@@ -71,14 +71,14 @@ pub fn set_data(pw3_apdu: apdus::APDU, data: apdus::APDU) -> Result<bool, errors
         Ok(_) => (),
         Err(value) => return Err(value),
     }
-    let resp = talktosc::send_and_parse(&card, pw3_apdu.clone());
+    let resp = talktosc::send_and_parse(&card, pw3_apdu);
     let resp = match resp {
         Ok(_) => resp.unwrap(),
         Err(value) => return Err(value),
     };
 
     // Verify if the admin pin worked or not.
-    if resp.is_okay() == false {
+    if !resp.is_okay() {
         return Err(errors::TalktoSCError::PinError);
     }
 
@@ -88,7 +88,7 @@ pub fn set_data(pw3_apdu: apdus::APDU, data: apdus::APDU) -> Result<bool, errors
         Err(value) => return Err(value),
     };
 
-    if resp.is_okay() == true {
+    if resp.is_okay() {
         return Ok(true);
     }
 
@@ -124,7 +124,7 @@ pub fn move_subkey_to_card(
     };
 
     // Verify if the admin pin worked or not.
-    if resp.is_okay() == false {
+    if !resp.is_okay() {
         return Err(errors::TalktoSCError::PinError);
     }
 
@@ -136,14 +136,14 @@ pub fn move_subkey_to_card(
     }
 
     // Another time pw3 verification
-    let resp = talktosc::send_and_parse(&card, pw3_apdu.clone());
+    let resp = talktosc::send_and_parse(&card, pw3_apdu);
     let resp = match resp {
         Ok(_) => resp.unwrap(),
         Err(value) => return Err(value),
     };
 
     // Verify if the admin pin worked or not.
-    if resp.is_okay() == false {
+    if !resp.is_okay() {
         return Err(errors::TalktoSCError::PinError);
     }
 
@@ -198,14 +198,14 @@ fn decrypt_the_secret_in_card(c: Vec<u8>, pin: Vec<u8>) -> Result<Vec<u8>, error
     aiddata.extend(resp.get_data());
     // This means we have more data to read.
     while resp.sw1 == 0x61 {
-        let apdu = apdus::create_apdu_for_reading(resp.sw2.clone());
+        let apdu = apdus::create_apdu_for_reading(resp.sw2);
 
         resp = talktosc::send_and_parse(&card, apdu).unwrap();
         aiddata.extend(resp.get_data());
     }
 
     talktosc::disconnect(card);
-    Ok(Vec::from(aiddata))
+    Ok(aiddata)
 }
 
 fn sign_hash_in_card(c: Vec<u8>, pin: Vec<u8>) -> Result<Vec<u8>, errors::TalktoSCError> {
@@ -229,7 +229,7 @@ fn sign_hash_in_card(c: Vec<u8>, pin: Vec<u8>) -> Result<Vec<u8>, errors::Talkto
 
     // Experiment code
     let mut iapdu: Vec<u8> = vec![0x00, 0x2A, 0x9E, 0x9A, c.len() as u8];
-    iapdu.extend(c.clone().iter());
+    iapdu.extend(c.iter());
     iapdu.push(0x00);
     let iapdus = vec![iapdu];
 
@@ -238,7 +238,7 @@ fn sign_hash_in_card(c: Vec<u8>, pin: Vec<u8>) -> Result<Vec<u8>, errors::Talkto
         ins: 0x21,
         p1: 0x9E,
         p2: 0x9A,
-        data: c.clone(),
+        data: c,
         iapdus,
     };
 
@@ -248,13 +248,13 @@ fn sign_hash_in_card(c: Vec<u8>, pin: Vec<u8>) -> Result<Vec<u8>, errors::Talkto
     aiddata.extend(resp.get_data());
     // This means we have more data to read.
     while resp.sw1 == 0x61 {
-        let apdu = apdus::create_apdu_for_reading(resp.sw2.clone());
+        let apdu = apdus::create_apdu_for_reading(resp.sw2);
 
         resp = talktosc::send_and_parse(&card, apdu).unwrap();
         aiddata.extend(resp.get_data());
     }
     talktosc::disconnect(card);
-    Ok(Vec::from(aiddata))
+    Ok(aiddata)
 }
 
 pub struct KeyPair<'a> {
@@ -315,7 +315,7 @@ impl<'a> crypto::Decryptor for KeyPair<'a> {
                 // Sequoia needs the full thing, not the real session key like below
                 //let sk = openpgp::crypto::SessionKey::from(&dec[1..length - 2]);
                 let sk = openpgp::crypto::SessionKey::from(&dec[..]);
-                return Ok(sk.clone());
+                Ok(sk)
             }
             (
                 openpgp::crypto::mpi::Ciphertext::ECDH { ref e, .. },
@@ -336,7 +336,11 @@ impl<'a> crypto::Decryptor for KeyPair<'a> {
                 // Send this for decryption on the card
                 let dec = decrypt_the_secret_in_card(c, self.pin.clone())?;
                 let S: openpgp::crypto::mem::Protected = dec.into();
-                Ok(openpgp::crypto::ecdh::decrypt_unwrap(self.public, &S, ciphertext)?)
+                Ok(openpgp::crypto::ecdh::decrypt_unwrap(
+                    self.public,
+                    &S,
+                    ciphertext,
+                )?)
             }
 
             (ciphertext, public) => Err(openpgp::Error::InvalidOperation(format!(
@@ -375,7 +379,7 @@ impl<'a> crypto::Signer for KeyPair<'a> {
                         data_for_rsa.push(0x00);
                         let result = sign_hash_in_card(data_for_rsa, self.pin.clone())?;
                         let mpi = openpgp::crypto::mpi::MPI::new(&result[..]);
-                        return Ok(openpgp::crypto::mpi::Signature::RSA { s: mpi });
+                        Ok(openpgp::crypto::mpi::Signature::RSA { s: mpi })
                     }
                     openpgp::types::HashAlgorithm::SHA512 => {
                         let mut data_for_rsa = vec![
@@ -385,7 +389,7 @@ impl<'a> crypto::Signer for KeyPair<'a> {
                         data_for_rsa.extend(digest);
                         let result = sign_hash_in_card(data_for_rsa, self.pin.clone())?;
                         let mpi = openpgp::crypto::mpi::MPI::new(&result[..]);
-                        return Ok(openpgp::crypto::mpi::Signature::RSA { s: mpi });
+                        Ok(openpgp::crypto::mpi::Signature::RSA { s: mpi })
                     }
                     _ => {
                         return Err(openpgp::Error::InvalidOperation(format!(
@@ -397,11 +401,11 @@ impl<'a> crypto::Signer for KeyPair<'a> {
                 }
             }
             (EdDSA, PublicKey::EdDSA { .. }) => {
-                let data_for_eddsa: Vec<u8> = digest.iter().map(|x| x).copied().collect();
+                let data_for_eddsa: Vec<u8> = digest.iter().copied().collect();
                 let result = sign_hash_in_card(data_for_eddsa, self.pin.clone())?;
                 let r = openpgp::crypto::mpi::MPI::new(&result[..32]);
                 let s = openpgp::crypto::mpi::MPI::new(&result[32..]);
-                return Ok(openpgp::crypto::mpi::Signature::EdDSA { r, s });
+                Ok(openpgp::crypto::mpi::Signature::EdDSA { r, s })
             }
             (pk_algo, _) => Err(openpgp::Error::InvalidOperation(format!(
                 "unsupported combination of algorithm {:?} and key {:?}",

@@ -365,7 +365,7 @@ impl YuBi {
             .for_transport_encryption()
         {
             let key = ka.key();
-            keys.insert(key.keyid(), key.clone().into());
+            keys.insert(key.keyid(), key.clone());
         }
         YuBi { keys, pin }
     }
@@ -1346,7 +1346,7 @@ fn parse_and_move_a_subkey(
         .skip_while(|&&e| e == 0)
         .copied()
         .collect();
-    let mut for_algo_attributes: Vec<u8> = vec![01];
+    let mut for_algo_attributes: Vec<u8> = vec![1];
 
     match what_kind_of_key {
         // Here we will create the algorithm attributes data
