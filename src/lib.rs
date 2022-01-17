@@ -1046,7 +1046,7 @@ fn sign_bytes_detached_internal(
     // Finalize the armor writer.
     sink.finalize().expect("Failed to write data");
 
-    Ok(String::from_utf8(result).unwrap())
+    Ok(String::from_utf8(result)?)
 }
 
 #[pyfunction]
