@@ -1051,16 +1051,18 @@ fn sign_bytes_detached_internal(
 
 #[pyfunction]
 #[pyo3(text_signature = "(certdata, newcertdata)")]
-fn merge_keys(_py: Python, certdata: Vec<u8>, newcertdata: Vec<u8>) -> PyResult<PyObject> {
-    let cert = openpgp::Cert::from_bytes(&certdata).unwrap();
-    let newcert = openpgp::Cert::from_bytes(&newcertdata).unwrap();
+fn merge_keys(_py: Python, certdata: Vec<u8>, newcertdata: Vec<u8>) -> Result<PyObject> {
+    let cert = openpgp::Cert::from_bytes(&certdata)?;
+    let newcert = openpgp::Cert::from_bytes(&newcertdata)?;
     if cert.as_tsk() == newcert.as_tsk() {
-        return Err(SameKeyError::new_err("Both keys are same. Can not merge."));
+        return Err(JceError::new(
+            "Both keys are same. Can not merge.".to_string(),
+        ));
     }
     // Now let us merge the new one into old one.
     // Remember, the opposite is a security risk.
-    let mergred_cert = cert.merge_public_and_secret(newcert).unwrap();
-    let cert_packets = mergred_cert.armored().to_vec().unwrap();
+    let mergred_cert = cert.merge_public_and_secret(newcert)?;
+    let cert_packets = mergred_cert.armored().to_vec()?;
     let res = PyBytes::new(_py, &cert_packets);
     return Ok(res.into());
 }

@@ -473,7 +473,7 @@ def test_same_key_import_error():
     tempdir = tempfile.TemporaryDirectory()
     ks = jce.KeyStore(tempdir.name)
     ks.import_cert("tests/files/store/public.asc")
-    with pytest.raises(jce.SameKeyError):
+    with pytest.raises(jce.CryptoError):
         ks.import_cert("tests/files/store/public.asc")
 
 
