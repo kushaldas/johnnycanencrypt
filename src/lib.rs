@@ -97,6 +97,12 @@ impl std::convert::From<str::Utf8Error> for JceError {
     }
 }
 
+impl std::convert::From<std::string::FromUtf8Error> for JceError {
+    fn from(err: std::string::FromUtf8Error) -> JceError {
+        JceError::new(err.to_string())
+    }
+}
+
 impl std::convert::From<JceError> for PyErr {
     fn from(err: JceError) -> PyErr {
         CryptoError::new_err(err.to_string())
@@ -935,7 +941,7 @@ pub fn sign_bytes_detached_on_card(
     certdata: Vec<u8>,
     data: Vec<u8>,
     pin: Vec<u8>,
-) -> PyResult<String> {
+) -> Result<String> {
     let mut localdata = io::Cursor::new(data);
     sign_internal_detached_on_card(certdata, &mut localdata, pin)
 }
@@ -946,8 +952,8 @@ pub fn sign_file_detached_on_card(
     certdata: Vec<u8>,
     filepath: Vec<u8>,
     pin: Vec<u8>,
-) -> PyResult<String> {
-    let file = Path::new(str::from_utf8(&filepath[..]).unwrap());
+) -> Result<String> {
+    let file = Path::new(str::from_utf8(&filepath[..])?);
     let mut localdata = File::open(file)?;
     sign_internal_detached_on_card(certdata, &mut localdata, pin)
 }
@@ -956,11 +962,11 @@ fn sign_internal_detached_on_card(
     certdata: Vec<u8>,
     input: &mut dyn io::Read,
     pin: Vec<u8>,
-) -> PyResult<String> {
+) -> Result<String> {
     let policy = &P::new();
     // This is where we will store all the signing keys
     let mut keys: Vec<scard::KeyPair> = Vec::new();
-    let cert = openpgp::Cert::from_bytes(&certdata).unwrap();
+    let cert = openpgp::Cert::from_bytes(&certdata)?;
     // Note: We are only selecting subkeys for signing via card
     for ka in cert
         .keys()
@@ -971,7 +977,7 @@ fn sign_internal_detached_on_card(
         .for_signing()
     {
         let key = ka.key();
-        let pair = scard::KeyPair::new(pin.clone(), key).unwrap();
+        let pair = scard::KeyPair::new(pin.clone(), key)?;
         keys.push(pair);
     }
     let mut result = Vec::new();
@@ -994,13 +1000,13 @@ fn sign_internal_detached_on_card(
     // Finally, teardown the stack to ensure all the data is written.
     match signer.finalize() {
         Ok(_) => (),
-        Err(msg) => return Err(CardError::new_err(msg.to_string())),
+        Err(msg) => return Err(JceError::new(msg.to_string())),
     }
 
     // Finalize the armor writer.
     sink.finalize().expect("Failed to write data");
 
-    Ok(String::from_utf8(result).unwrap())
+    Ok(String::from_utf8(result)?)
 }
 
 fn sign_bytes_detached_internal(
