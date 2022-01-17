@@ -6,6 +6,7 @@ use pyo3::types::{PyDateTime, PyDict, PyList};
 use pyo3::wrap_pyfunction;
 
 use std::collections::HashMap;
+use std::fmt;
 use std::fs::File;
 use std::io;
 use std::io::Write;
@@ -53,6 +54,43 @@ create_exception!(johnnycanencrypt, SameKeyError, PyException);
 
 // Error in selecting OpenPGP applet in the card
 create_exception!(johnnycanencrypt, CardError, PyException);
+
+#[derive(Debug)]
+pub struct JceError {
+    msg: String,
+}
+
+impl fmt::Display for JceError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.msg)
+    }
+}
+
+impl std::convert::From<anyhow::Error> for JceError {
+    fn from(err: anyhow::Error) -> JceError {
+        JceError {
+            msg: err.to_string(),
+        }
+    }
+}
+impl std::convert::From<pyo3::PyErr> for JceError {
+    fn from(err: pyo3::PyErr) -> JceError {
+        JceError {
+            msg: err.to_string(),
+        }
+    }
+}
+impl std::convert::From<JceError> for PyErr {
+    fn from(err: JceError) -> PyErr {
+        CryptoError::new_err(err.to_string())
+    }
+}
+
+impl JceError {
+    fn new(msg: String) -> Self {
+        JceError { msg }
+    }
+}
 
 /// Returns updated key with new expiration time for subkeys
 /// Takes the secret key data, a list of subkey fingerprints as str,
@@ -1385,8 +1423,8 @@ fn parse_and_move_a_subkey(
 fn parse_cert_file(
     py: Python,
     certpath: String,
-) -> PyResult<(PyObject, String, bool, PyObject, PyObject, PyObject)> {
-    let cert = openpgp::Cert::from_file(certpath).unwrap();
+) -> Result<(PyObject, String, bool, PyObject, PyObject, PyObject), JceError> {
+    let cert = openpgp::Cert::from_file(certpath)?;
     internal_parse_cert(py, cert)
 }
 
@@ -1408,21 +1446,21 @@ fn parse_cert_file(
 fn parse_cert_bytes(
     py: Python,
     certdata: Vec<u8>,
-) -> PyResult<(PyObject, String, bool, PyObject, PyObject, PyObject)> {
-    let cert = openpgp::Cert::from_bytes(&certdata).unwrap();
+) -> Result<(PyObject, String, bool, PyObject, PyObject, PyObject), JceError> {
+    let cert = openpgp::Cert::from_bytes(&certdata)?;
     internal_parse_cert(py, cert)
 }
 
 fn internal_parse_cert(
     py: Python,
     cert: openpgp::Cert,
-) -> PyResult<(PyObject, String, bool, PyObject, PyObject, PyObject)> {
+) -> Result<(PyObject, String, bool, PyObject, PyObject, PyObject), JceError> {
     let p = P::new();
     let creationtime = match cert.primary_key().with_policy(&p, None) {
         Ok(value) => {
             let ctime = value.creation_time();
             let dt: DateTime<Utc> = DateTime::from(ctime);
-            Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None).unwrap())
+            Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None)?)
         }
         _ => None,
     };
@@ -1431,7 +1469,7 @@ fn internal_parse_cert(
         Ok(value) => match value.key_expiration_time() {
             Some(etime) => {
                 let dt: DateTime<Utc> = DateTime::from(etime);
-                let pd = Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None).unwrap());
+                let pd = Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None)?);
                 pd
             }
             _ => None,
@@ -1442,20 +1480,19 @@ fn internal_parse_cert(
             for error in eiters {
                 err_msg.push(error.to_string());
             }
-            return Err(CryptoError::new_err(err_msg.join(", ")));
+            return Err(JceError::new(err_msg.join(", ")));
         }
     };
     let plist = PyList::empty(py);
     for ua in cert.userids() {
         let pd = PyDict::new(py);
         //println!("  {}", String::from_utf8_lossy(ua.value()));
-        pd.set_item("value", String::from_utf8_lossy(ua.value()))
-            .unwrap();
+        pd.set_item("value", String::from_utf8_lossy(ua.value()))?;
         // If we have a name part in the UID
         match ua.name() {
             Ok(value) => match value {
                 Some(name) => {
-                    pd.set_item("name", name).unwrap();
+                    pd.set_item("name", name)?;
                 }
                 _ => (),
             },
@@ -1465,7 +1502,7 @@ fn internal_parse_cert(
         match ua.comment() {
             Ok(value) => match value {
                 Some(comment) => {
-                    pd.set_item("comment", comment).unwrap();
+                    pd.set_item("comment", comment)?;
                 }
                 _ => (),
             },
@@ -1475,7 +1512,7 @@ fn internal_parse_cert(
         match ua.email() {
             Ok(value) => match value {
                 Some(email) => {
-                    pd.set_item("email", email).unwrap();
+                    pd.set_item("email", email)?;
                 }
                 _ => (),
             },
@@ -1485,7 +1522,7 @@ fn internal_parse_cert(
         match ua.uri() {
             Ok(value) => match value {
                 Some(uri) => {
-                    pd.set_item("uri", uri).unwrap();
+                    pd.set_item("uri", uri)?;
                 }
                 _ => (),
             },
@@ -1496,8 +1533,8 @@ fn internal_parse_cert(
         if let RevocationStatus::Revoked(_) = ua.revocation_status(&p, None) {
             revoked = true;
         };
-        pd.set_item("revoked", revoked).unwrap();
-        plist.append(pd).unwrap();
+        pd.set_item("revoked", revoked)?;
+        plist.append(pd)?;
     }
 
     let subkeys = PyList::empty(py);
@@ -1505,7 +1542,7 @@ fn internal_parse_cert(
         let expirationtime = match ka.key_expiration_time() {
             Some(etime) => {
                 let dt: DateTime<Utc> = DateTime::from(etime);
-                let pd = Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None).unwrap());
+                let pd = Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None)?);
                 pd
             }
             _ => None,
@@ -1513,7 +1550,7 @@ fn internal_parse_cert(
 
         let creationtime = {
             let dt: DateTime<Utc> = DateTime::from(ka.creation_time());
-            let pd = Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None).unwrap());
+            let pd = Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None)?);
             pd
         };
 
@@ -1536,23 +1573,19 @@ fn internal_parse_cert(
             RevocationStatus::CouldBe(_) => false,
             RevocationStatus::NotAsFarAsWeKnow => false,
         };
-        subkeys
-            .append((
-                ka.keyid().to_hex(),
-                ka.fingerprint().to_hex(),
-                creationtime,
-                expirationtime,
-                keytype,
-                revoked,
-            ))
-            .unwrap();
+        subkeys.append((
+            ka.keyid().to_hex(),
+            ka.fingerprint().to_hex(),
+            creationtime,
+            expirationtime,
+            keytype,
+            revoked,
+        ))?;
     }
 
     let othervalues = PyDict::new(py);
-    othervalues
-        .set_item("keyid", cert.primary_key().keyid().to_hex())
-        .unwrap();
-    othervalues.set_item("subkeys", subkeys).unwrap();
+    othervalues.set_item("keyid", cert.primary_key().keyid().to_hex())?;
+    othervalues.set_item("subkeys", subkeys)?;
 
     Ok((
         plist.into(),
