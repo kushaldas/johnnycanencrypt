@@ -91,6 +91,12 @@ impl std::convert::From<std::io::Error> for JceError {
     }
 }
 
+impl std::convert::From<str::Utf8Error> for JceError {
+    fn from(err: str::Utf8Error) -> JceError {
+        JceError::new(err.to_string())
+    }
+}
+
 impl std::convert::From<JceError> for PyErr {
     fn from(err: JceError) -> PyErr {
         CryptoError::new_err(err.to_string())
@@ -228,17 +234,16 @@ pub fn add_uid_in_cert(
     certdata: Vec<u8>,
     uid: Vec<u8>,
     pass: String,
-) -> PyResult<PyObject> {
+) -> Result<PyObject> {
     // This is where we will store all the signing keys
-    let cert = openpgp::Cert::from_bytes(&certdata).unwrap();
+    let cert = openpgp::Cert::from_bytes(&certdata)?;
 
     // To find the secret keypair
     let mut keypair = match cert
         .primary_key()
         .key()
         .clone()
-        .parts_into_secret()
-        .unwrap()
+        .parts_into_secret()?
         .secret()
         .is_encrypted()
     {
@@ -247,40 +252,33 @@ pub fn add_uid_in_cert(
             cert.primary_key()
                 .key()
                 .clone()
-                .parts_into_secret()
-                .unwrap()
-                .decrypt_secret(&openpgp::crypto::Password::from(pass))
-                .unwrap()
-                .into_keypair()
-                .unwrap()
+                .parts_into_secret()?
+                .decrypt_secret(&openpgp::crypto::Password::from(pass))?
+                .into_keypair()?
         }
         false => {
             // When the secret is not encrypted
             cert.primary_key()
                 .key()
                 .clone()
-                .parts_into_secret()
-                .unwrap()
-                .into_keypair()
-                .unwrap()
+                .parts_into_secret()?
+                .into_keypair()?
         }
     };
     let userid = openpgp::packet::UserID::from(uid);
     let builder = openpgp::packet::signature::SignatureBuilder::new(
         openpgp::types::SignatureType::PositiveCertification,
     );
-    let binding = userid.bind(&mut keypair, &cert, builder).unwrap();
-    let cert = cert
-        .insert_packets(vec![Packet::from(userid), binding.into()])
-        .unwrap();
+    let binding = userid.bind(&mut keypair, &cert, builder)?;
+    let cert = cert.insert_packets(vec![Packet::from(userid), binding.into()])?;
 
     let mut buf = Vec::new();
     let mut buffer = Vec::new();
 
-    let mut writer = Writer::new(&mut buf, Kind::SecretKey).unwrap();
-    cert.as_tsk().serialize(&mut buffer).unwrap();
-    writer.write_all(&buffer).unwrap();
-    writer.finalize().unwrap();
+    let mut writer = Writer::new(&mut buf, Kind::SecretKey)?;
+    cert.as_tsk().serialize(&mut buffer)?;
+    writer.write_all(&buffer)?;
+    writer.finalize()?;
 
     // Let us return the cert data which can be saved in the database
     let res = PyBytes::new(py, &buf);
@@ -293,22 +291,18 @@ pub fn update_password(
     certdata: Vec<u8>,
     pass: String,
     newpass: String,
-) -> PyResult<PyObject> {
+) -> Result<PyObject> {
     let p = P::new();
-    let mut cert = openpgp::Cert::from_bytes(&certdata).unwrap();
+    let mut cert = openpgp::Cert::from_bytes(&certdata)?;
     let mut keys = Vec::new();
     // First let us change the password for the primary key
     let key = cert
         .primary_key()
         .key()
         .clone()
-        .parts_into_secret()
-        .unwrap()
-        .decrypt_secret(&openpgp::crypto::Password::from(pass.clone()))
-        .unwrap();
-    let pkey = key
-        .encrypt_secret(&openpgp::crypto::Password::from(newpass.clone()))
-        .unwrap();
+        .parts_into_secret()?
+        .decrypt_secret(&openpgp::crypto::Password::from(pass.clone()))?;
+    let pkey = key.encrypt_secret(&openpgp::crypto::Password::from(newpass.clone()))?;
 
     for key in cert
         .keys()
@@ -320,30 +314,26 @@ pub fn update_password(
     {
         let k = key
             .clone()
-            .parts_into_secret()
-            .unwrap()
-            .decrypt_secret(&openpgp::crypto::Password::from(pass.clone()))
-            .unwrap();
-        let newk = k
-            .encrypt_secret(&openpgp::crypto::Password::from(newpass.clone()))
-            .unwrap();
+            .parts_into_secret()?
+            .decrypt_secret(&openpgp::crypto::Password::from(pass.clone()))?;
+        let newk = k.encrypt_secret(&openpgp::crypto::Password::from(newpass.clone()))?;
         keys.push(newk.clone());
     }
 
     // First let us merge the changed primary key and then the subkeys
-    cert = cert.insert_packets(Packet::from(pkey)).unwrap();
+    cert = cert.insert_packets(Packet::from(pkey))?;
     // here we are merging the subkeys back
     for k in keys {
-        cert = cert.insert_packets(Packet::from(k)).unwrap();
+        cert = cert.insert_packets(Packet::from(k))?;
     }
 
     let mut buf = Vec::new();
     let mut buffer = Vec::new();
 
-    let mut writer = Writer::new(&mut buf, Kind::SecretKey).unwrap();
-    cert.as_tsk().serialize(&mut buffer).unwrap();
-    writer.write_all(&buffer).unwrap();
-    writer.finalize().unwrap();
+    let mut writer = Writer::new(&mut buf, Kind::SecretKey)?;
+    cert.as_tsk().serialize(&mut buffer)?;
+    writer.write_all(&buffer)?;
+    writer.finalize()?;
     // Let us return the cert data which can be saved in the database
     let res = PyBytes::new(py, &buf);
     Ok(res.into())
@@ -360,6 +350,7 @@ pub struct YuBi {
 impl YuBi {
     pub fn new(policy: &dyn Policy, certdata: Vec<u8>, pin: Vec<u8>) -> Self {
         let mut keys = HashMap::new();
+        // This should really fail if we pass wrong data here.
         let cert = openpgp::Cert::from_bytes(&certdata).unwrap();
         for ka in cert
             .keys()
@@ -423,7 +414,7 @@ fn decrypt_bytes_on_card(
     certdata: Vec<u8>,
     data: Vec<u8>,
     pin: Vec<u8>,
-) -> PyResult<PyObject> {
+) -> Result<PyObject> {
     //let keys: HashMap<openpgp::KeyID, String> = HashMap::new();
     //for (key, val) in keys_from_py.iter() {
     //let kid: openpgp::KeyID = key.parse().unwrap();
@@ -437,18 +428,13 @@ fn decrypt_bytes_on_card(
     let dec = DecryptorBuilder::from_reader(reader);
     let dec2 = match dec {
         Ok(dec) => dec,
-        Err(msg) => {
-            return Err(PySystemError::new_err(format!(
-                "Can not create decryptor: {}",
-                msg
-            )))
-        }
+        Err(msg) => return Err(JceError::new(format!("Can not create decryptor: {}", msg))),
     };
     let mut decryptor = match dec2.with_policy(&p, None, YuBi::new(&p, certdata, pin)) {
         Ok(decr) => decr,
-        Err(msg) => return Err(PyValueError::new_err(format!("Failed to decrypt: {}", msg))),
+        Err(msg) => return Err(JceError::new(format!("Failed to decrypt: {}", msg))),
     };
-    std::io::copy(&mut decryptor, &mut result).unwrap();
+    std::io::copy(&mut decryptor, &mut result)?;
     let res = PyBytes::new(_py, &result);
     Ok(res.into())
 }
@@ -461,17 +447,18 @@ pub fn decrypt_file_on_card(
     filepath: Vec<u8>,
     output: Vec<u8>,
     pin: Vec<u8>,
-) -> PyResult<bool> {
+) -> Result<bool> {
     let p = P::new();
 
-    let input = File::open(str::from_utf8(&filepath[..]).unwrap()).unwrap();
-    let mut outfile = File::create(str::from_utf8(&output[..]).unwrap()).unwrap();
+    let input = File::open(str::from_utf8(&filepath[..])?)?;
+    let mut outfile = File::create(str::from_utf8(&output[..])?)?;
 
-    let mut decryptor = DecryptorBuilder::from_reader(input)
-        .unwrap()
-        .with_policy(&p, None, YuBi::new(&p, certdata, pin))
-        .unwrap();
-    std::io::copy(&mut decryptor, &mut outfile).unwrap();
+    let mut decryptor = DecryptorBuilder::from_reader(input)?.with_policy(
+        &p,
+        None,
+        YuBi::new(&p, certdata, pin),
+    )?;
+    std::io::copy(&mut decryptor, &mut outfile)?;
     Ok(true)
 }
 
