@@ -1127,8 +1127,8 @@ fn upload_to_smartcard(
     pin: Vec<u8>,
     password: String,
     whichkeys: u8,
-) -> PyResult<bool> {
-    let cert = openpgp::Cert::from_bytes(&certdata).unwrap();
+) -> Result<bool> {
+    let cert = openpgp::Cert::from_bytes(&certdata)?;
 
     // whichkeys, 1 for encryption, 2 for signing, 4 for authentication
     // 3 - both enc and signing
@@ -1161,7 +1161,7 @@ fn parse_and_move_a_subkey(
     keytype: i8,
     pin: Vec<u8>,
     password: String,
-) -> PyResult<bool> {
+) -> Result<bool> {
     let policy = P::new();
     // To flag if it is a RSA key, or ECDH or EdDSA
     let mut what_kind_of_key = "";
@@ -1194,7 +1194,7 @@ fn parse_and_move_a_subkey(
         1 => valid_ka.for_storage_encryption(),
         2 => valid_ka.for_signing(),
         3 => valid_ka.for_authentication(),
-        _ => return Err(PyValueError::new_err("wrong value for the keytype")),
+        _ => return Err(JceError::new("wrong value for the keytype".to_string())),
     };
     for ka in valid_ka {
         // First let us get the value of e from the public key
@@ -1218,8 +1218,7 @@ fn parse_and_move_a_subkey(
         let key = ka
             .key()
             .clone()
-            .decrypt_secret(&openpgp::crypto::Password::from(password.clone()))
-            .unwrap();
+            .decrypt_secret(&openpgp::crypto::Password::from(password.clone()))?;
         let ctime = key.creation_time();
         let dt: DateTime<Utc> = DateTime::from(ctime);
         ts = dt.timestamp() as u64;
@@ -1317,7 +1316,7 @@ fn parse_and_move_a_subkey(
         1 => vec![0xB8, 0x00],
         2 => vec![0xB6, 0x00],
         3 => vec![0xA4, 0x00],
-        _ => return Err(PyValueError::new_err("wrong value for keytype")),
+        _ => return Err(JceError::new("wrong value for keytype".to_string())),
     };
 
     maindata.extend(for7f48.iter());
@@ -1405,14 +1404,14 @@ fn parse_and_move_a_subkey(
         1 => talktosc::apdus::APDU::create_big_apdu(0x00, 0xDA, 0x00, 0xC2, for_algo_attributes),
         2 => talktosc::apdus::APDU::create_big_apdu(0x00, 0xDA, 0x00, 0xC1, for_algo_attributes),
         3 => talktosc::apdus::APDU::create_big_apdu(0x00, 0xDA, 0x00, 0xC3, for_algo_attributes),
-        _ => return Err(PyValueError::new_err("wrong value for keytype")),
+        _ => return Err(JceError::new("wrong value for keytype".to_string())),
     };
     // Details are in PUT DATA DO part in the spec 4.4.2
     let fp_p2 = match keytype {
         1 => 0xC8,
         2 => 0xC7,
         3 => 0xC9,
-        _ => return Err(PyValueError::new_err("wrong value for keytype")),
+        _ => return Err(JceError::new("wrong value for keytype".to_string())),
     };
     let fp_apdu = talktosc::apdus::APDU::create_big_apdu(
         0x00,
@@ -1425,7 +1424,7 @@ fn parse_and_move_a_subkey(
         1 => 0xCF,
         2 => 0xCE,
         3 => 0xD0,
-        _ => return Err(PyValueError::new_err("wrong value for keytype")),
+        _ => return Err(JceError::new("wrong value for keytype".to_string())),
     };
 
     let time_apdu = talktosc::apdus::APDU::new(0x00, 0xDA, 0x00, time_p2, Some(time_value));
@@ -1433,7 +1432,7 @@ fn parse_and_move_a_subkey(
 
     match scard::move_subkey_to_card(pw3_apdu, algo_apdu, apdu, fp_apdu, time_apdu) {
         Ok(res) => Ok(res),
-        Err(value) => Err(CardError::new_err(format!("{}", value))),
+        Err(value) => Err(JceError::new(format!("{}", value))),
     }
     //dbg!(talktosc::tlvs::hexify(algo_apdu.iapdus[0].clone()));
     //dbg!(talktosc::tlvs::hexify(fp_apdu.iapdus[0].clone()));
@@ -1646,7 +1645,7 @@ fn create_newkey(
     expiration: i64,
     subkeys_expiration: bool,
     whichkeys: u8,
-) -> PyResult<(String, String, String)> {
+) -> Result<(String, String, String)> {
     let mut cdt: Option<DateTime<Utc>> = None;
     // Default we create RSA4k keys
     let mut ciphervalue = CipherSuite::RSA4k;
@@ -1749,14 +1748,14 @@ fn create_newkey(
     let mut buf = Vec::new();
     let mut buffer = Vec::new();
 
-    let mut writer = Writer::new(&mut buf, Kind::SecretKey).unwrap();
-    cert.as_tsk().serialize(&mut buffer).unwrap();
-    writer.write_all(&buffer).unwrap();
-    writer.finalize().unwrap();
-    let armored = cert.armored().to_vec().unwrap();
+    let mut writer = Writer::new(&mut buf, Kind::SecretKey)?;
+    cert.as_tsk().serialize(&mut buffer)?;
+    writer.write_all(&buffer)?;
+    writer.finalize()?;
+    let armored = cert.armored().to_vec()?;
     Ok((
-        String::from_utf8(armored).unwrap(),
-        String::from_utf8(buf).unwrap(),
+        String::from_utf8(armored)?,
+        String::from_utf8(buf)?,
         cert.fingerprint().to_hex(),
     ))
 }
