@@ -470,10 +470,10 @@ pub fn decrypt_filehandler_on_card(
     fh: PyObject,
     output: Vec<u8>,
     pin: Vec<u8>,
-) -> PyResult<bool> {
+) -> Result<bool> {
     let p = P::new();
 
-    let filedata = fh.call_method(_py, "read", (), None).unwrap();
+    let filedata = fh.call_method(_py, "read", (), None)?;
     let pbytes: &PyBytes = filedata.cast_as(_py).expect("Excepted bytes");
     let data: Vec<u8> = Vec::from(pbytes.as_bytes());
 
@@ -481,21 +481,16 @@ pub fn decrypt_filehandler_on_card(
     let dec = DecryptorBuilder::from_reader(reader);
     let dec2 = match dec {
         Ok(dec) => dec,
-        Err(msg) => {
-            return Err(PySystemError::new_err(format!(
-                "Can not create decryptor: {}",
-                msg
-            )))
-        }
+        Err(msg) => return Err(JceError::new(format!("Can not create decryptor: {}", msg))),
     };
     let mut decryptor = match dec2.with_policy(&p, None, YuBi::new(&p, certdata, pin)) {
         Ok(decr) => decr,
-        Err(msg) => return Err(CryptoError::new_err(format!("Failed to decrypt: {}", msg))),
+        Err(msg) => return Err(JceError::new(format!("Failed to decrypt: {}", msg))),
     };
 
-    let mut outfile = File::create(str::from_utf8(&output[..]).unwrap()).unwrap();
+    let mut outfile = File::create(str::from_utf8(&output[..])?)?;
 
-    std::io::copy(&mut decryptor, &mut outfile).unwrap();
+    std::io::copy(&mut decryptor, &mut outfile)?;
     Ok(true)
 }
 
@@ -544,7 +539,10 @@ fn reset_yubikey() -> PyResult<bool> {
         data: vec![0x00],
         iapdus,
     };
-    talktosc::send_and_parse(&card, opgp_kill).unwrap();
+    match talktosc::send_and_parse(&card, opgp_kill) {
+        Ok(_) => (),
+        Err(value) => return Err(CardError::new_err(format!("{}", value))),
+    }
 
     let activate = vec![0x00, 0x44, 0x00, 0x00, 0x00];
     let iapdus = vec![activate.clone()];
@@ -556,7 +554,10 @@ fn reset_yubikey() -> PyResult<bool> {
         data: vec![0x00],
         iapdus,
     };
-    talktosc::send_and_parse(&card, opgp_activate).unwrap();
+    match talktosc::send_and_parse(&card, opgp_activate) {
+        Ok(_) => (),
+        Err(value) => return Err(CardError::new_err(format!("{}", value))),
+    }
 
     Ok(true)
 }
