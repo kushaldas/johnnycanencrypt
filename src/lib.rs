@@ -536,7 +536,7 @@ fn reset_yubikey() -> PyResult<bool> {
     }
 
     let kill = vec![0x00, 0xE6, 0x00, 0x00, 0x00];
-    let iapdus = vec![kill.clone()];
+    let iapdus = vec![kill];
     let opgp_kill = apdus::APDU {
         cla: 0x00,
         ins: 0xE6,
@@ -551,7 +551,7 @@ fn reset_yubikey() -> PyResult<bool> {
     }
 
     let activate = vec![0x00, 0x44, 0x00, 0x00, 0x00];
-    let iapdus = vec![activate.clone()];
+    let iapdus = vec![activate];
     let opgp_activate = apdus::APDU {
         cla: 0x00,
         ins: 0x44,
@@ -622,26 +622,16 @@ fn get_card_details(py: Python) -> PyResult<PyObject> {
     let mut resp = match talktosc::send_and_parse(&card, apdus::create_apdu_get_application_data())
     {
         Ok(value) => value,
-        Err(err) => {
-            return Err(CardError::new_err(format!(
-                "Error in getting AID: {}",
-                err.to_string()
-            )))
-        }
+        Err(err) => return Err(CardError::new_err(format!("Error in getting AID: {}", err))),
     };
     aiddata.extend(resp.get_data());
     // This means we have more data to read.
     while resp.sw1 == 0x61 {
-        let apdu = apdus::create_apdu_for_reading(resp.sw2.clone());
+        let apdu = apdus::create_apdu_for_reading(resp.sw2);
 
         resp = match talktosc::send_and_parse(&card, apdu) {
             Ok(value) => value,
-            Err(err) => {
-                return Err(CardError::new_err(format!(
-                    "Error in getting AID: {}",
-                    err.to_string()
-                )))
-            }
+            Err(err) => return Err(CardError::new_err(format!("Error in getting AID: {}", err))),
         };
         aiddata.extend(resp.get_data());
     }
@@ -671,7 +661,7 @@ fn get_card_details(py: Python) -> PyResult<PyObject> {
         Err(err) => {
             return Err(CardError::new_err(format!(
                 "Error in getting security template: {}",
-                err.to_string()
+                err
             )))
         }
     };
@@ -679,14 +669,14 @@ fn get_card_details(py: Python) -> PyResult<PyObject> {
     sectemplate.extend(resp.get_data());
     // This means we have more data to read.
     while resp.sw1 == 0x61 {
-        let apdu = apdus::create_apdu_for_reading(resp.sw2.clone());
+        let apdu = apdus::create_apdu_for_reading(resp.sw2);
 
         resp = match talktosc::send_and_parse(&card, apdu) {
             Ok(value) => value,
             Err(err) => {
                 return Err(CardError::new_err(format!(
                     "Error in getting security template : {}",
-                    err.to_string()
+                    err
                 )))
             }
         };
@@ -836,7 +826,7 @@ impl DecryptionHelper for Helper {
             //_ => (),
             //};
             // If the keyid is not present, we should just skip to next pkesk
-            let keypair = match self.keys.get_mut(&keyid) {
+            let keypair = match self.keys.get_mut(keyid) {
                 Some(keypair) => keypair,
                 _ => {
                     continue;
@@ -1019,7 +1009,7 @@ fn sign_bytes_detached_internal(
 
     let mut keys = get_keys(cert, password);
 
-    if keys.len() == 0 {
+    if keys.is_empty() {
         return Err(JceError::new("No signing key is present.".to_string()));
     }
 
@@ -1064,7 +1054,7 @@ fn merge_keys(_py: Python, certdata: Vec<u8>, newcertdata: Vec<u8>) -> Result<Py
     let mergred_cert = cert.merge_public_and_secret(newcert)?;
     let cert_packets = mergred_cert.armored().to_vec()?;
     let res = PyBytes::new(_py, &cert_packets);
-    return Ok(res.into());
+    Ok(res.into())
 }
 
 /// This function takes a path to an encrypted message and tries to guess the keyids it was
@@ -1150,7 +1140,7 @@ fn upload_to_smartcard(
         result = parse_and_move_a_subkey(cert.clone(), 2, pin.clone(), password.clone())?;
     }
     if (whichkeys & 0x04) == 0x04 {
-        result = parse_and_move_a_subkey(cert.clone(), 3, pin.clone(), password.clone())?;
+        result = parse_and_move_a_subkey(cert, 3, pin, password)?;
     }
     Ok(result)
 }
@@ -1180,7 +1170,7 @@ fn parse_and_move_a_subkey(
     // This is idiotic, but will do for now
     let mut main_e_for_second_use: Option<openpgp::crypto::mpi::MPI> = None;
     let mut main_n: Option<openpgp::crypto::mpi::MPI> = None;
-    let mut ts = 0 as u64;
+    let mut ts = 0_u64;
 
     let mut fp: Option<openpgp::Fingerprint> = None;
     let mut valid_ka = cert
