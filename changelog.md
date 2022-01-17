@@ -1,5 +1,17 @@
 # Changlelog
 
+## [unreleased]
+
+### Added
+
+- Pin retries left in the card now can be retrieved
+
+
+### Fixed
+
+- Now can fail gracefully with CryptoError exception in Python
+- #80 also fails gracefully
+
 ## [0.6.0] - 2021-12-27
 
 ### Added
