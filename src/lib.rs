@@ -1013,14 +1013,14 @@ fn sign_bytes_detached_internal(
     cert: &openpgp::cert::Cert,
     input: &mut dyn io::Read,
     password: String,
-) -> PyResult<String> {
+) -> Result<String> {
     // TODO: WHY?
     let mut input = input;
 
     let mut keys = get_keys(cert, password);
 
     if keys.len() == 0 {
-        return Err(PyAttributeError::new_err("No signing key is present."));
+        return Err(JceError::new("No signing key is present.".to_string()));
     }
 
     let mut result = Vec::new();
@@ -1744,7 +1744,7 @@ fn create_newkey(
         }
     };
 
-    let (cert, _) = crtbuilder.generate().unwrap();
+    let (cert, _) = crtbuilder.generate()?;
     let mut buf = Vec::new();
     let mut buffer = Vec::new();
 
@@ -1772,8 +1772,8 @@ fn encrypt_filehandler_to_file(
     fh: PyObject,
     output: Vec<u8>,
     armor: Option<bool>,
-) -> PyResult<bool> {
-    let data = fh.call_method(_py, "read", (), None).unwrap();
+) -> Result<bool> {
+    let data = fh.call_method(_py, "read", (), None)?;
     let pbytes: &PyBytes = data.cast_as(_py).expect("Excepted bytes");
     let filedata: Vec<u8> = Vec::from(pbytes.as_bytes());
     return encrypt_bytes_to_file(publickeys, filedata, output, armor);
@@ -1788,10 +1788,10 @@ fn encrypt_bytes_to_file(
     data: Vec<u8>,
     output: Vec<u8>,
     armor: Option<bool>,
-) -> PyResult<bool> {
+) -> Result<bool> {
     let mut certs = Vec::new();
     for certdata in publickeys {
-        certs.push(openpgp::Cert::from_bytes(&certdata).unwrap());
+        certs.push(openpgp::Cert::from_bytes(&certdata)?);
     }
     let mode = KeyFlags::empty().set_storage_encryption();
 
@@ -1803,7 +1803,7 @@ fn encrypt_bytes_to_file(
             .revoked(false)
             .key_flags(&mode)
     });
-    let mut outfile = File::create(str::from_utf8(&output[..]).unwrap()).unwrap();
+    let mut outfile = File::create(str::from_utf8(&output[..])?)?;
     // TODO: Find better ways to write this code
     match armor {
         // For armored output file.
@@ -1816,7 +1816,7 @@ fn encrypt_bytes_to_file(
             let encryptor = match Encryptor::for_recipients(message, recipients).build() {
                 Ok(value) => value,
                 Err(_) => {
-                    return Err(CryptoError::new_err("Can not encrypt."));
+                    return Err(JceError::new("Can not encrypt.".to_string()));
                 }
             };
 
@@ -1825,11 +1825,11 @@ fn encrypt_bytes_to_file(
                 .expect("Failed to create literal writer");
 
             // Copy data to our writer stack to encrypt the data.
-            literal_writer.write_all(&data).unwrap();
+            literal_writer.write_all(&data)?;
 
             // Finally, finalize the OpenPGP message by tearing down the
             // writer stack.
-            literal_writer.finalize().unwrap();
+            literal_writer.finalize()?;
 
             // Finalize the armor writer.
             sink.finalize().expect("Failed to write data");
@@ -1851,7 +1851,7 @@ fn encrypt_bytes_to_file(
 
             // Finally, finalize the OpenPGP message by tearing down the
             // writer stack.
-            literal_writer.finalize().unwrap();
+            literal_writer.finalize()?;
         }
     }
 
@@ -1867,10 +1867,10 @@ fn encrypt_file_internal(
     filepath: Vec<u8>,
     output: Vec<u8>,
     armor: Option<bool>,
-) -> PyResult<bool> {
+) -> Result<bool> {
     let mut certs = Vec::new();
     for certdata in publickeys {
-        certs.push(openpgp::Cert::from_bytes(&certdata).unwrap());
+        certs.push(openpgp::Cert::from_bytes(&certdata)?);
     }
 
     let mode = KeyFlags::empty().set_storage_encryption();
@@ -1884,13 +1884,13 @@ fn encrypt_file_internal(
             .key_flags(&mode)
     });
 
-    let mut input = File::open(str::from_utf8(&filepath[..]).unwrap()).unwrap();
-    let mut outfile = File::create(str::from_utf8(&output[..]).unwrap()).unwrap();
+    let mut input = File::open(str::from_utf8(&filepath[..])?)?;
+    let mut outfile = File::create(str::from_utf8(&output[..])?)?;
     // TODO: Find better ways to write this code
     match armor {
         // For armored output file.
         Some(true) => {
-            let mut sink = armor::Writer::new(&mut outfile, armor::Kind::Message).unwrap();
+            let mut sink = armor::Writer::new(&mut outfile, armor::Kind::Message)?;
             // Stream an OpenPGP message.
             let message = Message::new(&mut sink);
 
@@ -1909,7 +1909,7 @@ fn encrypt_file_internal(
 
             // Finally, finalize the OpenPGP message by tearing down the
             // writer stack.
-            literal_writer.finalize().unwrap();
+            literal_writer.finalize()?;
 
             // Finalize the armor writer.
             sink.finalize().expect("Failed to write data");
@@ -1932,7 +1932,7 @@ fn encrypt_file_internal(
 
             // Finally, finalize the OpenPGP message by tearing down the
             // writer stack.
-            literal_writer.finalize().unwrap();
+            literal_writer.finalize()?;
         }
     }
 
@@ -1948,10 +1948,10 @@ fn encrypt_bytes_to_bytes(
     publickeys: Vec<Vec<u8>>,
     data: Vec<u8>,
     armor: Option<bool>,
-) -> PyResult<PyObject> {
+) -> Result<PyObject> {
     let mut certs = Vec::new();
     for certdata in publickeys {
-        certs.push(openpgp::Cert::from_bytes(&certdata).unwrap());
+        certs.push(openpgp::Cert::from_bytes(&certdata)?);
     }
 
     let mode = KeyFlags::empty().set_storage_encryption();
@@ -1984,11 +1984,11 @@ fn encrypt_bytes_to_bytes(
 
     // Copy stdin to our writer stack to encrypt the data.
     // io::copy(&mut data, &mut literal_writer).expect("Failed to encrypt");
-    literal_writer.write_all(&data).unwrap();
+    literal_writer.write_all(&data)?;
 
     // Finally, finalize the OpenPGP message by tearing down the
     // writer stack.
-    literal_writer.finalize().unwrap();
+    literal_writer.finalize()?;
 
     match armor {
         Some(true) => {
@@ -2013,8 +2013,8 @@ struct Johnny {
 #[pymethods]
 impl Johnny {
     #[new]
-    fn new(certdata: Vec<u8>) -> PyResult<Self> {
-        let cert = openpgp::Cert::from_bytes(&certdata).unwrap();
+    fn new(certdata: Vec<u8>) -> Result<Self> {
+        let cert = openpgp::Cert::from_bytes(&certdata)?;
         Ok(Johnny { cert })
     }
 
@@ -2023,7 +2023,7 @@ impl Johnny {
         py: Python,
         data: Vec<u8>,
         armor: Option<bool>,
-    ) -> PyResult<PyObject> {
+    ) -> Result<PyObject> {
         let mode = KeyFlags::empty().set_storage_encryption();
         let p = P::new();
         let recipients = self
@@ -2053,11 +2053,11 @@ impl Johnny {
 
         // Copy stdin to our writer stack to encrypt the data.
         // io::copy(&mut data, &mut literal_writer).expect("Failed to encrypt");
-        literal_writer.write_all(&data).unwrap();
+        literal_writer.write_all(&data)?;
 
         // Finally, finalize the OpenPGP message by tearing down the
         // writer stack.
-        literal_writer.finalize().unwrap();
+        literal_writer.finalize()?;
 
         match armor {
             Some(true) => {
@@ -2073,7 +2073,7 @@ impl Johnny {
         }
     }
 
-    pub fn decrypt_bytes(&self, py: Python, data: Vec<u8>, password: String) -> PyResult<PyObject> {
+    pub fn decrypt_bytes(&self, py: Python, data: Vec<u8>, password: String) -> Result<PyObject> {
         let p = P::new();
 
         let mut result = Vec::new();
@@ -2082,19 +2082,14 @@ impl Johnny {
         let dec = DecryptorBuilder::from_reader(reader);
         let dec2 = match dec {
             Ok(dec) => dec,
-            Err(msg) => {
-                return Err(PySystemError::new_err(format!(
-                    "Can not create decryptor: {}",
-                    msg
-                )))
-            }
+            Err(msg) => return Err(JceError::new(format!("Can not create decryptor: {}", msg))),
         };
         let mut decryptor = match dec2.with_policy(&p, None, Helper::new(&p, &self.cert, &password))
         {
             Ok(decr) => decr,
-            Err(msg) => return Err(PyValueError::new_err(format!("Failed to decrypt: {}", msg))),
+            Err(msg) => return Err(JceError::new(format!("Failed to decrypt: {}", msg))),
         };
-        std::io::copy(&mut decryptor, &mut result).unwrap();
+        std::io::copy(&mut decryptor, &mut result)?;
         let res = PyBytes::new(py, &result);
         Ok(res.into())
     }
@@ -2103,7 +2098,7 @@ impl Johnny {
         filepath: Vec<u8>,
         output: Vec<u8>,
         armor: Option<bool>,
-    ) -> PyResult<bool> {
+    ) -> Result<bool> {
         let mode = KeyFlags::empty().set_storage_encryption();
         let p = &P::new();
         let recipients = self
@@ -2113,13 +2108,13 @@ impl Johnny {
             .alive()
             .revoked(false)
             .key_flags(&mode);
-        let mut input = File::open(str::from_utf8(&filepath[..]).unwrap()).unwrap();
-        let mut outfile = File::create(str::from_utf8(&output[..]).unwrap()).unwrap();
+        let mut input = File::open(str::from_utf8(&filepath[..])?)?;
+        let mut outfile = File::create(str::from_utf8(&output[..])?)?;
         // TODO: Find better ways to write this code
         match armor {
             // For armored output file.
             Some(true) => {
-                let mut sink = armor::Writer::new(&mut outfile, armor::Kind::Message).unwrap();
+                let mut sink = armor::Writer::new(&mut outfile, armor::Kind::Message)?;
                 // Stream an OpenPGP message.
                 let message = Message::new(&mut sink);
 
@@ -2138,7 +2133,7 @@ impl Johnny {
 
                 // Finally, finalize the OpenPGP message by tearing down the
                 // writer stack.
-                literal_writer.finalize().unwrap();
+                literal_writer.finalize()?;
 
                 // Finalize the armor writer.
                 sink.finalize().expect("Failed to write data");
@@ -2161,7 +2156,7 @@ impl Johnny {
 
                 // Finally, finalize the OpenPGP message by tearing down the
                 // writer stack.
-                literal_writer.finalize().unwrap();
+                literal_writer.finalize()?;
             }
         }
 
@@ -2173,17 +2168,18 @@ impl Johnny {
         filepath: Vec<u8>,
         output: Vec<u8>,
         password: String,
-    ) -> PyResult<bool> {
+    ) -> Result<bool> {
         let p = P::new();
 
-        let input = File::open(str::from_utf8(&filepath[..]).unwrap()).unwrap();
-        let mut outfile = File::create(str::from_utf8(&output[..]).unwrap()).unwrap();
+        let input = File::open(str::from_utf8(&filepath[..])?)?;
+        let mut outfile = File::create(str::from_utf8(&output[..])?)?;
 
-        let mut decryptor = DecryptorBuilder::from_reader(input)
-            .unwrap()
-            .with_policy(&p, None, Helper::new(&p, &self.cert, &password))
-            .unwrap();
-        std::io::copy(&mut decryptor, &mut outfile).unwrap();
+        let mut decryptor = DecryptorBuilder::from_reader(input)?.with_policy(
+            &p,
+            None,
+            Helper::new(&p, &self.cert, &password),
+        )?;
+        std::io::copy(&mut decryptor, &mut outfile)?;
         Ok(true)
     }
 
@@ -2193,10 +2189,10 @@ impl Johnny {
         fh: PyObject,
         output: Vec<u8>,
         password: String,
-    ) -> PyResult<bool> {
+    ) -> Result<bool> {
         let p = P::new();
 
-        let filedata = fh.call_method(_py, "read", (), None).unwrap();
+        let filedata = fh.call_method(_py, "read", (), None)?;
         let pbytes: &PyBytes = filedata.cast_as(_py).expect("Excepted bytes");
         let data: Vec<u8> = Vec::from(pbytes.as_bytes());
 
@@ -2204,56 +2200,45 @@ impl Johnny {
         let dec = DecryptorBuilder::from_reader(reader);
         let dec2 = match dec {
             Ok(dec) => dec,
-            Err(msg) => {
-                return Err(PySystemError::new_err(format!(
-                    "Can not create decryptor: {}",
-                    msg
-                )))
-            }
+            Err(msg) => return Err(JceError::new(format!("Can not create decryptor: {}", msg))),
         };
         let mut decryptor = match dec2.with_policy(&p, None, Helper::new(&p, &self.cert, &password))
         {
             Ok(decr) => decr,
-            Err(msg) => return Err(CryptoError::new_err(format!("Failed to decrypt: {}", msg))),
+            Err(msg) => return Err(JceError::new(format!("Failed to decrypt: {}", msg))),
         };
 
-        let mut outfile = File::create(str::from_utf8(&output[..]).unwrap()).unwrap();
+        let mut outfile = File::create(str::from_utf8(&output[..])?)?;
 
-        std::io::copy(&mut decryptor, &mut outfile).unwrap();
+        std::io::copy(&mut decryptor, &mut outfile)?;
         Ok(true)
     }
 
-    pub fn sign_bytes_detached(&self, data: Vec<u8>, password: String) -> PyResult<String> {
+    pub fn sign_bytes_detached(&self, data: Vec<u8>, password: String) -> Result<String> {
         let mut localdata = io::Cursor::new(data);
         sign_bytes_detached_internal(&self.cert, &mut localdata, password)
     }
 
-    pub fn sign_file_detached(&self, filepath: Vec<u8>, password: String) -> PyResult<String> {
-        let file = Path::new(str::from_utf8(&filepath[..]).unwrap());
-        let mut localdata = File::open(file).unwrap();
+    pub fn sign_file_detached(&self, filepath: Vec<u8>, password: String) -> Result<String> {
+        let file = Path::new(str::from_utf8(&filepath[..])?);
+        let mut localdata = File::open(file)?;
         sign_bytes_detached_internal(&self.cert, &mut localdata, password)
     }
 
-    pub fn verify_bytes(&self, data: Vec<u8>, sig: Vec<u8>) -> PyResult<bool> {
+    pub fn verify_bytes(&self, data: Vec<u8>, sig: Vec<u8>) -> Result<bool> {
         let p = P::new();
         let vh = VHelper::new(&self.cert);
-        let mut v = DetachedVerifierBuilder::from_bytes(&sig[..])
-            .unwrap()
-            .with_policy(&p, None, vh)
-            .unwrap();
+        let mut v = DetachedVerifierBuilder::from_bytes(&sig[..])?.with_policy(&p, None, vh)?;
         match v.verify_bytes(data) {
             Ok(()) => return Ok(true),
             Err(_) => return Ok(false),
         };
     }
-    pub fn verify_file(&self, filepath: Vec<u8>, sig: Vec<u8>) -> PyResult<bool> {
+    pub fn verify_file(&self, filepath: Vec<u8>, sig: Vec<u8>) -> Result<bool> {
         let p = P::new();
         let vh = VHelper::new(&self.cert);
-        let mut v = DetachedVerifierBuilder::from_bytes(&sig[..])
-            .unwrap()
-            .with_policy(&p, None, vh)
-            .unwrap();
-        let path = Path::new(str::from_utf8(&filepath[..]).unwrap());
+        let mut v = DetachedVerifierBuilder::from_bytes(&sig[..])?.with_policy(&p, None, vh)?;
+        let path = Path::new(str::from_utf8(&filepath[..])?);
         match v.verify_file(path) {
             Ok(()) => return Ok(true),
             Err(_) => return Ok(false),
