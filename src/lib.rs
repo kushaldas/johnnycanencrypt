@@ -17,6 +17,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 extern crate anyhow;
 extern crate sequoia_openpgp as openpgp;
 extern crate talktosc;
+extern crate tempfile;
 
 use crate::openpgp::armor;
 use openpgp::armor::{Kind, Writer};
@@ -24,7 +25,7 @@ use openpgp::armor::{Kind, Writer};
 use crate::openpgp::crypto::{KeyPair, SessionKey};
 use crate::openpgp::parse::stream::{
     DecryptionHelper, DecryptorBuilder, DetachedVerifierBuilder, MessageLayer, MessageStructure,
-    VerificationHelper,
+    VerificationHelper, VerifierBuilder,
 };
 
 use crate::openpgp::crypto::Decryptor;
@@ -2336,7 +2337,7 @@ impl Johnny {
         sign_bytes_detached_internal(&self.cert, &mut localdata, password)
     }
 
-    pub fn verify_bytes(&self, data: Vec<u8>, sig: Vec<u8>) -> Result<bool> {
+    pub fn verify_bytes_detached(&self, data: Vec<u8>, sig: Vec<u8>) -> Result<bool> {
         let p = P::new();
         let vh = VHelper::new(&self.cert);
         let mut v = DetachedVerifierBuilder::from_bytes(&sig[..])?.with_policy(&p, None, vh)?;
@@ -2345,7 +2346,7 @@ impl Johnny {
             Err(_) => Ok(false),
         }
     }
-    pub fn verify_file(&self, filepath: Vec<u8>, sig: Vec<u8>) -> Result<bool> {
+    pub fn verify_file_detached(&self, filepath: Vec<u8>, sig: Vec<u8>) -> Result<bool> {
         let p = P::new();
         let vh = VHelper::new(&self.cert);
         let mut v = DetachedVerifierBuilder::from_bytes(&sig[..])?.with_policy(&p, None, vh)?;
@@ -2354,6 +2355,16 @@ impl Johnny {
             Ok(()) => Ok(true),
             Err(_) => Ok(false),
         }
+    }
+
+    pub fn verify_file(&self, filepath: Vec<u8>) -> Result<bool> {
+        let p = P::new();
+        let vh = VHelper::new(&self.cert);
+        let path = Path::new(str::from_utf8(&filepath[..])?);
+        let mut v = VerifierBuilder::from_file(path)?.with_policy(&p, None, vh)?;
+        let mut tmp = tempfile::tempfile()?;
+        std::io::copy(&mut v, &mut tmp)?;
+        Ok(v.message_processed())
     }
 }
 

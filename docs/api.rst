@@ -171,16 +171,16 @@ For the rest of the documentation we assume that you imported the module as foll
 
                 Signs the given *data* (can be either str or bytes) using the secret key. Returns the armored signature string.
 
-        .. method:: sign_file(key, filepath, password, write=False) -> str:
+        .. method:: sign_file_detached(key, filepath, password, write=False) -> str:
 
                 Returns the armored signature of the *filepath* argument using the secret key (either fingerprint or secret `Key` object).
                 If you pass *write=True*, it will also write the armored signature to a file named as *filepath.asc* 
 
-        .. method:: verify(key, data, signature) -> bool:
+        .. method:: verify_bytes_detached(key, data, signature) -> bool:
 
                 Verifies the given *data* using the public key, and signature string, returns **True** or **False** as result. 
 
-        .. method:: verify_file(key, filepath, signature_path) -> bool:
+        .. method:: verify_file_detached(key, filepath, signature_path) -> bool:
 
                 Verifies the given filepath using the public key, and signature string, returns **True** or **False** as result. 
 
