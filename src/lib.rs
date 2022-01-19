@@ -2346,6 +2346,7 @@ impl Johnny {
             Err(_) => Ok(false),
         }
     }
+
     pub fn verify_file_detached(&self, filepath: Vec<u8>, sig: Vec<u8>) -> Result<bool> {
         let p = P::new();
         let vh = VHelper::new(&self.cert);
@@ -2355,6 +2356,15 @@ impl Johnny {
             Ok(()) => Ok(true),
             Err(_) => Ok(false),
         }
+    }
+
+    pub fn verify_bytes(&self, data: Vec<u8>) -> Result<bool> {
+        let p = P::new();
+        let vh = VHelper::new(&self.cert);
+        let mut v = VerifierBuilder::from_bytes(&data[..])?.with_policy(&p, None, vh)?;
+        let mut tmp = tempfile::tempfile()?;
+        std::io::copy(&mut v, &mut tmp)?;
+        Ok(v.message_processed())
     }
 
     pub fn verify_file(&self, filepath: Vec<u8>) -> Result<bool> {
