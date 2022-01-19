@@ -1,3 +1,6 @@
+import os
+import tempfile
+
 import pytest
 
 import johnnycanencrypt.johnnycanencrypt as jce
@@ -28,6 +31,34 @@ def test_sign_included_cleartext():
     assert signed_data.startswith("-----BEGIN PGP SIGNED MESSAGE-----")
     assert DATA in signed_data
     assert signed_data.endswith("-----END PGP SIGNATURE-----\n")
+
+
+def test_sign_file_cleartext():
+    "This will sign a file in cleartext"
+    j = jce.Johnny(_get_cert_data("tests/files/secret.asc"))
+    tempdir = tempfile.TemporaryDirectory()
+    output = os.path.join(tempdir.name, "sign.asc")
+    j.sign_file(b"tests/files/text.txt", output.encode("utf-8"), "redhat", True)
+    assert os.path.exists(output)
+    with open(output) as fobj:
+        data = fobj.read()
+    assert data.startswith("-----BEGIN PGP SIGNED MESSAGE-----")
+    assert "🦄🦄🦄" in data
+    assert data.endswith("-----END PGP SIGNATURE-----\n")
+
+
+def test_sign_file():
+    "This will sign a file as a PGP message"
+    j = jce.Johnny(_get_cert_data("tests/files/secret.asc"))
+    tempdir = tempfile.TemporaryDirectory()
+    output = os.path.join(tempdir.name, "sign.asc")
+    j.sign_file(b"tests/files/text.txt", output.encode("utf-8"), "redhat", False)
+    assert os.path.exists(output)
+    with open(output) as fobj:
+        data = fobj.read()
+    assert data.startswith("-----BEGIN PGP MESSAGE-----")
+    assert "🦄🦄🦄" not in data
+    assert data.endswith("-----END PGP MESSAGE-----\n")
 
 
 def test_verify_bytes():

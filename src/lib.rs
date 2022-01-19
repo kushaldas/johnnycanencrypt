@@ -1002,6 +1002,64 @@ fn sign_internal_detached_on_card(
     Ok(String::from_utf8(result)?)
 }
 
+fn sign_file_internal(
+    cert: &openpgp::cert::Cert,
+    input: &mut dyn io::Read,
+    output: &mut (dyn io::Write + Send + Sync),
+    password: String,
+    cleartext: bool,
+) -> Result<bool> {
+    // TODO: WHY?
+    let mut input = input;
+
+    let mut keys = get_keys(cert, password);
+
+    if keys.is_empty() {
+        return Err(JceError::new("No signing key is present.".to_string()));
+    }
+
+    let mut sink = Message::new(output);
+
+    // Stream an OpenPGP message.
+    let mut message = Message::new(&mut sink);
+    if !cleartext {
+        message = Armorer::new(message).build()?;
+    };
+
+    let builder = match cleartext {
+        false => SignatureBuilder::new(SignatureType::Binary),
+        true => SignatureBuilder::new(SignatureType::Text),
+    };
+    // Now, create a signer with the builder.
+    let mut signer =
+        Signer::with_template(message, keys.pop().expect("No key for signing"), builder);
+
+    // Now if we need cleartext signature
+    if cleartext {
+        signer = signer.cleartext();
+    }
+
+    for s in keys {
+        signer = signer.add_signer(s);
+    }
+
+    // Emit a literal data packet or direct writer for cleartext.
+    let mut writer = match cleartext {
+        false => LiteralWriter::new(signer.build()?).build()?,
+        true => signer.build()?,
+    };
+
+    // Copy all the data.
+    io::copy(&mut input, &mut writer).expect("Failed to sign data");
+
+    // Finally, teardown the stack to ensure all the data is written.
+    // signer.finalize().expect("Failed to write data");
+    writer.finalize()?;
+
+    sink.finalize()?;
+    Ok(true)
+}
+
 fn sign_bytes_internal(
     cert: &openpgp::cert::Cert,
     input: &mut dyn io::Read,
@@ -2244,6 +2302,27 @@ impl Johnny {
     pub fn sign_bytes(&self, data: Vec<u8>, password: String, cleartext: bool) -> Result<String> {
         let mut localdata = io::Cursor::new(data);
         sign_bytes_internal(&self.cert, &mut localdata, password, cleartext)
+    }
+
+    pub fn sign_file(
+        &self,
+        inputpath: Vec<u8>,
+        output: Vec<u8>,
+        password: String,
+        cleartext: bool,
+    ) -> Result<bool> {
+        // This is the file we will sign.
+        let file = Path::new(str::from_utf8(&inputpath[..])?);
+        let mut localdata = File::open(file)?;
+        // This is where the signed message will go
+        let mut outfile = File::create(str::from_utf8(&output[..])?)?;
+        sign_file_internal(
+            &self.cert,
+            &mut localdata,
+            &mut outfile,
+            password,
+            cleartext,
+        )
     }
 
     pub fn sign_bytes_detached(&self, data: Vec<u8>, password: String) -> Result<String> {
