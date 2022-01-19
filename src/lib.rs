@@ -29,13 +29,15 @@ use crate::openpgp::parse::stream::{
 
 use crate::openpgp::crypto::Decryptor;
 use crate::openpgp::packet::key;
+use crate::openpgp::packet::signature::SignatureBuilder;
 use crate::openpgp::parse::{PacketParser, PacketParserResult, Parse};
 use crate::openpgp::policy::Policy;
 use crate::openpgp::policy::StandardPolicy as P;
-use crate::openpgp::serialize::stream::{Encryptor, LiteralWriter, Message, Signer};
+use crate::openpgp::serialize::stream::{Armorer, Encryptor, LiteralWriter, Message, Signer};
 use crate::openpgp::serialize::Marshal;
 use crate::openpgp::serialize::MarshalInto;
 use crate::openpgp::types::KeyFlags;
+use crate::openpgp::types::SignatureType;
 use crate::openpgp::types::SymmetricAlgorithm;
 use crate::openpgp::Packet;
 use chrono::prelude::*;
@@ -947,6 +949,7 @@ pub fn sign_file_detached_on_card(
     let mut localdata = File::open(file)?;
     sign_internal_detached_on_card(certdata, &mut localdata, pin)
 }
+
 // This is the internal function which signs either bytes or an input file on the smartcard
 fn sign_internal_detached_on_card(
     certdata: Vec<u8>,
@@ -996,6 +999,64 @@ fn sign_internal_detached_on_card(
     // Finalize the armor writer.
     sink.finalize().expect("Failed to write data");
 
+    Ok(String::from_utf8(result)?)
+}
+
+fn sign_bytes_internal(
+    cert: &openpgp::cert::Cert,
+    input: &mut dyn io::Read,
+    password: String,
+    cleartext: bool,
+) -> Result<String> {
+    // TODO: WHY?
+    let mut input = input;
+
+    let mut keys = get_keys(cert, password);
+
+    if keys.is_empty() {
+        return Err(JceError::new("No signing key is present.".to_string()));
+    }
+
+    let mut result = Vec::new();
+    let mut sink = Message::new(&mut result);
+
+    // Stream an OpenPGP message.
+    let mut message = Message::new(&mut sink);
+    if !cleartext {
+        message = Armorer::new(message).build()?;
+    };
+
+    let builder = match cleartext {
+        false => SignatureBuilder::new(SignatureType::Binary),
+        true => SignatureBuilder::new(SignatureType::Text),
+    };
+    // Now, create a signer with the builder.
+    let mut signer =
+        Signer::with_template(message, keys.pop().expect("No key for signing"), builder);
+
+    // Now if we need cleartext signature
+    if cleartext {
+        signer = signer.cleartext();
+    }
+
+    for s in keys {
+        signer = signer.add_signer(s);
+    }
+
+    // Emit a literal data packet or direct writer for cleartext.
+    let mut writer = match cleartext {
+        false => LiteralWriter::new(signer.build()?).build()?,
+        true => signer.build()?,
+    };
+
+    // Copy all the data.
+    io::copy(&mut input, &mut writer).expect("Failed to sign data");
+
+    // Finally, teardown the stack to ensure all the data is written.
+    // signer.finalize().expect("Failed to write data");
+    writer.finalize()?;
+
+    sink.finalize()?;
     Ok(String::from_utf8(result)?)
 }
 
@@ -2178,6 +2239,11 @@ impl Johnny {
 
         std::io::copy(&mut decryptor, &mut outfile)?;
         Ok(true)
+    }
+
+    pub fn sign_bytes(&self, data: Vec<u8>, password: String, cleartext: bool) -> Result<String> {
+        let mut localdata = io::Cursor::new(data);
+        sign_bytes_internal(&self.cert, &mut localdata, password, cleartext)
     }
 
     pub fn sign_bytes_detached(&self, data: Vec<u8>, password: String) -> Result<String> {
