@@ -82,19 +82,19 @@ DB_UPGRADE_DATE = "20210118"
 
 
 def _get_cert_data(filepath):
-    "Returns the filepath content as bytes"
+    """Returns the filepath content as bytes"""
     with open(filepath, "rb") as fobj:
         return fobj.read()
 
 
 def __get_cert_data(filepath):
-    "Returns the filepath content as bytes"
+    """Returns the filepath content as bytes"""
     with open(filepath, "rb") as fobj:
         return fobj.read()
 
 
 def convert_fingerprint(data):
-    "Converts binary data to fingerprint string"
+    """Converts binary data to fingerprint string"""
     s = ""
     for x in data:
         s += format(x, "02x")
@@ -102,7 +102,7 @@ def convert_fingerprint(data):
 
 
 def to_sort_by_expiry(date):
-    "To help to sort based on expiration date"
+    """To help to sort based on expiration date"""
     if date["expiration"] is not None:
         return date["expiration"]
     return datetime.datetime(2050, 3, 24, 23, 49, 1)
