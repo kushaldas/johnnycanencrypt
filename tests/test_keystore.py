@@ -590,8 +590,7 @@ def test_ks_upgrade_failure():
 def test_get_encrypted_for():
     ks = jce.KeyStore(BASE_TESTSDIR / "files/store/")
     keyids = rjce.file_encrypted_for(
-        (BASE_TESTSDIR / "files/double_recipient.asc").as_posix()
-    )
+        (BASE_TESTSDIR / "files/double_recipient.asc").as_posix())
     assert keyids == ["1CF980B8E69E112A", "5A7A1560D46ED4F6"]
     with open(BASE_TESTSDIR / "files/double_recipient.asc", "rb") as fobj:
         data = fobj.read()
@@ -600,8 +599,7 @@ def test_get_encrypted_for():
 
 
 @vcr.use_cassette(
-    (BASE_TESTSDIR / "files/test_fetch_key_by_fingerprint.yml").as_posix()
-)
+    (BASE_TESTSDIR / "files/test_fetch_key_by_fingerprint.yml").as_posix())
 def test_fetch_key_by_fingerprint():
     tempdir = tempfile.TemporaryDirectory()
     ks = jce.KeyStore(tempdir.name)
@@ -613,8 +611,7 @@ def test_fetch_key_by_fingerprint():
 
 
 @vcr.use_cassette(
-    (BASE_TESTSDIR / "files/test_fetch_nonexistingkey_by_fingerprint.yml").as_posix()
-)
+    (BASE_TESTSDIR / "files/test_fetch_nonexistingkey_by_fingerprint.yml").as_posix())
 def test_fetch_nonexistingkey_by_fingerprint():
     tempdir = tempfile.TemporaryDirectory()
     ks = jce.KeyStore(tempdir.name)
@@ -634,8 +631,7 @@ def test_fetch_key_by_email():
 
 
 @vcr.use_cassette(
-    (BASE_TESTSDIR / "files/test_fetch_nonexistingkey_by_email.yml").as_posix()
-)
+    (BASE_TESTSDIR / "files/test_fetch_nonexistingkey_by_email.yml").as_posix())
 def test_fetch_nonexistingkey_by_email():
     tempdir = tempfile.TemporaryDirectory()
     ks = jce.KeyStore(tempdir.name)
