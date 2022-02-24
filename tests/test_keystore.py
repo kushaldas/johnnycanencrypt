@@ -243,51 +243,51 @@ def test_ks_encrypt_decrypt_bytes_to_file_multiple_recipients(tmp_path):
     assert DATA == decrypted_text
 
 
-def test_ks_encrypt_decrypt_file(encrypt_decrypt_file):
+def test_ks_encrypt_decrypt_file(tmp_path):
     "Encrypts and decrypt some bytes"
     inputfile = BASE_TESTSDIR / "files/text.txt"
-    output = "/tmp/text-encrypted.pgp"
-    decrypted_output = "/tmp/text.txt"
+    output = tmp_path / "text-encrypted.pgp"
+    decrypted_output = tmp_path / "text.txt"
 
     ks = jce.KeyStore(BASE_TESTSDIR / "files/store")
     public_key = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
-    assert ks.encrypt_file(public_key, inputfile.as_posix(), output)
+    assert ks.encrypt_file(public_key, inputfile.as_posix(), output.as_posix())
     secret_key = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
-    ks.decrypt_file(secret_key, output, decrypted_output, password="redhat")
+    ks.decrypt_file(secret_key, output.as_posix(), decrypted_output.as_posix(), password="redhat")
     verify_files(inputfile, decrypted_output)
 
 
-def test_ks_encrypt_decrypt_filehandler(encrypt_decrypt_file):
+def test_ks_encrypt_decrypt_filehandler(tmp_path):
     "Encrypts and decrypt some bytes"
     inputfile = BASE_TESTSDIR / "files/text.txt"
-    output = "/tmp/text-encrypted.pgp"
-    decrypted_output = "/tmp/text.txt"
+    output = tmp_path / "text-encrypted.pgp"
+    decrypted_output = tmp_path / "text.txt"
 
     ks = jce.KeyStore(BASE_TESTSDIR / "files/store")
     public_key = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
     with open(inputfile, "rb") as fobj:
-        assert ks.encrypt_file(public_key, fobj, output)
+        assert ks.encrypt_file(public_key, fobj, output.as_posix())
     secret_key = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
     with open(output, "rb") as fobj:
-        ks.decrypt_file(secret_key, fobj, decrypted_output, password="redhat")
+        ks.decrypt_file(secret_key, fobj, decrypted_output.as_posix(), password="redhat")
     verify_files(inputfile, decrypted_output)
 
 
-def test_ks_encrypt_decrypt_file_multiple_recipients(encrypt_decrypt_file):
+def test_ks_encrypt_decrypt_file_multiple_recipients(tmp_path):
     "Encrypts and decrypt some bytes"
     inputfile = BASE_TESTSDIR / "files/text.txt"
-    output = "/tmp/text-encrypted.pgp"
-    decrypted_output = "/tmp/text.txt"
+    output = tmp_path / "text-encrypted.pgp"
+    decrypted_output = tmp_path / "text.txt"
 
     ks = jce.KeyStore(BASE_TESTSDIR / "files/store")
     key1 = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
     key2 = ks.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
-    encrypted = ks.encrypt_file([key1, key2], inputfile.as_posix(), output)
+    encrypted = ks.encrypt_file([key1, key2], inputfile.as_posix(), output.as_posix())
     secret_key1 = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
-    ks.decrypt_file(secret_key1, output, decrypted_output, password="redhat")
+    ks.decrypt_file(secret_key1, output.as_posix(), decrypted_output.as_posix(), password="redhat")
     verify_files(inputfile, decrypted_output)
     secret_key2 = ks.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
-    ks.decrypt_file(secret_key2, output, decrypted_output, password="redhat")
+    ks.decrypt_file(secret_key2, output.as_posix(), decrypted_output.as_posix(), password="redhat")
     verify_files(inputfile, decrypted_output)
 
 
