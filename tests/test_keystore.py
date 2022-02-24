@@ -1,28 +1,17 @@
 import datetime
-import os
 import shutil
-import tempfile
 import sqlite3
 
 import pytest
 import vcr
-from pprint import pprint
 
 import johnnycanencrypt as jce
 import johnnycanencrypt.johnnycanencrypt as rjce
 
 from .conftest import BASE_TESTSDIR
-from .utils import clean_outputfiles, verify_files
+from .utils import verify_files
 
 DATA = "Kushal loves 🦀"
-
-
-def setup_module(module):
-    module.tmpdirname = tempfile.TemporaryDirectory()
-
-
-def teardown_module(module):
-    del module.tmpdirname
 
 
 def test_correct_keystore_path():
@@ -55,13 +44,13 @@ def test_create_primary_key_with_encryption():
     assert newkey.can_primary_sign == True
 
 
-def test_keystore_lifecycle():
+def test_keystore_lifecycle(tmp_path):
     # Before anything let us first delete if any existing db
     pathname = os.path.join(tmpdirname.name, "jce.db")
     if os.path.exists(pathname):
         os.remove(pathname)
     # Now create a fresh db
-    ks = jce.KeyStore(tmpdirname.name)
+    ks = jce.KeyStore(tmp_path.as_posix())
     newkey = ks.create_key("redhat", "test key1 <email@example.com>", jce.Cipher.RSA4k)
     # the default key must be of secret
     assert newkey.keytype == jce.KeyType.SECRET
@@ -94,9 +83,9 @@ def test_keystore_lifecycle():
     assert key_via_fingerprint == keys_via_names[0]
 
 
-def test_keystore_contains_key():
+def test_keystore_contains_key(tmp_path):
     "verifies __contains__ method for keystore"
-    ks = jce.KeyStore(tmpdirname.name)
+    ks = jce.KeyStore(tmp_path.as_posix())
     keypath = BASE_TESTSDIR / "files/store/secret.asc"
     k = ks.import_key(keypath.as_posix())
     _, fingerprint, keytype, exp, ctime, othervalues = jce.parse_cert_file(
@@ -137,17 +126,15 @@ def test_keystore_key_uids():
     assert "mail@kushaldas.in" == key.uids[-1]["email"]
 
 
-def test_key_password_change():
-    tempdir = tempfile.TemporaryDirectory()
-    ks = jce.KeyStore(tempdir.name)
+def test_key_password_change(tmp_path):
+    ks = jce.KeyStore(tmp_path.as_posix())
     k = ks.import_key((BASE_TESTSDIR / "files/store/secret.asc").as_posix())
     k2 = ks.update_password(k, "redhat", "byebye")
     data = ks.sign_detached(k2, b"hello", "byebye")
 
 
-def test_key_deletion():
-    tempdir = tempfile.TemporaryDirectory()
-    ks = jce.KeyStore(tempdir.name)
+def test_key_deletion(tmp_path):
+    ks = jce.KeyStore(tmp_path.as_posix())
     ks.import_key((BASE_TESTSDIR / "files/store/public.asc").as_posix())
     k = ks.import_key((BASE_TESTSDIR / "files/store/pgp_keys.asc").as_posix())
     ks.import_key((BASE_TESTSDIR / "files/store/hellopublic.asc").as_posix())
@@ -175,10 +162,9 @@ def test_key_equality():
     assert key.fingerprint == "F51C310E02DC1B7771E176D8A1C5C364EB5B9A20"
 
 
-def test_ks_update_expiry_time_for_subkeys():
+def test_ks_update_expiry_time_for_subkeys(tmp_path):
     "Updates expiry time for a given subkey"
-    tempdir = tempfile.TemporaryDirectory()
-    ks = jce.KeyStore(tempdir.name)
+    ks = jce.KeyStore(tmp_path.as_posix())
     ks.import_key((BASE_TESTSDIR / "files/store/hellosecret.asc").as_posix())
     ks.import_key((BASE_TESTSDIR / "files/store/secret.asc").as_posix())
 
@@ -229,12 +215,12 @@ def test_ks_encrypt_decrypt_bytes_multiple_recipients():
     assert DATA == decrypted_text
 
 
-def test_ks_encrypt_decrypt_bytes_to_file():
+def test_ks_encrypt_decrypt_bytes_to_file(tmp_path):
     "Encrypts and decrypt some bytes"
-    outputfile = os.path.join(tmpdirname.name, "encrypted.asc")
+    outputfile = tmp_path / "encrypted.asc"
     ks = jce.KeyStore(BASE_TESTSDIR / "files/store")
     secret_key = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
-    assert ks.encrypt(secret_key, DATA, outputfile=outputfile)
+    assert ks.encrypt(secret_key, DATA, outputfile=outputfile.as_posix())
     with open(outputfile, "rb") as fobj:
         encrypted = fobj.read()
     secret_key = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
@@ -244,13 +230,13 @@ def test_ks_encrypt_decrypt_bytes_to_file():
     assert DATA == decrypted_text
 
 
-def test_ks_encrypt_decrypt_bytes_to_file_multiple_recipients():
+def test_ks_encrypt_decrypt_bytes_to_file_multiple_recipients(tmp_path):
     "Encrypts and decrypt some bytes"
-    outputfile = os.path.join(tmpdirname.name, "encrypted.asc")
+    outputfile = tmp_path / "encrypted.asc"
     ks = jce.KeyStore(BASE_TESTSDIR / "files/store")
     key1 = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
     key2 = ks.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
-    assert ks.encrypt([key1, key2], DATA, outputfile=outputfile)
+    assert ks.encrypt([key1, key2], DATA, outputfile=outputfile.as_posix())
     with open(outputfile, "rb") as fobj:
         encrypted = fobj.read()
     secret_key = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
@@ -324,16 +310,15 @@ def test_ks_sign_data_fails():
     assert not ks.verify(key, "hello2", signed)
 
 
-def test_ks_sign_verify_file_detached():
+def test_ks_sign_verify_file_detached(tmp_path):
     inputfile = BASE_TESTSDIR / "files/text.txt"
-    tempdir = tempfile.TemporaryDirectory()
-    shutil.copy(inputfile, tempdir.name)
+    shutil.copy(inputfile, tmp_path.as_posix())
     ks = jce.KeyStore(BASE_TESTSDIR / "files/store")
     key = "F51C310E02DC1B7771E176D8A1C5C364EB5B9A20"
-    file_to_be_signed = os.path.join(tempdir.name, "text.txt")
-    signed = ks.sign_file_detached(key, file_to_be_signed, "redhat", write=True)
+    file_to_be_signed = tmp_path / "text.txt"
+    signed = ks.sign_file_detached(key, file_to_be_signed.as_posix(), "redhat", write=True)
     assert signed.startswith("-----BEGIN PGP SIGNATURE-----\n")
-    assert ks.verify_file_detached(key, file_to_be_signed, file_to_be_signed + ".asc")
+    assert ks.verify_file_detached(key, file_to_be_signed.as_posix(), file_to_be_signed.as_posix() + ".asc")
 
 
 def test_ks_userid_signing():
@@ -373,17 +358,16 @@ def test_ks_userid_signing():
             assert len(uid["certifications"]) == 0
 
 
-def test_ks_creation_expiration_time():
+def test_ks_creation_expiration_time(tmp_path):
     """
     Tests via Kushal's key and a new key
     """
     # These two are known values from kushal
     etime = datetime.datetime(2020, 10, 16, 20, 53, 47)
     ctime = datetime.datetime(2017, 10, 17, 20, 53, 47)
-    tmpdir = tempfile.TemporaryDirectory()
     # First let us check from the file
     keypath = BASE_TESTSDIR / "files/store/pgp_keys.asc"
-    ks = jce.KeyStore(tmpdir.name)
+    ks = jce.KeyStore(tmp_path.as_posix())
     k = ks.import_key(keypath.as_posix())
     assert etime.date() == k.expirationtime.date()
     assert ctime.date() == k.creationtime.date()
@@ -450,10 +434,9 @@ def test_get_pub_key():
     assert pub_key.startswith("-----BEGIN PGP PUBLIC KEY BLOCK-----")
 
 
-def test_add_userid():
+def test_add_userid(tmp_path):
     """Verifies that we can add uid to a cert"""
-    tempdir = tempfile.TemporaryDirectory()
-    ks = jce.KeyStore(tempdir.name)
+    ks = jce.KeyStore(tmp_path.as_posix())
     key = ks.import_key((BASE_TESTSDIR / "files/store/secret.asc").as_posix())
     # check that there is only one userid
     assert len(key.uids) == 1
@@ -466,10 +449,9 @@ def test_add_userid():
     assert key2.keytype == jce.KeyType.SECRET
 
 
-def test_add_and_revoke_userid():
+def test_add_and_revoke_userid(tmp_path):
     """Verifies that we can add uid to a cert"""
-    tempdir = tempfile.TemporaryDirectory()
-    ks = jce.KeyStore(tempdir.name)
+    ks = jce.KeyStore(tmp_path.as_posix())
     key = ks.import_key((BASE_TESTSDIR / "files/store/secret.asc").as_posix())
     # check that there is only one userid
     assert len(key.uids) == 1
@@ -497,10 +479,9 @@ def test_add_and_revoke_userid():
             assert uid["revoked"] == False
 
 
-def test_add_userid_fails_for_public():
+def test_add_userid_fails_for_public(tmp_path):
     """Verifies that adding uid to a public key fails"""
-    tempdir = tempfile.TemporaryDirectory()
-    ks = jce.KeyStore(tempdir.name)
+    ks = jce.KeyStore(tmp_path.as_posix())
     key = ks.import_key((BASE_TESTSDIR / "files/store/public.asc").as_posix())
     # verify that the key is a secret
     assert len(key.uids) == 1
@@ -528,25 +509,22 @@ def test_update_subkey_expiry_time():
             assert date.date() == tomorrow
 
 
-def test_same_key_import_error():
-    tempdir = tempfile.TemporaryDirectory()
-    ks = jce.KeyStore(tempdir.name)
+def test_same_key_import_error(tmp_path):
+    ks = jce.KeyStore(tmp_path.as_posix())
     ks.import_key((BASE_TESTSDIR / "files/store/public.asc").as_posix())
     with pytest.raises(jce.CryptoError):
         ks.import_key((BASE_TESTSDIR / "files/store/public.asc").as_posix())
 
 
-def test_key_without_uid():
-    tempdir = tempfile.TemporaryDirectory()
-    ks = jce.KeyStore(tempdir.name)
+def test_key_without_uid(tmp_path):
+    ks = jce.KeyStore(tmp_path.as_posix())
     k = ks.create_key("redhat")
     uids, fp, secret, et, ct, othervalues = jce.parse_cert_bytes(k.keyvalue)
     assert len(uids) == 0
 
 
-def test_key_with_multiple_uids():
-    tempdir = tempfile.TemporaryDirectory()
-    ks = jce.KeyStore(tempdir.name)
+def test_key_with_multiple_uids(tmp_path):
+    ks = jce.KeyStore(tmp_path.as_posix())
     uids = [
         "Kushal Das <kushaldas@gmail.com>",
         "kushal@freedom.press",
@@ -557,13 +535,11 @@ def test_key_with_multiple_uids():
     assert len(uids) == 3
 
 
-def test_ks_upgrade():
+def test_ks_upgrade(tmp_path):
     "tests db upgrade from an old db"
-    tempdir = tempfile.TemporaryDirectory()
-    shutil.copy(
-        BASE_TESTSDIR / "files/store/oldjce.db", os.path.join(tempdir.name, "jce.db")
-    )
-    ks = jce.KeyStore(tempdir.name)
+    shutil.copy(BASE_TESTSDIR / "files/store/oldjce.db",  tmp_path / "jce.db")
+
+    ks = jce.KeyStore(tmp_path.as_posix())
     con = sqlite3.connect(ks.dbpath)
     con.row_factory = sqlite3.Row
     # First we will check if this db schema is old or not
@@ -576,18 +552,14 @@ def test_ks_upgrade():
     # TODO: Now verify the keys inside of the new db, in full.
 
 
-def test_ks_upgrade_failure():
+def test_ks_upgrade_failure(tmp_path):
     "tests db upgrade failure from an old db because of existing file"
-    tempdir = tempfile.TemporaryDirectory()
+    shutil.copy(BASE_TESTSDIR / "files/store/oldjce.db", tmp_path / "jce.db")
     shutil.copy(
-        BASE_TESTSDIR / "files/store/oldjce.db", os.path.join(tempdir.name, "jce.db")
-    )
-    shutil.copy(
-        BASE_TESTSDIR / "files/store/oldjce.db",
-        os.path.join(tempdir.name, "jce_upgrade.db"),
+        BASE_TESTSDIR / "files/store/oldjce.db", tmp_path / "jce_upgrade.db"
     )
     with pytest.raises(RuntimeError):
-        ks = jce.KeyStore(tempdir.name)
+        ks = jce.KeyStore(tmp_path.as_posix())
 
 
 def test_get_encrypted_for():
@@ -603,9 +575,8 @@ def test_get_encrypted_for():
 
 @vcr.use_cassette(
     (BASE_TESTSDIR / "files/test_fetch_key_by_fingerprint.yml").as_posix())
-def test_fetch_key_by_fingerprint():
-    tempdir = tempfile.TemporaryDirectory()
-    ks = jce.KeyStore(tempdir.name)
+def test_fetch_key_by_fingerprint(tmp_path):
+    ks = jce.KeyStore(tmp_path.as_posix())
     key = ks.fetch_key_by_fingerprint("EF6E286DDA85EA2A4BA7DE684E2C6E8793298290")
     assert len(key.uids) == 1
     uid = key.uids[0]
@@ -615,17 +586,15 @@ def test_fetch_key_by_fingerprint():
 
 @vcr.use_cassette(
     (BASE_TESTSDIR / "files/test_fetch_nonexistingkey_by_fingerprint.yml").as_posix())
-def test_fetch_nonexistingkey_by_fingerprint():
-    tempdir = tempfile.TemporaryDirectory()
-    ks = jce.KeyStore(tempdir.name)
+def test_fetch_nonexistingkey_by_fingerprint(tmp_path):
+    ks = jce.KeyStore(tmp_path.as_posix())
     with pytest.raises(jce.KeyNotFoundError):
         key = ks.fetch_key_by_fingerprint("EF6E286DDA85EA2A4BA7DE684E2C6E8793298291")
 
 
 @vcr.use_cassette((BASE_TESTSDIR / "files/test_fetch_key_by_email.yml").as_posix())
-def test_fetch_key_by_email():
-    tempdir = tempfile.TemporaryDirectory()
-    ks = jce.KeyStore(tempdir.name)
+def test_fetch_key_by_email(tmp_path):
+    ks = jce.KeyStore(tmp_path.as_posix())
     key = ks.fetch_key_by_email("anwesha.srkr@gmail.com")
     assert len(key.uids) == 2
     uid = key.uids[0]
@@ -635,8 +604,7 @@ def test_fetch_key_by_email():
 
 @vcr.use_cassette(
     (BASE_TESTSDIR / "files/test_fetch_nonexistingkey_by_email.yml").as_posix())
-def test_fetch_nonexistingkey_by_email():
-    tempdir = tempfile.TemporaryDirectory()
-    ks = jce.KeyStore(tempdir.name)
+def test_fetch_nonexistingkey_by_email(tmp_path):
+    ks = jce.KeyStore(tmp_path.as_posix())
     with pytest.raises(jce.KeyNotFoundError):
         ks.fetch_key_by_email("doesnotexists@kushaldas.in")
