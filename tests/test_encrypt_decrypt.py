@@ -2,6 +2,7 @@ import os
 
 import johnnycanencrypt.johnnycanencrypt as jce
 
+from .conftest import BASE_TESTSDIR
 from .utils import _get_cert_data
 
 DATA = "Kushal loves 🦀"
@@ -31,7 +32,7 @@ def test_encryption_of_multiple_keys_to_files():
     if os.path.exists(output):
         os.remove(output)
     certs = []
-    for keyfilename in ["tests/files/public.asc", "tests/files/hellopublic.asc"]:
+    for keyfilename in [BASE_TESTSDIR / "files/public.asc", BASE_TESTSDIR / "files/hellopublic.asc"]:
         certs.append(_get_cert_data(keyfilename))
     jce.encrypt_bytes_to_file(
         certs,
@@ -43,34 +44,34 @@ def test_encryption_of_multiple_keys_to_files():
     # Now let us decrypt it via first secret key
     with open(output, "rb") as f:
         enc = f.read()
-    jp = jce.Johnny(_get_cert_data("tests/files/hellosecret.asc"))
+    jp = jce.Johnny(_get_cert_data(BASE_TESTSDIR / "files/hellosecret.asc"))
     result = jp.decrypt_bytes(enc, "redhat")
     assert DATA == result.decode("utf-8")
 
-    jp = jce.Johnny(_get_cert_data("tests/files/secret.asc"))
+    jp = jce.Johnny(_get_cert_data(BASE_TESTSDIR / "files/secret.asc"))
     result = jp.decrypt_bytes(enc, "redhat")
     assert DATA == result.decode("utf-8")
 
 
 def test_encryption_of_multiple_keys_of_a_file():
     "Encrypt bytes to a file using multiple keys"
-    inputfile = "tests/files/text.txt"
+    inputfile = BASE_TESTSDIR / "files/text.txt"
     output = "/tmp/text-encrypted.pgp"
     decrypted_output = "/tmp/text.txt"
     clean_outputfiles(output, decrypted_output)
     certs = []
-    for keyfilename in ["tests/files/public.asc", "tests/files/hellopublic.asc"]:
+    for keyfilename in [BASE_TESTSDIR / "files/public.asc", BASE_TESTSDIR / "files/hellopublic.asc"]:
         certs.append(_get_cert_data(keyfilename))
 
     jce.encrypt_file_internal(
         certs,
-        inputfile.encode("utf-8"),
+        inputfile.as_posix().encode("utf-8"),
         output.encode("utf-8"),
         armor=True,
     )
     assert os.path.exists(output)
     # Now let us decrypt it via second secret key
-    jp = jce.Johnny(_get_cert_data("tests/files/hellosecret.asc"))
+    jp = jce.Johnny(_get_cert_data(BASE_TESTSDIR / "files/hellosecret.asc"))
     assert jp.decrypt_file(
         output.encode("utf-8"), decrypted_output.encode("utf-8"), "redhat"
     )
@@ -80,7 +81,7 @@ def test_encryption_of_multiple_keys_of_a_file():
     os.remove(decrypted_output)
 
     # Via first secret key
-    jp = jce.Johnny(_get_cert_data("tests/files/secret.asc"))
+    jp = jce.Johnny(_get_cert_data(BASE_TESTSDIR / "files/secret.asc"))
     assert jp.decrypt_file(
         output.encode("utf-8"), decrypted_output.encode("utf-8"), "redhat"
     )
@@ -90,7 +91,7 @@ def test_encryption_of_multiple_keys_of_a_file():
 def test_encryption_of_multiple_keys_to_bytes():
     "Encrypt bytes using multiple keys"
     certs = []
-    for keyfilename in ["tests/files/public.asc", "tests/files/hellopublic.asc"]:
+    for keyfilename in [BASE_TESTSDIR / "files/public.asc", BASE_TESTSDIR / "files/hellopublic.asc"]:
         certs.append(_get_cert_data(keyfilename))
     encrypted = jce.encrypt_bytes_to_bytes(
         certs,
@@ -98,45 +99,45 @@ def test_encryption_of_multiple_keys_to_bytes():
         armor=True,
     )
     # Now let us decrypt it via first secret key
-    jp = jce.Johnny(_get_cert_data("tests/files/hellosecret.asc"))
+    jp = jce.Johnny(_get_cert_data(BASE_TESTSDIR / "files/hellosecret.asc"))
     result = jp.decrypt_bytes(encrypted, "redhat")
     assert DATA == result.decode("utf-8")
 
-    jp = jce.Johnny(_get_cert_data("tests/files/secret.asc"))
+    jp = jce.Johnny(_get_cert_data(BASE_TESTSDIR / "files/secret.asc"))
     result = jp.decrypt_bytes(encrypted, "redhat")
     assert DATA == result.decode("utf-8")
 
 
 def test_encrypt_decrypt_bytes():
     "Tests raw bytes as output"
-    jp = jce.Johnny(_get_cert_data("tests/files/public.asc"))
+    jp = jce.Johnny(_get_cert_data(BASE_TESTSDIR / "files/public.asc"))
     enc = jp.encrypt_bytes(DATA.encode("utf-8"))
-    jp = jce.Johnny(_get_cert_data("tests/files/secret.asc"))
+    jp = jce.Johnny(_get_cert_data(BASE_TESTSDIR / "files/secret.asc"))
     result = jp.decrypt_bytes(enc, "redhat")
     assert DATA == result.decode("utf-8")
 
 
 def test_encrypt_decrypt_bytes_armored():
     "Tests ascii-armored output"
-    j = jce.Johnny(_get_cert_data("tests/files/public.asc"))
+    j = jce.Johnny(_get_cert_data(BASE_TESTSDIR / "files/public.asc"))
     enc = j.encrypt_bytes(DATA.encode("utf-8"), armor=True)
     assert enc.startswith(b"-----BEGIN PGP MESSAGE-----")
-    jp = jce.Johnny(_get_cert_data("tests/files/secret.asc"))
+    jp = jce.Johnny(_get_cert_data(BASE_TESTSDIR / "files/secret.asc"))
     result = jp.decrypt_bytes(enc, "redhat")
     assert DATA == result.decode("utf-8")
 
 
 def test_encrypt_decrypt_files():
     "Tests encrypt/decrypt file in binary format"
-    inputfile = "tests/files/text.txt"
+    inputfile = BASE_TESTSDIR / "files/text.txt"
     output = "/tmp/text-encrypted.pgp"
     decrypted_output = "/tmp/text.txt"
     clean_outputfiles(output, decrypted_output)
 
     # Now encrypt and then decrypt
-    j = jce.Johnny(_get_cert_data("tests/files/public.asc"))
-    assert j.encrypt_file(inputfile.encode("utf-8"), output.encode("utf-8"))
-    jp = jce.Johnny(_get_cert_data("tests/files/secret.asc"))
+    j = jce.Johnny(_get_cert_data(BASE_TESTSDIR / "files/public.asc"))
+    assert j.encrypt_file(inputfile.as_posix().encode("utf-8"), output.encode("utf-8"))
+    jp = jce.Johnny(_get_cert_data(BASE_TESTSDIR / "files/secret.asc"))
     assert jp.decrypt_file(
         output.encode("utf-8"), decrypted_output.encode("utf-8"), "redhat"
     )
@@ -145,15 +146,15 @@ def test_encrypt_decrypt_files():
 
 
 def test_encrypt_decrypt_files_armored():
-    inputfile = "tests/files/text.txt"
+    inputfile = BASE_TESTSDIR / "files/text.txt"
     output = "/tmp/text-encrypted.asc"
     decrypted_output = "/tmp/text.txt"
     clean_outputfiles(output, decrypted_output)
 
     # Now encrypt and then decrypt
-    j = jce.Johnny(_get_cert_data("tests/files/public.asc"))
-    assert j.encrypt_file(inputfile.encode("utf-8"), output.encode("utf-8"), armor=True)
-    jp = jce.Johnny(_get_cert_data("tests/files/secret.asc"))
+    j = jce.Johnny(_get_cert_data(BASE_TESTSDIR / "files/public.asc"))
+    assert j.encrypt_file(inputfile.as_posix().encode("utf-8"), output.encode("utf-8"), armor=True)
+    jp = jce.Johnny(_get_cert_data(BASE_TESTSDIR / "files/secret.asc"))
     assert jp.decrypt_file(
         output.encode("utf-8"), decrypted_output.encode("utf-8"), "redhat"
     )
@@ -173,22 +174,22 @@ def test_encrypt_decrypt_files_armored():
 # ❯ cp double.asc ../rust/johnnycanencrypt/tests/files/double_recipient.asc
 # Test case for issue number #14
 def test_decrypt_multiple_recipient_data():
-    with open("tests/files/double_recipient.asc", "rb") as f:
+    with open(BASE_TESTSDIR / "files/double_recipient.asc", "rb") as f:
         data = f.read()
 
-    jp = jce.Johnny(_get_cert_data("tests/files/secret.asc"))
+    jp = jce.Johnny(_get_cert_data(BASE_TESTSDIR / "files/secret.asc"))
     cleartext = jp.decrypt_bytes(data, "redhat")
     assert cleartext == b"Hello World! for 2.\n"
 
 
 def test_encryption_of_multiple_keys_of_a_filehandler():
     "Encrypt bytes to an opened file using multiple keys"
-    inputfile = "tests/files/text.txt"
+    inputfile = BASE_TESTSDIR / "files/text.txt"
     output = "/tmp/text-encrypted2.pgp"
     decrypted_output = "/tmp/text2.txt"
     clean_outputfiles(output, decrypted_output)
     certs = []
-    for keyfilename in ["tests/files/public.asc", "tests/files/hellopublic.asc"]:
+    for keyfilename in [BASE_TESTSDIR / "files/public.asc", BASE_TESTSDIR / "files/hellopublic.asc"]:
         certs.append(_get_cert_data(keyfilename))
 
     with open(inputfile, "rb") as fobj:
@@ -200,7 +201,7 @@ def test_encryption_of_multiple_keys_of_a_filehandler():
         )
     assert os.path.exists(output)
     # Now let us decrypt it via second secret key
-    jp = jce.Johnny(_get_cert_data("tests/files/hellosecret.asc"))
+    jp = jce.Johnny(_get_cert_data(BASE_TESTSDIR / "files/hellosecret.asc"))
     with open(output, "rb") as fobj:
         assert jp.decrypt_filehandler(fobj, decrypted_output.encode("utf-8"), "redhat")
     verify_files(inputfile, decrypted_output)
@@ -209,7 +210,7 @@ def test_encryption_of_multiple_keys_of_a_filehandler():
     os.remove(decrypted_output)
 
     # Via first secret key
-    jp = jce.Johnny(_get_cert_data("tests/files/secret.asc"))
+    jp = jce.Johnny(_get_cert_data(BASE_TESTSDIR / "files/secret.asc"))
     with open(output, "rb") as fobj:
         assert jp.decrypt_filehandler(fobj, decrypted_output.encode("utf-8"), "redhat")
     verify_files(inputfile, decrypted_output)

@@ -2,6 +2,8 @@ import datetime
 
 import johnnycanencrypt.johnnycanencrypt as rustjce
 
+from tests.conftest import BASE_TESTSDIR
+
 
 def test_parse_cert_file():
     """Tests the rust implementation of the pgp key.
@@ -12,7 +14,7 @@ def test_parse_cert_file():
     etime = datetime.datetime(2020, 10, 16, 20, 53, 47)
     ctime = datetime.datetime(2017, 10, 17, 20, 53, 47)
     # First let us check from the file
-    keypath = "tests/files/store/pgp_keys.asc"
+    keypath = BASE_TESTSDIR / "files/store/pgp_keys.asc"
     (
         uids,
         fingerprint,
@@ -20,7 +22,7 @@ def test_parse_cert_file():
         expirationtime,
         creationtime,
         othervalues,
-    ) = rustjce.parse_cert_file(keypath)
+    ) = rustjce.parse_cert_file(keypath.as_posix())
     assert etime.date() == expirationtime.date()
     assert ctime.date() == creationtime.date()
 
@@ -34,7 +36,7 @@ def test_parse_cert_bytes():
     etime = datetime.datetime(2020, 10, 16, 20, 53, 47)
     ctime = datetime.datetime(2017, 10, 17, 20, 53, 47)
     # First let us read from the file
-    keypath = "tests/files/store/pgp_keys.asc"
+    keypath = BASE_TESTSDIR / "files/store/pgp_keys.asc"
     with open(keypath, "rb") as fobj:
         data = fobj.read()
 
@@ -58,11 +60,11 @@ def test_merge_certs():
     # These two are known values from kushal
     ctime = datetime.datetime(2017, 10, 17, 20, 53, 47)
     # First let us read from the file
-    keypath = "tests/files/store/pgp_keys.asc"
+    keypath = BASE_TESTSDIR / "files/store/pgp_keys.asc"
     with open(keypath, "rb") as fobj:
         data = fobj.read()
 
-    keypath = "tests/files/store/kushal_updated_key.asc"
+    keypath = BASE_TESTSDIR / "files/store/kushal_updated_key.asc"
     with open(keypath, "rb") as fobj:
         newdata = fobj.read()
 
