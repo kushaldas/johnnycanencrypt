@@ -94,6 +94,6 @@ Now let us import the key and verify.
         <Key fingerprint=EF6E286DDA85EA2A4BA7DE684E2C6E8793298290 type=PUBLIC>
         >>> filepath="./tor-browser-linux64-10.0_en-US.tar.xz"
         >>> signaturepath="./tor-browser-linux64-10.0_en-US.tar.xz.asc"
-        >>> ks.verify_file(torkey, filepath, signaturepath)
+        >>> ks.verify_file_detached(torkey, filepath, signaturepath)
         True
 
