@@ -19,7 +19,7 @@ def test_sign_detached():
 def test_sign_verify_bytes():
     "This will test a signed PGP message creation"
     j = jce.Johnny(_get_cert_data("tests/files/secret.asc"))
-    signed_data = j.sign_bytes(DATA.encode("utf-8"), "redhat", False)
+    signed_data = j.sign_bytes(DATA.encode("utf-8"), "redhat", False).decode("utf-8")
     assert signed_data.endswith("-----END PGP MESSAGE-----\n")
     assert DATA not in signed_data
     jp = jce.Johnny(_get_cert_data("tests/files/public.asc"))
@@ -29,7 +29,7 @@ def test_sign_verify_bytes():
 def test_sign_cleartext():
     "This will test a signed cleartext message creation"
     j = jce.Johnny(_get_cert_data("tests/files/secret.asc"))
-    signed_data = j.sign_bytes(DATA.encode("utf-8"), "redhat", True)
+    signed_data = j.sign_bytes(DATA.encode("utf-8"), "redhat", True).decode("utf-8")
     assert signed_data.startswith("-----BEGIN PGP SIGNED MESSAGE-----")
     assert DATA in signed_data
     assert signed_data.endswith("-----END PGP SIGNATURE-----\n")

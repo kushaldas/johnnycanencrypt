@@ -1020,7 +1020,7 @@ class KeyStore:
         else:
             return jp.decrypt_filehandler(fh, outputpath, password)
 
-    def sign(self, key, data, password):
+    def sign_detached(self, key, data, password):
         """Signs the given data with the key.
 
         :param key: Fingerprint or secret Key object
@@ -1045,7 +1045,7 @@ class KeyStore:
         jp = Johnny(k.keyvalue)
         return jp.sign_bytes_detached(data, password)
 
-    def verify(self, key, data, signature):
+    def verify(self, key, data, signature: Optional[str]) -> bool:
         """Verifies the given data and the signature
 
         :param key: Fingerprint or public Key object
@@ -1062,7 +1062,11 @@ class KeyStore:
         if type(data) == str:
             data = data.encode("utf-8")
         jp = Johnny(k.keyvalue)
-        return jp.verify_bytes(data, signature.encode("utf-8"))
+
+        if signature:
+            return jp.verify_bytes_detached(data, signature.encode("utf-8"))
+        else:
+            return jp.verify_bytes(data)
 
     def sign_file(self, key, filepath, password, write=False):
         """Signs the given data with the key. It also writes filename.asc in the same directory of the file as the signature if write value is True.
@@ -1102,7 +1106,7 @@ class KeyStore:
 
         return signature
 
-    def verify_file(self, key, filepath, signature_path):
+    def verify_file_detached(self, key, filepath, signature_path):
         """Verifies the given filepath based on the signature file.
 
         :param key: Fingerprint or public Key object
@@ -1130,7 +1134,28 @@ class KeyStore:
         if type(filepath) == str:
             filepath = filepath.encode("utf-8")
         jp = Johnny(k.keyvalue)
-        return jp.verify_file(filepath, signature_in_bytes)
+        return jp.verify_file_detached(filepath, signature_in_bytes)
+
+    def verify_file(self, key, filepath):
+        """Verifies the given filepath.
+
+        :param key: Fingerprint or public Key object
+        :param filepath: File to be verified.
+
+        :returns: Boolean
+        """
+        if type(key) == str:  # Means we have a fingerprint
+            k = self.get_key(key)
+        else:
+            k = key
+
+        if not os.path.exists(filepath):
+            raise FileNotFoundError(f"The file at {filepath} is missing.")
+
+        if type(filepath) == str:
+            filepath = filepath.encode("utf-8")
+        jp = Johnny(k.keyvalue)
+        return jp.verify_file(filepath)
 
     def fetch_key_by_fingerprint(self, fingerprint: str):
         """Fetches key from keys.openpgp.org based on the fingerprint.

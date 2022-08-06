@@ -7,6 +7,7 @@ import johnnycanencrypt.johnnycanencrypt as rjce
 
 import tempfile
 import sys
+import os
 
 from pprint import pprint
 
@@ -81,6 +82,25 @@ print("Now let us sign some data")
 signature = rjce.sign_bytes_detached_on_card(k.keyvalue, msg, b"123456")
 
 if ks.verify(k, msg, signature):
+    print("The signature is good.")
+else:
+    print("Bad signature from the card.")
+
+print("Now we will create a test file and sign it.")
+inputfile_for_sign = os.path.join(tempdir.name, "oncard_cv.txt")
+outputfile_for_sign = os.path.join(tempdir.name, "oncard_cv.txt.asc")
+with open(inputfile_for_sign, "w") as fobj:
+    fobj.write("Hello text for signing.")
+
+assert rjce.sign_file_on_card(
+    k.keyvalue,
+    inputfile_for_sign.encode("utf-8"),
+    outputfile_for_sign.encode("utf-8"),
+    b"123456",
+    True,
+)
+
+if ks.verify_file(k, outputfile_for_sign.encode("utf-8")):
     print("The signature is good.")
 else:
     print("Bad signature from the card.")

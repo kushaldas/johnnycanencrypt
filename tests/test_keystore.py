@@ -118,7 +118,7 @@ def test_key_password_change():
     ks = jce.KeyStore(tempdir.name)
     k = ks.import_cert("tests/files/store/secret.asc")
     k2 = ks.update_password(k, "redhat", "byebye")
-    data = ks.sign(k2, b"hello", "byebye")
+    data = ks.sign_detached(k2, b"hello", "byebye")
 
 
 def test_key_deletion():
@@ -287,7 +287,7 @@ def test_ks_encrypt_decrypt_file_multiple_recipients(encrypt_decrypt_file):
 def test_ks_sign_data():
     ks = jce.KeyStore("tests/files/store")
     key = "F51C310E02DC1B7771E176D8A1C5C364EB5B9A20"
-    signed = ks.sign(key, "hello", "redhat")
+    signed = ks.sign_detached(key, "hello", "redhat")
     assert signed.startswith("-----BEGIN PGP SIGNATURE-----\n")
     assert ks.verify(key, "hello", signed)
 
@@ -295,7 +295,7 @@ def test_ks_sign_data():
 def test_ks_sign_data_fails():
     ks = jce.KeyStore("tests/files/store")
     key = "F51C310E02DC1B7771E176D8A1C5C364EB5B9A20"
-    signed = ks.sign(key, "hello", "redhat")
+    signed = ks.sign_detached(key, "hello", "redhat")
     assert signed.startswith("-----BEGIN PGP SIGNATURE-----\n")
     assert not ks.verify(key, "hello2", signed)
 
@@ -309,7 +309,7 @@ def test_ks_sign_verify_file():
     file_to_be_signed = os.path.join(tempdir.name, "text.txt")
     signed = ks.sign_file(key, file_to_be_signed, "redhat", write=True)
     assert signed.startswith("-----BEGIN PGP SIGNATURE-----\n")
-    assert ks.verify_file(key, file_to_be_signed, file_to_be_signed + ".asc")
+    assert ks.verify_file_detached(key, file_to_be_signed, file_to_be_signed + ".asc")
 
 
 def test_ks_creation_expiration_time():
