@@ -7,6 +7,7 @@ import johnnycanencrypt.johnnycanencrypt as rjce
 
 import tempfile
 import sys
+import os
 
 from pprint import pprint
 
@@ -21,7 +22,7 @@ tempdir = tempfile.TemporaryDirectory()
 ks = jce.KeyStore(tempdir.name)
 
 print("Now importing the Cv25519 secret key to the keyring")
-k = ks.import_cert("smartcardtests/5286C32E7C71E14C4C82F9AE0B207108925CB162.sec")
+k = ks.import_key("smartcardtests/5286C32E7C71E14C4C82F9AE0B207108925CB162.sec")
 
 print(f"Creating temporary keyring at: {tempdir.name}")
 
@@ -63,7 +64,7 @@ tempdir = tempfile.TemporaryDirectory()
 ks = jce.KeyStore(tempdir.name)
 
 print("Now importing the Cv25519 public key to the keyring")
-k = ks.import_cert("smartcardtests/5286C32E7C71E14C4C82F9AE0B207108925CB162.pub")
+k = ks.import_key("smartcardtests/5286C32E7C71E14C4C82F9AE0B207108925CB162.pub")
 msg = b"OpenPGP on smartcard."
 enc_bytes = ks.encrypt([k], msg)
 
@@ -85,13 +86,32 @@ if ks.verify(k, msg, signature):
 else:
     print("Bad signature from the card.")
 
+print("Now we will create a test file and sign it.")
+inputfile_for_sign = os.path.join(tempdir.name, "oncard_cv.txt")
+outputfile_for_sign = os.path.join(tempdir.name, "oncard_cv.txt.asc")
+with open(inputfile_for_sign, "w") as fobj:
+    fobj.write("Hello text for signing.")
+
+assert rjce.sign_file_on_card(
+    k.keyvalue,
+    inputfile_for_sign.encode("utf-8"),
+    outputfile_for_sign.encode("utf-8"),
+    b"123456",
+    True,
+)
+
+if ks.verify_file(k, outputfile_for_sign.encode("utf-8")):
+    print("The signature is good.")
+else:
+    print("Bad signature from the card.")
+
 
 inp = input("Please type Yes to continue to test RSA key: ")
 if inp != "Yes":
     sys.exit(0)
 
 print("Now importing the RSA4096 secret key to the keyring")
-k = ks.import_cert("smartcardtests/2184DF8AF2CAFEB16357FE43E6F848F1DDC66C12.sec")
+k = ks.import_key("smartcardtests/2184DF8AF2CAFEB16357FE43E6F848F1DDC66C12.sec")
 
 print("Resetting Yubikey")
 print(rjce.reset_yubikey())
@@ -131,7 +151,7 @@ tempdir = tempfile.TemporaryDirectory()
 ks = jce.KeyStore(tempdir.name)
 
 print("Now importing the RSA4096 public key to the keyring")
-k = ks.import_cert("smartcardtests/2184DF8AF2CAFEB16357FE43E6F848F1DDC66C12.pub")
+k = ks.import_key("smartcardtests/2184DF8AF2CAFEB16357FE43E6F848F1DDC66C12.pub")
 msg = b"OpenPGP on smartcard."
 enc_bytes = ks.encrypt([k], msg)
 

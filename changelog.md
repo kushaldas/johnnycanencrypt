@@ -4,8 +4,14 @@
 
 ### Added
 
-- Pin retries left in the card now can be retrieved
-
+- `get_card_details` now also tells Pin retries left in the card.
+- `sign_file_on_card` function in rjce.
+- `sign_bytes_on_card` function in rjce.
+- `verify_file` & `verify_file_detached` are two different functions in KeyStore (breaking change).
+- `verify` takes optional detached signature to verify the given bytes.
+- `sign_detached` will do detached signature, `sign` is for the other usecase.
+- renamed `create_newkey` to `create_key` (breaking change).
+- renamed `import_cert` to `import_key` (breaking change).
 
 ### Fixed
 

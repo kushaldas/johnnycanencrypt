@@ -32,7 +32,7 @@ For the rest of the documentation we assume that you imported the module as foll
                 Returns the updated key with a new userid. If you need to upload the key to the https://keys.openpgp.org, then remember to
                 have to an email address in the user id.
 
-        .. method:: create_newkey(password: str, uids: Optional[Union[List[str], str]] = [], ciphersuite: Cipher = Cipher.RSA4k, creation: Optional[datetime.datetime] = None, expiration: Optional[datetime.datetime] = None, subkeys_expiration= False, whichkeys = 7) -> Key:
+        .. method:: create_key(password: str, uids: Optional[Union[List[str], str]] = [], ciphersuite: Cipher = Cipher.RSA4k, creation: Optional[datetime.datetime] = None, expiration: Optional[datetime.datetime] = None, subkeys_expiration= False, whichkeys = 7) -> Key:
 
                 Returns the public part of the newly created `Key` in the store
                 directory. You can mention ciphersuite :class:`Cipher`  as
@@ -50,7 +50,7 @@ For the rest of the documentation we assume that you imported the module as foll
                 ::
 
                         >>> ks = jce.KeyStore("/var/lib/myamazingapp")
-                        >>> newkey = ks.create_newkey("supersecretpassphrasefromdiceware", "test key1 <email@example.com>", jce.KeyType.RSA4k)
+                        >>> newkey = ks.create_key("supersecretpassphrasefromdiceware", "test key1 <email@example.com>", jce.KeyType.RSA4k)
 
         .. method:: encrypt(keys, data, outputfile="", armor=True) -> bytes:
 
@@ -149,14 +149,14 @@ For the rest of the documentation we assume that you imported the module as foll
                 **KeyNotFoundError** in case no such keyid is found on the
                 store.
 
-        .. method:: import_cert(keypath: str) -> Key:
+        .. method:: import_key(keypath: str) -> Key:
 
                 Imports a pgp key file from a path on the system. 
                 The method returns the newly import `Key` object to the caller.
 
                 ::
 
-                        >>> key = ks.import_cert("tests/files/store/public.asc")
+                        >>> key = ks.import_key("tests/files/store/public.asc")
                         >>> print(key)
 
         .. method:: revoke_userid(key: Key, userid: str, pass: str) -> Key:
@@ -167,20 +167,20 @@ For the rest of the documentation we assume that you imported the module as foll
 
                 Updates the expiry time for the given subkeys (as a list of fingerprints) for the given secret key.
 
-        .. method:: sign(key, data, password) -> str:
+        .. method:: sign_detached(key, data, password) -> str:
 
                 Signs the given *data* (can be either str or bytes) using the secret key. Returns the armored signature string.
 
-        .. method:: sign_file(key, filepath, password, write=False) -> str:
+        .. method:: sign_file_detached(key, filepath, password, write=False) -> str:
 
                 Returns the armored signature of the *filepath* argument using the secret key (either fingerprint or secret `Key` object).
                 If you pass *write=True*, it will also write the armored signature to a file named as *filepath.asc* 
 
-        .. method:: verify(key, data, signature) -> bool:
+        .. method:: verify_bytes_detached(key, data, signature) -> bool:
 
                 Verifies the given *data* using the public key, and signature string, returns **True** or **False** as result. 
 
-        .. method:: verify_file(key, filepath, signature_path) -> bool:
+        .. method:: verify_file_detached(key, filepath, signature_path) -> bool:
 
                 Verifies the given filepath using the public key, and signature string, returns **True** or **False** as result. 
 
