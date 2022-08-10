@@ -1068,13 +1068,54 @@ class KeyStore:
         else:
             return jp.verify_bytes(data)
 
-    def sign_file(self, key, filepath, password, write=False):
+    def sign_file(self, key, filepath, outputpath, password, cleartext=False) -> bool:
+        """Signs the given input file with key and saves in the outputpath.
+
+        :param key: Fingerprint or secret Key object, public key in case card based operation.
+        :param filepath: str value of the path to the file.
+        :param outputpath: str value of the path to the output signed file.
+        :param password: Password the secret key file or the user pin of the card
+        :param cleartext: If the signed file should be in cleartext or not, default False.
+
+        :returns: Boolean result of the signing operation.
+        """
+        signature = ""
+        if type(key) == str:  # Means we have a fingerprint
+            k = self.get_key(key)
+        else:
+            k = key
+
+        if type(filepath) == str:
+            filepath_in_bytes = filepath.encode("utf-8")
+        else:
+            filepath_in_bytes = filepath
+
+        if type(outputpath) == str:
+            outputpath_in_bytes = outputpath.encode("utf-8")
+        else:
+            outputpath_in_bytes = outputpath
+
+
+
+        if k.keytype == KeyType.PUBLIC and k.oncard is not None:
+            result = rjce.sign_file_on_card(
+                k.keyvalue, filepath_in_bytes, outputpath_in_bytes, password.encode("utf-8"), cleartext)
+
+        else:
+            jp = Johnny(k.keyvalue)
+            result = jp.sign_file(filepath_in_bytes, outputpath_in_bytes, password, cleartext)
+
+        return result
+
+
+
+    def sign_file_detached(self, key, filepath, password, write=False):
         """Signs the given data with the key. It also writes filename.asc in the same directory of the file as the signature if write value is True.
 
         :param key: Fingerprint or secret Key object
         :param filepath: str value of the path to the file.
         :param password: Password of the secret key file.
-        :param wrtie: boolean value (default False), determines if we should write the signature to a file.
+        :param write: boolean value (default False), determines if we should write the signature to a file.
 
         :returns: The signature as string
         """

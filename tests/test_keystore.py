@@ -300,14 +300,14 @@ def test_ks_sign_data_fails():
     assert not ks.verify(key, "hello2", signed)
 
 
-def test_ks_sign_verify_file():
+def test_ks_sign_verify_file_detached():
     inputfile = "tests/files/text.txt"
     tempdir = tempfile.TemporaryDirectory()
     shutil.copy(inputfile, tempdir.name)
     ks = jce.KeyStore("tests/files/store")
     key = "F51C310E02DC1B7771E176D8A1C5C364EB5B9A20"
     file_to_be_signed = os.path.join(tempdir.name, "text.txt")
-    signed = ks.sign_file(key, file_to_be_signed, "redhat", write=True)
+    signed = ks.sign_file_detached(key, file_to_be_signed, "redhat", write=True)
     assert signed.startswith("-----BEGIN PGP SIGNATURE-----\n")
     assert ks.verify_file_detached(key, file_to_be_signed, file_to_be_signed + ".asc")
 
