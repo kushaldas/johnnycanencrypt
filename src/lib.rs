@@ -1927,7 +1927,7 @@ fn internal_parse_cert(
 /// key and the fingerprint in hex. Remember to save the keys for future use.
 #[pyfunction]
 #[pyo3(text_signature = "(password, userid, cipher, creation, expiration)")]
-fn create_newkey(
+fn create_key(
     password: String,
     userids: Vec<String>,
     cipher: String,
@@ -2618,7 +2618,7 @@ fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(decrypt_bytes_on_card))?;
     m.add_wrapped(wrap_pyfunction!(decrypt_file_on_card))?;
     m.add_wrapped(wrap_pyfunction!(decrypt_filehandler_on_card))?;
-    m.add_wrapped(wrap_pyfunction!(create_newkey))?;
+    m.add_wrapped(wrap_pyfunction!(create_key))?;
     m.add_wrapped(wrap_pyfunction!(upload_to_smartcard))?;
     m.add_wrapped(wrap_pyfunction!(get_pub_key))?;
     m.add_wrapped(wrap_pyfunction!(bytes_encrypted_for))?;

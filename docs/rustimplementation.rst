@@ -9,9 +9,9 @@ You can import the low level functions or `Johnny` class by the following way:
 
 In most cases you don't have to use these, but if you have a reason, feel free to use them.
 
-.. function:: create_newkey(password, userid)
+.. function:: create_key(password, userid)
 
-        Use the `create_newkey` function in the module to create a new keypair. It takes two arguments as str, a password, and userid.
+        Use the `create_key` function in the module to create a new keypair. It takes two arguments as str, a password, and userid.
         By default it creates the key with RSA4096, and returns a tuple of public,secret key as str. Raises `FileNotFound` error
         if the key file can not be accessed.
 

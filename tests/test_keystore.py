@@ -41,16 +41,14 @@ def test_no_such_key():
 
 def test_keystore_lifecycle():
     ks = jce.KeyStore(tmpdirname.name)
-    newkey = ks.create_newkey(
-        "redhat", "test key1 <email@example.com>", jce.Cipher.RSA4k
-    )
+    newkey = ks.create_key("redhat", "test key1 <email@example.com>", jce.Cipher.RSA4k)
     # the default key must be of secret
     assert newkey.keytype == jce.KeyType.SECRET
 
-    ks.import_cert("tests/files/store/public.asc")
-    ks.import_cert("tests/files/store/pgp_keys.asc")
-    ks.import_cert("tests/files/store/hellopublic.asc")
-    ks.import_cert("tests/files/store/secret.asc")
+    ks.import_key("tests/files/store/public.asc")
+    ks.import_key("tests/files/store/pgp_keys.asc")
+    ks.import_key("tests/files/store/hellopublic.asc")
+    ks.import_key("tests/files/store/secret.asc")
     # Now check the numbers of keys in the store
     assert (2, 2) == ks.details()
 
@@ -76,7 +74,7 @@ def test_keystore_contains_key():
     "verifies __contains__ method for keystore"
     ks = jce.KeyStore(tmpdirname.name)
     keypath = "tests/files/store/secret.asc"
-    k = ks.import_cert(keypath)
+    k = ks.import_key(keypath)
     _, fingerprint, keytype, exp, ctime, othervalues = jce.parse_cert_file(keypath)
 
     # First only the fingerprint
@@ -116,7 +114,7 @@ def test_keystore_key_uids():
 def test_key_password_change():
     tempdir = tempfile.TemporaryDirectory()
     ks = jce.KeyStore(tempdir.name)
-    k = ks.import_cert("tests/files/store/secret.asc")
+    k = ks.import_key("tests/files/store/secret.asc")
     k2 = ks.update_password(k, "redhat", "byebye")
     data = ks.sign_detached(k2, b"hello", "byebye")
 
@@ -124,11 +122,11 @@ def test_key_password_change():
 def test_key_deletion():
     tempdir = tempfile.TemporaryDirectory()
     ks = jce.KeyStore(tempdir.name)
-    ks.import_cert("tests/files/store/public.asc")
-    k = ks.import_cert("tests/files/store/pgp_keys.asc")
-    ks.import_cert("tests/files/store/hellopublic.asc")
-    ks.import_cert("tests/files/store/hellosecret.asc")
-    ks.import_cert("tests/files/store/secret.asc")
+    ks.import_key("tests/files/store/public.asc")
+    k = ks.import_key("tests/files/store/pgp_keys.asc")
+    ks.import_key("tests/files/store/hellopublic.asc")
+    ks.import_key("tests/files/store/hellosecret.asc")
+    ks.import_key("tests/files/store/secret.asc")
     assert (1, 2) == ks.details()
 
     ks.delete_key("F4F388BBB194925AE301F844C52B42177857DD79")
@@ -155,8 +153,8 @@ def test_ks_update_expiry_time_for_subkeys():
     "Updates expiry time for a given subkey"
     tempdir = tempfile.TemporaryDirectory()
     ks = jce.KeyStore(tempdir.name)
-    ks.import_cert("tests/files/store/hellosecret.asc")
-    ks.import_cert("tests/files/store/secret.asc")
+    ks.import_key("tests/files/store/hellosecret.asc")
+    ks.import_key("tests/files/store/secret.asc")
 
     key = ks.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
     subkeys = [
@@ -323,13 +321,13 @@ def test_ks_creation_expiration_time():
     # First let us check from the file
     keypath = "tests/files/store/pgp_keys.asc"
     ks = jce.KeyStore(tmpdir.name)
-    k = ks.import_cert(keypath)
+    k = ks.import_key(keypath)
     assert etime.date() == k.expirationtime.date()
     assert ctime.date() == k.creationtime.date()
 
     # now with a new key and creation time
     ctime = datetime.datetime(2010, 10, 10, 20, 53, 47)
-    newk = ks.create_newkey(
+    newk = ks.create_key(
         "redhat", "Another test key", ciphersuite=jce.Cipher.Cv25519, creation=ctime
     )
     assert ctime.date() == newk.creationtime.date()
@@ -338,16 +336,14 @@ def test_ks_creation_expiration_time():
     # Now both creation and expirationtime
     ctime = datetime.datetime(2008, 10, 10, 20, 53, 47)
     etime = datetime.datetime(2025, 12, 15, 20, 53, 47)
-    newk = ks.create_newkey(
-        "redhat", "Another test key", creation=ctime, expiration=etime
-    )
+    newk = ks.create_key("redhat", "Another test key", creation=ctime, expiration=etime)
     assert ctime.date() == newk.creationtime.date()
     assert etime.date() == newk.expirationtime.date()
 
     # Now both creation and expirationtime for subkeys
     ctime = datetime.datetime(2008, 10, 10, 20, 53, 47)
     etime = datetime.datetime(2029, 12, 15, 20, 53, 47)
-    newk = ks.create_newkey(
+    newk = ks.create_key(
         "redhat",
         "Test key with subkey expiration",
         creation=ctime,
@@ -360,7 +356,7 @@ def test_ks_creation_expiration_time():
 
     # Now only providing expirationtime for subkeys
     etime = datetime.datetime(2030, 6, 5, 20, 53, 47)
-    newk = ks.create_newkey(
+    newk = ks.create_key(
         "redhat",
         "Test key with subkey expiration",
         expiration=etime,
@@ -395,7 +391,7 @@ def test_add_userid():
     """Verifies that we can add uid to a cert"""
     tempdir = tempfile.TemporaryDirectory()
     ks = jce.KeyStore(tempdir.name)
-    key = ks.import_cert("tests/files/store/secret.asc")
+    key = ks.import_key("tests/files/store/secret.asc")
     # check that there is only one userid
     assert len(key.uids) == 1
 
@@ -411,7 +407,7 @@ def test_add_and_revoke_userid():
     """Verifies that we can add uid to a cert"""
     tempdir = tempfile.TemporaryDirectory()
     ks = jce.KeyStore(tempdir.name)
-    key = ks.import_cert("tests/files/store/secret.asc")
+    key = ks.import_key("tests/files/store/secret.asc")
     # check that there is only one userid
     assert len(key.uids) == 1
 
@@ -442,7 +438,7 @@ def test_add_userid_fails_for_public():
     """Verifies that adding uid to a public key fails"""
     tempdir = tempfile.TemporaryDirectory()
     ks = jce.KeyStore(tempdir.name)
-    key = ks.import_cert("tests/files/store/public.asc")
+    key = ks.import_key("tests/files/store/public.asc")
     # verify that the key is a secret
     assert len(key.uids) == 1
 
@@ -472,15 +468,15 @@ def test_update_subkey_expiry_time():
 def test_same_key_import_error():
     tempdir = tempfile.TemporaryDirectory()
     ks = jce.KeyStore(tempdir.name)
-    ks.import_cert("tests/files/store/public.asc")
+    ks.import_key("tests/files/store/public.asc")
     with pytest.raises(jce.CryptoError):
-        ks.import_cert("tests/files/store/public.asc")
+        ks.import_key("tests/files/store/public.asc")
 
 
 def test_key_without_uid():
     tempdir = tempfile.TemporaryDirectory()
     ks = jce.KeyStore(tempdir.name)
-    k = ks.create_newkey("redhat")
+    k = ks.create_key("redhat")
     uids, fp, secret, et, ct, othervalues = jce.parse_cert_bytes(k.keyvalue)
     assert len(uids) == 0
 
@@ -493,7 +489,7 @@ def test_key_with_multiple_uids():
         "kushal@freedom.press",
         "This is also Kushal",
     ]
-    k = ks.create_newkey("redhat", uids)
+    k = ks.create_key("redhat", uids)
     uids, fp, secret, et, ct, othervalues = jce.parse_cert_bytes(k.keyvalue)
     assert len(uids) == 3
 

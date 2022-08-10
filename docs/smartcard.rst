@@ -117,7 +117,7 @@ Smartcard API
 
                 ks = jce.KeyStore("/tmp/demo")
                 # By default it creates all 3 subkeys
-                key = ks.create_newkey("redhat", ["First Last <fl@example.com>",], jce.Cipher.Cv25519)
+                key = ks.create_key("redhat", ["First Last <fl@example.com>",], jce.Cipher.Cv25519)
                 print(key.fingerprint)
                 # We want to upload only the encryption and signing subkeys to the smartcard
                 result = rjce.upload_to_smartcard(key.keyvalue, b"12345678", "redhat", 3)

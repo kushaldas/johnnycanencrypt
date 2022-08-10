@@ -22,7 +22,7 @@ tempdir = tempfile.TemporaryDirectory()
 ks = jce.KeyStore(tempdir.name)
 
 print("Now importing the Cv25519 secret key to the keyring")
-k = ks.import_cert("smartcardtests/5286C32E7C71E14C4C82F9AE0B207108925CB162.sec")
+k = ks.import_key("smartcardtests/5286C32E7C71E14C4C82F9AE0B207108925CB162.sec")
 
 print(f"Creating temporary keyring at: {tempdir.name}")
 
@@ -64,7 +64,7 @@ tempdir = tempfile.TemporaryDirectory()
 ks = jce.KeyStore(tempdir.name)
 
 print("Now importing the Cv25519 public key to the keyring")
-k = ks.import_cert("smartcardtests/5286C32E7C71E14C4C82F9AE0B207108925CB162.pub")
+k = ks.import_key("smartcardtests/5286C32E7C71E14C4C82F9AE0B207108925CB162.pub")
 msg = b"OpenPGP on smartcard."
 enc_bytes = ks.encrypt([k], msg)
 
@@ -111,7 +111,7 @@ if inp != "Yes":
     sys.exit(0)
 
 print("Now importing the RSA4096 secret key to the keyring")
-k = ks.import_cert("smartcardtests/2184DF8AF2CAFEB16357FE43E6F848F1DDC66C12.sec")
+k = ks.import_key("smartcardtests/2184DF8AF2CAFEB16357FE43E6F848F1DDC66C12.sec")
 
 print("Resetting Yubikey")
 print(rjce.reset_yubikey())
@@ -151,7 +151,7 @@ tempdir = tempfile.TemporaryDirectory()
 ks = jce.KeyStore(tempdir.name)
 
 print("Now importing the RSA4096 public key to the keyring")
-k = ks.import_cert("smartcardtests/2184DF8AF2CAFEB16357FE43E6F848F1DDC66C12.pub")
+k = ks.import_key("smartcardtests/2184DF8AF2CAFEB16357FE43E6F848F1DDC66C12.pub")
 msg = b"OpenPGP on smartcard."
 enc_bytes = ks.encrypt([k], msg)
 

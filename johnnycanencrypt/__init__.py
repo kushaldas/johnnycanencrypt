@@ -14,7 +14,7 @@ from .johnnycanencrypt import (
     CryptoError,
     Johnny,
     SameKeyError,
-    create_newkey,
+    create_key,
     encrypt_bytes_to_bytes,
     encrypt_bytes_to_file,
     encrypt_file_internal,
@@ -520,8 +520,8 @@ class KeyStore:
         # Regnerate the key object and return it
         return self.get_key(fingerprint)
 
-    def import_cert(self, keypath: str, onplace=False) -> Key:
-        """Imports a given cert from the given path.
+    def import_key(self, keypath: str, onplace=False) -> Key:
+        """Imports a given key from the given file path.
 
         :param path: Path to the pgp key file.
         :param onplace: Default value is False, if True means the keyfile is in the right directory
@@ -787,7 +787,7 @@ class KeyStore:
                         results.append(key)
         return results
 
-    def create_newkey(
+    def create_key(
         self,
         password: str,
         uids: Optional[Union[List[str], str]] = [],
@@ -823,7 +823,7 @@ class KeyStore:
         elif isinstance(uids, list):
             finaluids = uids
 
-        public, secret, fingerprint = create_newkey(
+        public, secret, fingerprint = create_key(
             password,
             finaluids,
             ciphersuite.value,
@@ -837,7 +837,7 @@ class KeyStore:
         with open(key_filename, "w") as fobj:
             fobj.write(secret)
 
-        key = self.import_cert(key_filename)
+        key = self.import_key(key_filename)
 
         # TODO: should we remove the key_filename from the disk?
         return key
@@ -1095,19 +1095,22 @@ class KeyStore:
         else:
             outputpath_in_bytes = outputpath
 
-
-
         if k.keytype == KeyType.PUBLIC and k.oncard is not None:
             result = rjce.sign_file_on_card(
-                k.keyvalue, filepath_in_bytes, outputpath_in_bytes, password.encode("utf-8"), cleartext)
+                k.keyvalue,
+                filepath_in_bytes,
+                outputpath_in_bytes,
+                password.encode("utf-8"),
+                cleartext,
+            )
 
         else:
             jp = Johnny(k.keyvalue)
-            result = jp.sign_file(filepath_in_bytes, outputpath_in_bytes, password, cleartext)
+            result = jp.sign_file(
+                filepath_in_bytes, outputpath_in_bytes, password, cleartext
+            )
 
         return result
-
-
 
     def sign_file_detached(self, key, filepath, password, write=False):
         """Signs the given data with the key. It also writes filename.asc in the same directory of the file as the signature if write value is True.
