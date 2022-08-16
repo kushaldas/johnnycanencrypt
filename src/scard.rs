@@ -391,17 +391,15 @@ impl<'a> crypto::Signer for KeyPair<'a> {
                         let mpi = openpgp::crypto::mpi::MPI::new(&result[..]);
                         Ok(openpgp::crypto::mpi::Signature::RSA { s: mpi })
                     }
-                    _ => {
-                        return Err(openpgp::Error::InvalidOperation(format!(
-                            "unsupported combination of hash algorithm {:?} and key {:?}",
-                            hash_algo, self.public
-                        ))
-                        .into());
-                    }
+                    _ => Err(openpgp::Error::InvalidOperation(format!(
+                        "unsupported combination of hash algorithm {:?} and key {:?}",
+                        hash_algo, self.public
+                    ))
+                    .into()),
                 }
             }
             (EdDSA, PublicKey::EdDSA { .. }) => {
-                let data_for_eddsa: Vec<u8> = digest.iter().copied().collect();
+                let data_for_eddsa: Vec<u8> = digest.to_vec();
                 let result = sign_hash_in_card(data_for_eddsa, self.pin.clone())?;
                 let r = openpgp::crypto::mpi::MPI::new(&result[..32]);
                 let s = openpgp::crypto::mpi::MPI::new(&result[32..]);

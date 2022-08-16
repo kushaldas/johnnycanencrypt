@@ -919,7 +919,7 @@ fn get_keys(cert: &openpgp::cert::Cert, password: String) -> Vec<openpgp::crypto
         let mut key = key.clone();
         let algo = key.pk_algo();
 
-        let _keypair = key
+        key
             .secret_mut()
             .decrypt_in_place(algo, &openpgp::crypto::Password::from(password.clone()))
             .expect("decryption failed");
@@ -1017,13 +1017,7 @@ pub fn sign_file_on_card(
 
     // This is where the signed message will go
     let mut outfile = File::create(str::from_utf8(&output[..])?)?;
-    Ok(sign_file_internal_on_card(
-        certdata,
-        &mut localdata,
-        &mut outfile,
-        pin,
-        cleartext,
-    )?)
+    sign_file_internal_on_card(certdata, &mut localdata, &mut outfile, pin, cleartext)
 }
 
 fn sign_file_internal_on_card(
@@ -1106,12 +1100,7 @@ pub fn sign_bytes_on_card(
     cleartext: bool,
 ) -> Result<Vec<u8>> {
     let mut localdata = io::Cursor::new(data);
-    Ok(sign_bytes_internal_on_card(
-        certdata,
-        &mut localdata,
-        pin,
-        cleartext,
-    )?)
+    sign_bytes_internal_on_card(certdata, &mut localdata, pin, cleartext)
 }
 
 fn sign_bytes_internal_on_card(
@@ -1560,35 +1549,17 @@ fn parse_and_move_a_subkey(
     match what_kind_of_key {
         "rsa" => {
             // First the exponent
-            let values: Vec<u8> = main_e
-                .unwrap()
-                .value()
-                .iter()
-                .copied()
-                .collect::<Vec<u8>>()
-                .to_vec();
+            let values: Vec<u8> = main_e.unwrap().value().to_vec();
             for value in values {
                 result.push(value);
             }
             // Then the p
-            let values: Vec<u8> = main_p
-                .unwrap()
-                .value()
-                .iter()
-                .copied()
-                .collect::<Vec<u8>>()
-                .to_vec();
+            let values: Vec<u8> = main_p.unwrap().value().to_vec();
             for value in values {
                 result.push(value);
             }
             // Then the q
-            let values: Vec<u8> = main_q
-                .unwrap()
-                .value()
-                .iter()
-                .copied()
-                .collect::<Vec<u8>>()
-                .to_vec();
+            let values: Vec<u8> = main_q.unwrap().value().to_vec();
             for value in values {
                 result.push(value);
             }
@@ -1816,8 +1787,7 @@ fn internal_parse_cert(
         Ok(value) => match value.key_expiration_time() {
             Some(etime) => {
                 let dt: DateTime<Utc> = DateTime::from(etime);
-                let pd = Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None)?);
-                pd
+                Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None)?)
             }
             _ => None,
         },
@@ -1868,16 +1838,14 @@ fn internal_parse_cert(
         let expirationtime = match ka.key_expiration_time() {
             Some(etime) => {
                 let dt: DateTime<Utc> = DateTime::from(etime);
-                let pd = Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None)?);
-                pd
+                Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None)?)
             }
             _ => None,
         };
 
         let creationtime = {
             let dt: DateTime<Utc> = DateTime::from(ka.creation_time());
-            let pd = Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None)?);
-            pd
+            Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None)?)
         };
 
         // To find what kind of subkey is this.
@@ -2512,13 +2480,7 @@ impl Johnny {
         cleartext: bool,
     ) -> Result<PyObject> {
         let mut localdata = io::Cursor::new(data);
-        Ok(sign_bytes_internal(
-            py,
-            &self.cert,
-            &mut localdata,
-            password,
-            cleartext,
-        )?)
+        sign_bytes_internal(py, &self.cert, &mut localdata, password, cleartext)
     }
 
     pub fn sign_file(
