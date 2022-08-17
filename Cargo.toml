@@ -23,14 +23,14 @@ default = ["pyo3/extension-module"]
 
 [dependencies]
 sequoia-openpgp = "1.0.0"
-anyhow = "1.0.51"
-chrono = "0.4.19"
+anyhow = "1.0.62"
+chrono = "0.4.22"
 tempfile = "3.0.0"
-talktosc = { git = "https://github.com/kushaldas/talktosc", branch="main"}
-#talktosc = "0.1.1"
+#talktosc = { git = "https://github.com/kushaldas/talktosc", branch="main"}
+talktosc = "0.1.2"
  
 [dependencies.pyo3]
-version = "0.15.1"
+version = "0.16.4"
 
 
 [package.metadata.maturin]
@@ -43,6 +43,7 @@ classifier = [
   "Programming Language :: Python :: 3.7",
   "Programming Language :: Python :: 3.8",
   "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: Implementation :: CPython",
   "Topic :: Software Development :: Libraries",
   "Topic :: Software Development :: Libraries :: Python Modules"
