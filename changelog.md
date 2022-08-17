@@ -1,6 +1,6 @@
 # Changlelog
 
-## [unreleased]
+## [0.7.0] - 2022-08-17
 
 ### Added
 
@@ -12,6 +12,7 @@
 - `sign_detached` will do detached signature, `sign` is for the other usecase.
 - renamed `create_newkey` to `create_key` (breaking change).
 - renamed `import_cert` to `import_key` (breaking change).
+- Updates all dependencies.
 
 ### Fixed
 
