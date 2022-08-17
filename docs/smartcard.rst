@@ -103,7 +103,7 @@ Smartcard API
         - `2` for signing
         - `4` for authentication
 
-        And then you can add them up for the required compbination. For example `7` means you want to upload all 3 kinds of subkeys, but `3` means only encryption and signing subkeys will be loaded into the smartcard.
+        And then you can add them up for the required combination. For example `7` means you want to upload all 3 kinds of subkeys, but `3` means only encryption and signing subkeys will be loaded into the smartcard.
 
         - `3` for both encryption and signing
         - `5` for encryption and authentication
