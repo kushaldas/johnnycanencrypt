@@ -1,5 +1,14 @@
 # Changlelog
 
+## [upreleased]
+
+### Added
+
+- #96 `create_key` can now have signing capability for primary key.
+- #97 `sync_smartcard` can identify if the primary key is on card.
+- `upload_primary_to_smartcard` function in rjce.
+- Renamed internal function `parse_and_move_a_subkey` to `parse_and_move_a_key`
+
 ## [0.7.0] - 2022-08-17
 
 ### Added

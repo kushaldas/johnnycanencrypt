@@ -32,7 +32,7 @@ For the rest of the documentation we assume that you imported the module as foll
                 Returns the updated key with a new userid. If you need to upload the key to the https://keys.openpgp.org, then remember to
                 have to an email address in the user id.
 
-        .. method:: create_key(password: str, uids: Optional[Union[List[str], str]] = [], ciphersuite: Cipher = Cipher.RSA4k, creation: Optional[datetime.datetime] = None, expiration: Optional[datetime.datetime] = None, subkeys_expiration= False, whichkeys = 7) -> Key:
+        .. method:: create_key(password: str, uids: Optional[Union[List[str], str]] = [], ciphersuite: Cipher = Cipher.RSA4k, creation: Optional[datetime.datetime] = None, expiration: Optional[datetime.datetime] = None, subkeys_expiration= False, whichkeys = 7, can_primary_sign: bool = True) -> Key:
 
                 Returns the public part of the newly created `Key` in the store
                 directory. You can mention ciphersuite :class:`Cipher`  as
@@ -43,6 +43,8 @@ For the rest of the documentation we assume that you imported the module as foll
                 and keys don't expire. You can provide a string for uid, or multiple
                 strings using a List for multiple uids. It can also create a key without
                 any uids.
+
+                If you want the primary key to have signing capability, then pass `can_primary_sign=True`.
 
                 You can pass `whichkeys = 1` to generate only the encryption subkey, 2 for signing, 4 for authentication.
                 By default it will create all three subkeys (7).
@@ -190,7 +192,7 @@ For the rest of the documentation we assume that you imported the module as foll
         This is the enum class to metion the type of ciphersuite to be used while creating a new key. Possible values are **Cipher.RSA4k**,
         **Cipher.RSA2k**, **Cipher.Cv25519**.
 
-.. class:: Key(keyvalue: bytes, fingerprint: str, uids: Dict[str, str] = {}, keytype: KeyType=KeyType.PUBLIC, expirationtime=None, creationtime=None) -> Key:
+.. class:: Key(keyvalue: bytes, fingerprint: str, uids: Dict[str, str] = {}, keytype: KeyType=KeyType.PUBLIC, expirationtime=None, creationtime=None, othervalues={}, oncard: str = "", can_primary_sign: bool = False, primary_on_card: str = "") -> Key:
 
         Returns a Key object  and fingerprint. The keytype enum :class:`KeyType`. 
 
@@ -226,9 +228,21 @@ For the rest of the documentation we assume that you imported the module as foll
 
                 The keyid of the master key
 
+        .. attribute:: primary_on_card
+
+                A string containing the smartcard ID, this will be populated only after `sync_smartcard` call in the `KeyStore`.
+
+        .. attribute:: oncard
+
+                A string containing the smartcard ID if the card contains any of the subkeys, this will be populated only after `sync_smartcard` call in the `KeyStore`.
+
         .. attribute:: othervalues
 
                 A dictionary containing subkeys's keyids and fingerprints.
+        
+        .. attribute:: can_primary_sign
+
+                A boolean value telling if the primary key has signing capability or not.
 
         .. method:: available_subkeys() -> Tuple[bool, bool, bool]:
 

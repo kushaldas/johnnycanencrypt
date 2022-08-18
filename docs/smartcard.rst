@@ -123,3 +123,26 @@ Smartcard API
                 result = rjce.upload_to_smartcard(key.keyvalue, b"12345678", "redhat", 3)
                 print(result)
 
+.. function:: upload_primary_to_smartcard(certdata: bytes, pin: bytes, password: str, whichslot: int) -> bool:
+
+        Uploads the primary key to the smartcard in the given slot. Takes the whole certdata (from `Key.keyvalue`) in bytes, and the admin pin of the card, the password (as string) of
+        the key. You can choose which subkeys to be uploaded via the following values of `whichslot` argument:
+
+        - `2` for signing slot
+        - `4` for authentication slot
+
+        ::
+
+                import johnnycanencrypt as jce
+                import johnnycanencrypt.johnnycanencrypt as rjce
+
+                ks = jce.KeyStore("/tmp/demo")
+                # Create a primary key with signing capability & an encryption subkey
+                key = ks.create_key("redhat", ["First Last <fl@example.com>",], jce.Cipher.Cv25519, whichkeys=1, can_primary_sign=True)
+                print(key.fingerprint)
+                # We want to upload first the primary key to the signing slot of the card
+                result = rjce.upload_primary_to_smartcard(key.keyvalue, b"12345678", "redhat", whichslot=2)
+                # We want to upload only the encryption subkey to the smartcard
+                result = rjce.upload_to_smartcard(key.keyvalue, b"12345678", "redhat", 1)
+                print(result)
+

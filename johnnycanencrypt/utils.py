@@ -9,7 +9,9 @@ CREATE TABLE keys (
 	expiration TEXT,
 	creation TEXT,
 	keytype INTEGER,
-    oncard TEXT
+    can_primary_sign INTEGER,
+    oncard TEXT,
+    primary_on_card TEXT
 );
 
 CREATE TABLE subkeys (
@@ -78,7 +80,7 @@ CREATE TABLE uiduris (
 CREATE TABLE dbupgrade (upgradedate TEXT)
 """
 
-DB_UPGRADE_DATE = "20210118"
+DB_UPGRADE_DATE = "20220818"
 
 
 def _get_cert_data(filepath):

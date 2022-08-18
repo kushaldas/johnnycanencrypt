@@ -23,6 +23,7 @@ def test_parse_cert_file():
     ) = rustjce.parse_cert_file(keypath)
     assert etime.date() == expirationtime.date()
     assert ctime.date() == creationtime.date()
+    assert othervalues["can_primary_sign"] == True
 
 
 def test_parse_cert_bytes():
@@ -80,3 +81,16 @@ def test_merge_certs():
 
     assert ctime.date() == creationtime.date()
     assert not expirationtime
+
+def test_no_primary_sign():
+    keypath = "tests/files/store/secret.asc"
+    (
+        uids,
+        fingerprint,
+        keytype,
+        expirationtime,
+        creationtime,
+        othervalues,
+    ) = rustjce.parse_cert_file(keypath)
+    assert othervalues["can_primary_sign"] == False
+
