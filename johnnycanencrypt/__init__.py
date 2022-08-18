@@ -62,6 +62,7 @@ class Key:
         othervalues={},
         oncard: str = "",
         can_primary_sign: bool = False,
+        primary_on_card: str = ""
     ):
         self.keyvalue = keyvalue
         self.keytype = keytype
@@ -77,6 +78,7 @@ class Key:
         self.othervalues = othervalues
         self.oncard = oncard
         self.can_primary_sign = can_primary_sign
+        self.primary_on_card = primary_on_card
 
     def __repr__(self):
         return f"<Key fingerprint={self.fingerprint} type={self.keytype.name}>"
@@ -639,6 +641,7 @@ class KeyStore:
                 keytype = KeyType.SECRET if result["keytype"] else KeyType.PUBLIC
                 oncard = result["oncard"]
                 can_primary_sign = result["can_primary_sign"]
+                primary_on_card = result["primary_on_card"]
 
                 # Now get the uids
                 sql = "SELECT id, value, revoked FROM uidvalues WHERE key_id=?"
@@ -717,6 +720,7 @@ class KeyStore:
                         othervalues,
                         oncard,
                         can_primary_sign,
+                        primary_on_card,
                     )
                 )
         if finalresult:
@@ -1278,6 +1282,7 @@ class KeyStore:
 
         :returns: The fingerprint of the primary key.
         """
+        fingerprint: str = ""
         data = rjce.get_card_details()
         if not data["serial_number"]:
             return "No data found."
@@ -1299,4 +1304,22 @@ class KeyStore:
                 sql = "SELECT fingerprint from keys where id=?"
                 cursor.execute(sql, (fromdb["key_id"],))
                 result = cursor.fetchone()
-                return result["fingerprint"]
+                fingerprint = result["fingerprint"]
+            # Now let us see if we can find the primary key on the card
+            sql = "SELECT DISTINCT id, fingerprint FROM keys where fingerprint IN (?, ?, ?)"
+            sig_f = convert_fingerprint(data["sig_f"])
+            enc_f = convert_fingerprint(data["enc_f"])
+            auth_f = convert_fingerprint(data["auth_f"])
+            cursor.execute(sql, (sig_f, enc_f, auth_f))
+            fromdb = cursor.fetchone()
+            if fromdb:
+                # Means we found the main key, now we have to mark it with the serial number of the card
+                sql = "UPDATE keys SET primary_on_card=? WHERE id=?"
+                cursor.execute(sql, (data["serial_number"], fromdb["id"]))
+                sql = "SELECT fingerprint from keys where id=?"
+                cursor.execute(sql, (fromdb["id"],))
+                result = cursor.fetchone()
+                fingerprint = result["fingerprint"]
+
+            return fingerprint
+

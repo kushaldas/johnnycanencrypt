@@ -192,7 +192,7 @@ For the rest of the documentation we assume that you imported the module as foll
         This is the enum class to metion the type of ciphersuite to be used while creating a new key. Possible values are **Cipher.RSA4k**,
         **Cipher.RSA2k**, **Cipher.Cv25519**.
 
-.. class:: Key(keyvalue: bytes, fingerprint: str, uids: Dict[str, str] = {}, keytype: KeyType=KeyType.PUBLIC, expirationtime=None, creationtime=None, othervalues={}, oncard: str = "", can_primary_sign: bool = False) -> Key:
+.. class:: Key(keyvalue: bytes, fingerprint: str, uids: Dict[str, str] = {}, keytype: KeyType=KeyType.PUBLIC, expirationtime=None, creationtime=None, othervalues={}, oncard: str = "", can_primary_sign: bool = False, primary_on_card: str = "") -> Key:
 
         Returns a Key object  and fingerprint. The keytype enum :class:`KeyType`. 
 
@@ -227,6 +227,14 @@ For the rest of the documentation we assume that you imported the module as foll
         .. attribute:: keyid
 
                 The keyid of the master key
+
+        .. attribute:: primary_on_card
+
+                A string containing the smartcard ID, this will be populated only after `sync_smartcard` call in the `KeyStore`.
+
+        .. attribute:: oncard
+
+                A string containing the smartcard ID if the card contains any of the subkeys, this will be populated only after `sync_smartcard` call in the `KeyStore`.
 
         .. attribute:: othervalues
 
