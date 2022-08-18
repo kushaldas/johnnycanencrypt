@@ -61,6 +61,7 @@ class Key:
         creationtime=None,
         othervalues={},
         oncard: str = "",
+        can_primary_sign: bool = False,
     ):
         self.keyvalue = keyvalue
         self.keytype = keytype
@@ -75,6 +76,7 @@ class Key:
         )
         self.othervalues = othervalues
         self.oncard = oncard
+        self.can_primary_sign = can_primary_sign
 
     def __repr__(self):
         return f"<Key fingerprint={self.fingerprint} type={self.keytype.name}>"
@@ -204,9 +206,14 @@ class KeyStore:
             cursor = con.cursor()
             for row in existing_records:
                 oncard = row["oncard"]
+                # The following because this column may not exist at all
+                try:
+                    primary_on_card = row["primary_on_card"]
+                except IndexError:
+                    primary_on_card = ""
                 fingerprint = row["fingerprint"]
-                sql = "UPDATE keys set oncard=? where fingerprint=?"
-                cursor.execute(sql, (oncard, fingerprint))
+                sql = "UPDATE keys set oncard=?, primary_on_card=? where fingerprint=?"
+                cursor.execute(sql, (oncard, primary_on_card, fingerprint))
         # Now let us rename the file
         os.rename(self.dbpath, oldpath)
         self.dbpath = oldpath
@@ -259,6 +266,7 @@ class KeyStore:
         ktype = 1 if keytype else 0
         subkeys = othervalues["subkeys"]
         mainkeyid = othervalues["keyid"]
+        can_primary_sign = othervalues["can_primary_sign"]
         with con:
             cursor = con.cursor()
             # First let us check if a key already exists
@@ -285,8 +293,8 @@ class KeyStore:
                 cursor.execute(sql, (cert, ktype, etime, ctime, key_id))
             else:
                 # Now insert the new key
-                sql = "INSERT INTO keys (keyvalue, fingerprint, keyid, keytype, expiration, creation) VALUES(?, ?, ?, ?, ?, ?)"
-                cursor.execute(sql, (cert, fingerprint, mainkeyid, ktype, etime, ctime))
+                sql = "INSERT INTO keys (keyvalue, fingerprint, keyid, keytype, expiration, creation, can_primary_sign) VALUES(?, ?, ?, ?, ?, ?, ?)"
+                cursor.execute(sql, (cert, fingerprint, mainkeyid, ktype, etime, ctime, can_primary_sign))
                 # This `key_id` is the database id
                 key_id = cursor.lastrowid
             # Now let us add the subkey and keyid details
@@ -630,6 +638,7 @@ class KeyStore:
                 creationtime = result["creation"]
                 keytype = KeyType.SECRET if result["keytype"] else KeyType.PUBLIC
                 oncard = result["oncard"]
+                can_primary_sign = result["can_primary_sign"]
 
                 # Now get the uids
                 sql = "SELECT id, value, revoked FROM uidvalues WHERE key_id=?"
@@ -707,6 +716,7 @@ class KeyStore:
                         creationtime,
                         othervalues,
                         oncard,
+                        can_primary_sign,
                     )
                 )
         if finalresult:
@@ -796,6 +806,7 @@ class KeyStore:
         expiration=None,
         subkeys_expiration=False,
         whichkeys=7,
+        can_primary_sign=False,
     ) -> Key:
         """Returns a public `Key` object after creating a new key in the store
 
@@ -806,6 +817,7 @@ class KeyStore:
         :param expiration: datetime.datetime, default 0 (Never)
         :param subkeys_expiration: Bool (default False), pass True if you want to set the expiry date to the subkeys instead of master key.
         :param whichkeys: Decides which all subkeys to generate, 1 (for encryption), 2 for signing, 4 for authentication. Add the numbers for mixed result.
+        :param can_primary_sign: Boolean to indicate if the primary key can do signing
         """
         if creation:
             ctime = creation.timestamp()
@@ -831,6 +843,7 @@ class KeyStore:
             int(etime),
             subkeys_expiration,
             whichkeys,
+            can_primary_sign
         )
         # Now save the secret key
         key_filename = os.path.join(self.path, f"{fingerprint}.sec")

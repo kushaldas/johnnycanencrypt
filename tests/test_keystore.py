@@ -38,8 +38,17 @@ def test_no_such_key():
         ks = jce.KeyStore("tests/files/store")
         key = ks.get_key("A4F388BBB194925AE301F844C52B42177857DD79")
 
+def test_create_primary_key_with_encryption():
+    ks = jce.KeyStore(tmpdirname.name)
+    newkey = ks.create_key("redhat", "test key42 <42@example.com>", jce.Cipher.RSA4k, whichkeys=1, can_primary_sign=True)
+    assert newkey.can_primary_sign == True
 
 def test_keystore_lifecycle():
+    # Before anything let us first delete if any existing db
+    pathname = os.path.join(tmpdirname.name, "jce.db")
+    if os.path.exists(pathname):
+        os.remove(pathname)
+    # Now create a fresh db
     ks = jce.KeyStore(tmpdirname.name)
     newkey = ks.create_key("redhat", "test key1 <email@example.com>", jce.Cipher.RSA4k)
     # the default key must be of secret
@@ -60,6 +69,9 @@ def test_keystore_lifecycle():
     keys_via_emails = ks.get_keys(qvalue="kushaldas@gmail.com", qtype="email")
     assert len(keys_via_emails) == 1
     assert key_via_fingerprint == keys_via_emails[0]
+
+    # Also verify that kushal's primary key can sign
+    assert key_via_fingerprint.can_primary_sign == True
 
     # Now verify name cache
     key_via_fingerprint = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")

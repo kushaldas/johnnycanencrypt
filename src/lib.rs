@@ -919,8 +919,7 @@ fn get_keys(cert: &openpgp::cert::Cert, password: String) -> Vec<openpgp::crypto
         let mut key = key.clone();
         let algo = key.pk_algo();
 
-        key
-            .secret_mut()
+        key.secret_mut()
             .decrypt_in_place(algo, &openpgp::crypto::Password::from(password.clone()))
             .expect("decryption failed");
         keys.push(key.into_keypair().unwrap());
@@ -1877,9 +1876,16 @@ fn internal_parse_cert(
         ))?;
     }
 
+    // To find out if the primary key can sign or not.
+    let can_primary_sign = match cert.primary_key().with_policy(&p, None) {
+        Ok(pkey) => pkey.for_signing(),
+        _ => false,
+    };
+
     let othervalues = PyDict::new(py);
     othervalues.set_item("keyid", cert.primary_key().keyid().to_hex())?;
     othervalues.set_item("subkeys", subkeys)?;
+    othervalues.set_item("can_primary_sign", can_primary_sign)?;
 
     Ok((
         plist.into(),
@@ -1894,7 +1900,9 @@ fn internal_parse_cert(
 /// This function takes a password and an userid as strings, returns a tuple of public and private
 /// key and the fingerprint in hex. Remember to save the keys for future use.
 #[pyfunction]
-#[pyo3(text_signature = "(password, userid, cipher, creation, expiration)")]
+#[pyo3(
+    text_signature = "(password, userid, cipher, creation, expiration, subkeys_expiration, whichkeys, can_primary_sign)"
+)]
 fn create_key(
     password: String,
     userids: Vec<String>,
@@ -1903,6 +1911,7 @@ fn create_key(
     expiration: i64,
     subkeys_expiration: bool,
     whichkeys: u8,
+    can_primary_sign: bool,
 ) -> Result<(String, String, String)> {
     let mut cdt: Option<DateTime<Utc>> = None;
     // Default we create RSA4k keys
@@ -1920,6 +1929,12 @@ fn create_key(
     for uid in userids {
         crtbuilder = crtbuilder.add_userid(uid);
     }
+
+    // To mark if our primary key needs to have signing capability
+    let crtbuilder = match can_primary_sign {
+        true => crtbuilder.set_primary_key_flags(KeyFlags::empty().set_signing()),
+        false => crtbuilder,
+    };
 
     let crtbuilder = match creation {
         0 => crtbuilder,
