@@ -1,6 +1,6 @@
 # Changlelog
 
-## [upreleased]
+## [0.8.0] - 2022-08-18
 
 ### Added
 
