@@ -9,19 +9,6 @@ You can import the low level functions or `Johnny` class by the following way:
 
 In most cases you don't have to use these, but if you have a reason, feel free to use them.
 
-.. function:: create_key(password, userid)
-
-        Use the `create_key` function in the module to create a new keypair. It takes two arguments as str, a password, and userid.
-        By default it creates the key with RSA4096, and returns a tuple of public,secret key as str. Raises `FileNotFound` error
-        if the key file can not be accessed.
-
-        ::
-
-                >>> public, secret = jce.newkey("my super secret password using diceware", "test <test@example.com>")
-
-
-        .. note:: Remember to save both the public and serect keys in a file to use in future.
-
 .. function:: encrypt_bytes_to_file(publickeys, data, output, armor=False)
 
         This function takes a list of public key file paths, and encrypts the given data in bytes to an output

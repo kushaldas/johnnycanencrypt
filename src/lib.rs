@@ -1404,7 +1404,34 @@ fn get_pub_key(_py: Python, certdata: Vec<u8>) -> Result<String> {
 }
 
 #[pyfunction]
-#[pyo3(text_signature = "(certdata, pin, password)")]
+#[pyo3(text_signature = "(certdata, pin, password, whichslot)")]
+fn upload_primary_to_smartcard(
+    _py: Python,
+    certdata: Vec<u8>,
+    pin: Vec<u8>,
+    password: String,
+    whichslot: u8,
+) -> Result<bool> {
+    let cert = openpgp::Cert::from_bytes(&certdata)?;
+
+    // whichslot, 2 for signing, 4 for authentication
+    // Can be either of this.
+
+    // Here the key slot is something I decided
+    // 2 -- singing slot on the key
+    // 3 -- authentication slot on the key
+    let mut result = false;
+
+    if (whichslot & 0x02) == 0x02 {
+        result = parse_and_move_a_key(cert.clone(), 2, pin.clone(), password.clone(), true)?;
+    } else if (whichslot & 0x04) == 0x04 {
+        result = parse_and_move_a_key(cert, 3, pin, password, true)?;
+    }
+    Ok(result)
+}
+
+#[pyfunction]
+#[pyo3(text_signature = "(certdata, pin, password, whichkeys)")]
 fn upload_to_smartcard(
     _py: Python,
     certdata: Vec<u8>,
@@ -1427,24 +1454,25 @@ fn upload_to_smartcard(
     // 3 -- authentication key
     let mut result = false;
     if (whichkeys & 0x01) == 0x01 {
-        result = parse_and_move_a_subkey(cert.clone(), 1, pin.clone(), password.clone())?;
+        result = parse_and_move_a_key(cert.clone(), 1, pin.clone(), password.clone(), false)?;
     }
 
     if (whichkeys & 0x02) == 0x02 {
-        result = parse_and_move_a_subkey(cert.clone(), 2, pin.clone(), password.clone())?;
+        result = parse_and_move_a_key(cert.clone(), 2, pin.clone(), password.clone(), false)?;
     }
     if (whichkeys & 0x04) == 0x04 {
-        result = parse_and_move_a_subkey(cert, 3, pin, password)?;
+        result = parse_and_move_a_key(cert, 3, pin, password, false)?;
     }
     Ok(result)
 }
 
 #[allow(unused)]
-fn parse_and_move_a_subkey(
+fn parse_and_move_a_key(
     cert: openpgp::Cert,
     keytype: i8,
     pin: Vec<u8>,
     password: String,
+    primary: bool,
 ) -> Result<bool> {
     let policy = P::new();
     // To flag if it is a RSA key, or ECDH or EdDSA
@@ -1467,21 +1495,87 @@ fn parse_and_move_a_subkey(
     let mut ts = 0_u64;
 
     let mut fp: Option<openpgp::Fingerprint> = None;
-    let mut valid_ka = cert
-        .keys()
-        .subkeys()
-        .with_policy(&policy, None)
-        .secret()
-        .alive()
-        .revoked(false);
-    valid_ka = match keytype {
-        1 => valid_ka.for_storage_encryption(),
-        2 => valid_ka.for_signing(),
-        3 => valid_ka.for_authentication(),
-        _ => return Err(JceError::new("wrong value for the keytype".to_string())),
-    };
-    for ka in valid_ka {
-        // First let us get the value of e from the public key
+    if !primary {
+        // Means we are here for subkeys
+        let mut valid_ka = cert
+            .keys()
+            .subkeys()
+            .with_policy(&policy, None)
+            .secret()
+            .alive()
+            .revoked(false);
+
+        valid_ka = match keytype {
+            1 => valid_ka.for_storage_encryption(),
+            2 => valid_ka.for_signing(),
+            3 => valid_ka.for_authentication(),
+            _ => return Err(JceError::new("wrong value for the keytype".to_string())),
+        };
+        for ka in valid_ka {
+            // First let us get the value of e from the public key
+            let public = ka.parts_as_public();
+            match public.mpis().clone() {
+                openpgp::crypto::mpi::PublicKey::RSA { ref e, ref n } => {
+                    main_e = Some(e.clone());
+                    main_e_for_second_use = Some(e.clone());
+                    main_n = Some(n.clone());
+                }
+                openpgp::crypto::mpi::PublicKey::ECDH { curve, q, .. } => {
+                    main_curve = Some(curve.clone());
+                    main_eq = Some(q.clone());
+                }
+                openpgp::crypto::mpi::PublicKey::EdDSA { curve, q } => {
+                    main_curve = Some(curve.clone());
+                    main_eq = Some(q.clone());
+                }
+                _ => (),
+            }
+            let key = ka
+                .key()
+                .clone()
+                .decrypt_secret(&openpgp::crypto::Password::from(password.clone()))?;
+            let ctime = key.creation_time();
+            let dt: DateTime<Utc> = DateTime::from(ctime);
+            ts = dt.timestamp() as u64;
+
+            fp = Some(key.fingerprint());
+
+            // NOTE: all integers has to converted via to_be_bytes, and then remove any extra 0 in the
+            // front.
+            //let dd: u32 = 65537;
+            //dbg!(dd.to_be_bytes());
+
+            if let Some(openpgp::packet::key::SecretKeyMaterial::Unencrypted(ref u)) =
+                key.optional_secret()
+            {
+                u.map(|mpis| match mpis.clone() {
+                    openpgp::crypto::mpi::SecretKeyMaterial::RSA { d, p, q, u } => {
+                        main_d = Some(d);
+                        main_p = Some(p);
+                        main_q = Some(q);
+                        main_u = Some(u);
+                        what_kind_of_key = "rsa";
+                    }
+                    openpgp::crypto::mpi::SecretKeyMaterial::ECDH { scalar } => {
+                        main_scalar = Some(scalar);
+                        what_kind_of_key = "ECDH";
+                    }
+                    openpgp::crypto::mpi::SecretKeyMaterial::EdDSA { scalar } => {
+                        main_scalar = Some(scalar);
+                        what_kind_of_key = "EdDSA";
+                    }
+                    _ => (),
+                });
+            }
+        }
+    // End of the block for subkeys
+    } else {
+        // Here we will work with the primary key.
+
+        let ka = cert
+            .primary_key()
+            .with_policy(&policy, None)?
+            .parts_into_secret()?;
         let public = ka.parts_as_public();
         match public.mpis().clone() {
             openpgp::crypto::mpi::PublicKey::RSA { ref e, ref n } => {
@@ -1509,11 +1603,6 @@ fn parse_and_move_a_subkey(
 
         fp = Some(key.fingerprint());
 
-        // NOTE: all integers has to converted via to_be_bytes, and then remove any extra 0 in the
-        // front.
-        //let dd: u32 = 65537;
-        //dbg!(dd.to_be_bytes());
-
         if let Some(openpgp::packet::key::SecretKeyMaterial::Unencrypted(ref u)) =
             key.optional_secret()
         {
@@ -1536,7 +1625,7 @@ fn parse_and_move_a_subkey(
                 _ => (),
             });
         }
-    }
+    } // End of the block for primary key
     let mut result: Vec<u8> = Vec::new();
     // Let us create the TLV for 5F48
     let mut for5f48: Vec<u8> = vec![0x5F, 0x48];
@@ -2597,6 +2686,7 @@ fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(decrypt_filehandler_on_card))?;
     m.add_wrapped(wrap_pyfunction!(create_key))?;
     m.add_wrapped(wrap_pyfunction!(upload_to_smartcard))?;
+    m.add_wrapped(wrap_pyfunction!(upload_primary_to_smartcard))?;
     m.add_wrapped(wrap_pyfunction!(get_pub_key))?;
     m.add_wrapped(wrap_pyfunction!(bytes_encrypted_for))?;
     m.add_wrapped(wrap_pyfunction!(file_encrypted_for))?;

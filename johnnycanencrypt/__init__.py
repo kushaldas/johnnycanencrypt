@@ -62,7 +62,7 @@ class Key:
         othervalues={},
         oncard: str = "",
         can_primary_sign: bool = False,
-        primary_on_card: str = ""
+        primary_on_card: str = "",
     ):
         self.keyvalue = keyvalue
         self.keytype = keytype
@@ -296,7 +296,18 @@ class KeyStore:
             else:
                 # Now insert the new key
                 sql = "INSERT INTO keys (keyvalue, fingerprint, keyid, keytype, expiration, creation, can_primary_sign) VALUES(?, ?, ?, ?, ?, ?, ?)"
-                cursor.execute(sql, (cert, fingerprint, mainkeyid, ktype, etime, ctime, can_primary_sign))
+                cursor.execute(
+                    sql,
+                    (
+                        cert,
+                        fingerprint,
+                        mainkeyid,
+                        ktype,
+                        etime,
+                        ctime,
+                        can_primary_sign,
+                    ),
+                )
                 # This `key_id` is the database id
                 key_id = cursor.lastrowid
             # Now let us add the subkey and keyid details
@@ -847,7 +858,7 @@ class KeyStore:
             int(etime),
             subkeys_expiration,
             whichkeys,
-            can_primary_sign
+            can_primary_sign,
         )
         # Now save the secret key
         key_filename = os.path.join(self.path, f"{fingerprint}.sec")
@@ -1322,4 +1333,3 @@ class KeyStore:
                 fingerprint = result["fingerprint"]
 
             return fingerprint
-
