@@ -1,6 +1,5 @@
 [build-system]
-requires = ["maturin>=0.13,<0.14"]
-build-backend = "maturin"
+requires = ["setuptools", "wheel", "setuptools-rust"]
 
 [tool.maturin]
 manylinux = "off"
