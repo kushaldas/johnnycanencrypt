@@ -1,6 +1,6 @@
 pytest
 setuptools
-wheels
+wheel
 setuptools-rust
 mypy
 httpx
