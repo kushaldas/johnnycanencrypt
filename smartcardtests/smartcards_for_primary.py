@@ -21,7 +21,7 @@ tempdir = tempfile.TemporaryDirectory()
 ks = jce.KeyStore(tempdir.name)
 
 print("Now importing the RSA4096 secret key to the keyring")
-#k = ks.import_key("smartcardtests/2184DF8AF2CAFEB16357FE43E6F848F1DDC66C12.sec")
+# k = ks.import_key("smartcardtests/2184DF8AF2CAFEB16357FE43E6F848F1DDC66C12.sec")
 k = ks.import_key("tests/files/primary_with_sign.asc")
 
 print("Resetting Yubikey")
@@ -45,5 +45,22 @@ rjce.upload_to_smartcard(k.keyvalue, b"12345678", "redhat", whichkeys=1)
 data = rjce.get_card_details()
 
 print("Now verifying the fingerprints of the subkeys on the card")
-print(    jce.utils.convert_fingerprint(data["sig_f"]) + " " + jce.utils.convert_fingerprint(data["enc_f"]) + " " + jce.utils.convert_fingerprint(data["auth_f"]))
+print(
+    jce.utils.convert_fingerprint(data["sig_f"])
+    + " "
+    + jce.utils.convert_fingerprint(data["enc_f"])
+    + " "
+    + jce.utils.convert_fingerprint(data["auth_f"])
+)
 
+print("Now let us sign some data")
+
+msg = b"Kushal loves Python."
+signature = rjce.sign_bytes_detached_on_card(k.keyvalue, msg, b"123456")
+
+print(f"The signature is {signature}")
+
+if ks.verify(k, msg, signature):
+    print("The signature is good.")
+else:
+    print("Bad signature from the card.")

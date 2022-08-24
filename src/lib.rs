@@ -964,7 +964,6 @@ fn sign_internal_detached_on_card(
     for ka in cert
         .keys()
         .with_policy(policy, None)
-        .subkeys()
         .alive()
         .revoked(false)
         .for_signing()
@@ -1037,7 +1036,6 @@ fn sign_file_internal_on_card(
     for ka in cert
         .keys()
         .with_policy(policy, None)
-        .subkeys()
         .alive()
         .revoked(false)
         .for_signing()
@@ -1119,7 +1117,6 @@ fn sign_bytes_internal_on_card(
     for ka in cert
         .keys()
         .with_policy(policy, None)
-        .subkeys()
         .alive()
         .revoked(false)
         .for_signing()
