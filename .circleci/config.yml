@@ -61,17 +61,6 @@ common-steps:
 
 version: 2
 jobs:
-  build-buster-3.7:
-    docker:
-      - image: circleci/python:3.7-buster
-    steps:
-      - checkout
-      - *install_system_packages
-      - *install_rustup
-      - *install_dependencies
-      - *build_jce
-      - *test_jce
-
   build-buster-3.8:
     docker:
       - image: circleci/python:3.8-buster
@@ -117,5 +106,4 @@ workflows:
     - build-bullseye-3.10
     - build-buster-3.9
     - build-buster-3.8
-    - build-buster-3.7
 
