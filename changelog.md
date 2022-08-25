@@ -1,5 +1,9 @@
 # Changlelog
 
+## [unreleased]
+
+- Adds `setuptools-rust` as build system.
+
 ## [0.8.0] - 2022-08-18
 
 ### Added

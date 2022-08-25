@@ -8,7 +8,7 @@ You will need `libnettle` and `libnettle-dev` & `clang`, `libpcsclite1`, `libpcs
 
 ::
 
-        sudo apt install -y python3-dev libnettle6 nettle-dev libhogweed4 python3-pip python3-venv clang libpcsclite-dev libpcsclite1
+        sudo apt install -y python3-dev libnettle8 nettle-dev libhogweed6 python3-pip python3-venv clang libpcsclite-dev libpcsclite1 libclang-9-dev
 
 ::
 
@@ -32,30 +32,30 @@ After you have the dependencies mentioned above, you can follow the steps below 
 
         python3 -m venv .venv
         source .venv/bin/activate
-        python3 -m pip install -r requirements-dev.txt
-        maturin build --manylinux=off
+        python -m pip install -r requirements-dev.txt
+        python setup.py develop
 
 Only to build and test locally, you should execute
 
 ::
 
-        maturin develop
+        python setup.py develop
 
 
 To build a wheel use the following command.
 
 ::
 
-        maturin build --manylinux=off
+        python setup.py bdist_wheel
 
 How to run the tests?
 ----------------------
 
-After you did the `maturin develop` as mentioned above, execute the following command.
+After you did the `python setup.py develop` as mentioned above, execute the following command.
 
 ::
 
-        python3 -m pytest -vvv
+        python -m pytest -vvv
 
 
 How to run the smartcard related tests?
