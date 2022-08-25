@@ -42,8 +42,7 @@ common-steps:
         . .venv/bin/activate
         source /home/circleci/.cargo/env
         export PATH=/usr/lib/llvm-7/bin:$PATH
-        maturin develop
-        maturin build --manylinux=off
+        python setup.py develop
 
   - &test_jce
     run:
