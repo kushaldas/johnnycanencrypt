@@ -1,7 +1,9 @@
+use openpgp::KeyHandle;
 use pyo3::create_exception;
 use pyo3::exceptions::*;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
+use pyo3::types::PyTuple;
 use pyo3::types::{PyDateTime, PyDict, PyList};
 use pyo3::wrap_pyfunction;
 
@@ -1915,6 +1917,58 @@ fn internal_parse_cert(
             revoked = true;
         };
         pd.set_item("revoked", revoked)?;
+
+        // This list contains a list of dictionary
+        let certification_list = PyList::empty(py);
+        // Now we will deal with the certifications, that is if anyone else signed this UID.
+        for c in ua.certifications() {
+            // This is the type of certification
+            let c_type = match c.typ() {
+                SignatureType::GenericCertification => "generic",
+                SignatureType::CasualCertification => "casual",
+                SignatureType::PersonaCertification => "persona",
+                SignatureType::PositiveCertification => "postive",
+                _ => "unknown",
+            };
+
+            let creationtime = {
+                let sct = c.signature_creation_time();
+                match sct {
+                    Some(sct_value) => {
+                        let dt: DateTime<Utc> = DateTime::from(sct_value);
+                        Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None)?)
+                    }
+                    None => None,
+                }
+            };
+
+            // Now we need a list of issuers for this certification
+            //
+            let issuer_list = PyList::empty(py);
+            for issuer in c.get_issuers() {
+                //let fp_keyid = PyTuple::new(py, &[issuer.])
+                match issuer {
+                    KeyHandle::Fingerprint(finger) => issuer_list.append(PyTuple::new(
+                        py,
+                        &["fingerprint".to_string(), finger.to_hex()],
+                    ))?,
+                    KeyHandle::KeyID(kid) => issuer_list
+                        .append(PyTuple::new(py, &["keyid".to_string(), kid.to_hex()]))?,
+                }
+            }
+
+            // Now add this one certification
+            let ud_dict = PyDict::new(py);
+            ud_dict.set_item("certification_type", c_type)?;
+            ud_dict.set_item("certification_list", issuer_list)?;
+            ud_dict.set_item("creationtime", creationtime)?;
+
+            certification_list.append(ud_dict)?;
+        }
+
+        // Now let us set the certifications for this user id
+        pd.set_item("certifications", certification_list)?;
+
         plist.append(pd)?;
     }
 

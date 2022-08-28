@@ -38,10 +38,18 @@ def test_no_such_key():
         ks = jce.KeyStore("tests/files/store")
         key = ks.get_key("A4F388BBB194925AE301F844C52B42177857DD79")
 
+
 def test_create_primary_key_with_encryption():
     ks = jce.KeyStore(tmpdirname.name)
-    newkey = ks.create_key("redhat", "test key42 <42@example.com>", jce.Cipher.RSA4k, whichkeys=1, can_primary_sign=True)
+    newkey = ks.create_key(
+        "redhat",
+        "test key42 <42@example.com>",
+        jce.Cipher.RSA4k,
+        whichkeys=1,
+        can_primary_sign=True,
+    )
     assert newkey.can_primary_sign == True
+
 
 def test_keystore_lifecycle():
     # Before anything let us first delete if any existing db
@@ -520,6 +528,7 @@ def test_ks_upgrade():
         cursor.execute(sql)
         fromdb = cursor.fetchone()
         assert fromdb["upgradedate"] == jce.DB_UPGRADE_DATE
+    # TODO: Now verify the keys inside of the new db, in full.
 
 
 def test_ks_upgrade_failure():

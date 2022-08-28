@@ -38,6 +38,38 @@ CREATE TABLE uidvalues (
 		ON DELETE CASCADE
 );
 
+CREATE TABLE uidcerts (
+	id INTEGER PRIMARY KEY,
+    ctype TEXT NOT NULL,
+	creation TEXT,
+	key_id INTEGER,
+	value_id INTEGER,
+	FOREIGN KEY (key_id)
+	REFERENCES keys (id)
+		ON DELETE CASCADE
+	FOREIGN KEY (value_id)
+	REFERENCES uidvalues (id)
+		ON DELETE CASCADE
+);
+
+CREATE TABLE uidcertlist (
+	id INTEGER PRIMARY KEY,
+	value TEXT,
+	datatype TEXT,
+	key_id INTEGER,
+	value_id INTEGER,
+	cert_id INTEGER,
+	FOREIGN KEY (key_id)
+	REFERENCES keys (id)
+		ON DELETE CASCADE
+	FOREIGN KEY (value_id)
+	REFERENCES uidvalues (id)
+		ON DELETE CASCADE
+	FOREIGN KEY (cert_id)
+	REFERENCES uidcerts (id)
+		ON DELETE CASCADE
+);
+
 CREATE TABLE uidemails (
 	id INTEGER PRIMARY KEY,
 	value TEXT,
@@ -80,7 +112,7 @@ CREATE TABLE uiduris (
 CREATE TABLE dbupgrade (upgradedate TEXT)
 """
 
-DB_UPGRADE_DATE = "20220818"
+DB_UPGRADE_DATE = "20220828"
 
 
 def _get_cert_data(filepath):

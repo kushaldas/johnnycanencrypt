@@ -332,6 +332,28 @@ class KeyStore:
                     sql = f"INSERT INTO uidvalues (value, revoked, key_id) values (?, ?, ?)"
                     cursor.execute(sql, (uid["value"], revoked, key_id))
                     value_id = cursor.lastrowid
+                    # After we added the value, we should check for certification
+                    if len(uid["certifications"]) > 0:
+                        for ucert in uid["certifications"]:
+                            ctime = (
+                                str(ucert["creationtime"].timestamp())
+                                if ucert["creationtime"]
+                                else ""
+                            )
+                            sql = f"INSERT INTO uidcerts (ctype, creation, key_id, value_id) values (?, ?, ?, ?)"
+                            cursor.execute(
+                                sql,
+                                (ucert["certification_type"], ctime, key_id, value_id),
+                            )
+                            # This is the ID of the certification we just added to the database
+                            ucert_id = cursor.lastrowid
+                            # Now time to loop over the details and add them
+                            for citem in ucert["certification_list"]:
+                                # citem is like [('fingerprint', 'F7FC698FAAE2D2EFBECDE98ED1B3ADC0E0238CA6'), ('keyid', 'D1B3ADC0E0238CA6')]
+                                sql = f"INSERT INTO uidcertlist (value, datatype, key_id, value_id) values (?, ?, ?, ?)"
+                                cursor.execute(
+                                    sql, (citem[1], citem[0], key_id, value_id)
+                                )
                 else:
                     # If no value, then we can skip the rest
                     continue
@@ -641,6 +663,7 @@ class KeyStore:
     def _internal_build_key_list(self, rows, cursor):
         "Internal method to create a list of keys from db result rows"
         finalresult = []
+        sql_for_certs = "SELECT value, datatype FROM uidcertlist WHERE cert_id=?"
         for result in rows:
             if result:
                 key_id = result["id"]
@@ -665,6 +688,27 @@ class KeyStore:
                     email = self._get_one_row_from_table(cursor, "uidemails", value_id)
                     name = self._get_one_row_from_table(cursor, "uidnames", value_id)
                     uri = self._get_one_row_from_table(cursor, "uiduris", value_id)
+                    # Now time to find any certification for the uid value
+                    # TODO: Write a join query in future please
+                    sql = "SELECT id, ctype, creation FROM uidcerts WHERE key_id=?"
+                    cursor.execute(sql, (key_id,))
+                    certrows = cursor.fetchall()
+                    # let us loop over all the certs
+                    certifications = []
+                    for uidcert in certrows:
+                        cert_result = {}
+                        cert_result["creationtime"] = uidcert["creation"]
+                        cert_result["ctype"] = uidcert["ctype"]
+                        ucertid = uidcert["id"]
+                        cert_issuers = cursor.execute(sql_for_certs, (ucertid,))
+                        issuers = []
+                        for cissuer in cert_issuers:
+                            issuers.append((cissuer["datatype"], cissuer["value"]))
+                        # now put it in the right place
+                        cert_result["certification_list"] = issuers
+                        # Now put all the data in the right place
+                        certifications.append(cert_result)
+
                     uids.append(
                         {
                             "value": row["value"],
@@ -672,6 +716,7 @@ class KeyStore:
                             "email": email,
                             "name": name,
                             "uri": uri,
+                            "certifications": certifications,
                         }
                     )
 
