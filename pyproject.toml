@@ -20,6 +20,10 @@ classifiers = [
 authors = [{name="Kushal Das", email="mail@kushaldas.in"}]
 readme = "README.md"
 requires-python = ">=3.8"
+dependencies = [
+    "httpx",
+]
+
 [project.urls]
 "Homepage" = "https://github.com/kushaldas/johnnycanencrypt"
 "Bug Tracker" = "https://github.com/kushaldas/johnnycanencrypt/issues"
