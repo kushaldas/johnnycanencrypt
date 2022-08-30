@@ -265,13 +265,10 @@ class KeyStore:
             k = key
 
         if isinstance(otherkey, str):  # Means we have a fingerprint
-            other_k: Key = self.get_key(otherkey)
+            other_k = self.get_key(otherkey)
         else:
-            other_k: Key = otherkey
+            other_k  = otherkey
 
-        print(
-            f"We will now certify {other_k=} with {k}, and then save the {other_k=} into the db."
-        )
         cert = rjce.certify_key(
             k.keyvalue, other_k.keyvalue, sig_type.value, uids, password, oncard
         )
@@ -280,7 +277,6 @@ class KeyStore:
             cert = rjce.merge_keys(other_k.keyvalue, cert, True)
         # first remove the old one
         self.delete_key(otherkey)
-        print(f"Deleted {otherkey=}")
         # Now add back the new updated key
         (
             uids,
@@ -291,7 +287,6 @@ class KeyStore:
             othervalues,
         ) = parse_cert_bytes(cert)
 
-        print(f"Now we are going to save to the DB {fingerprint=}")
         self._save_key_info_to_db(
             cert,
             uids,
