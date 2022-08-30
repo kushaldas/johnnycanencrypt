@@ -67,7 +67,7 @@ def test_merge_certs():
     with open(keypath, "rb") as fobj:
         newdata = fobj.read()
 
-    newcert = rustjce.merge_keys(data, newdata)
+    newcert = rustjce.merge_keys(data, newdata, False)
     assert isinstance(newcert, bytes)
 
     (

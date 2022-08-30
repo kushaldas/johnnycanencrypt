@@ -7,8 +7,11 @@ import johnnycanencrypt.johnnycanencrypt as rjce
 import tempfile
 import sys
 import os
+import tests.utils
 
 from pprint import pprint
+
+PUBLIC_KEY = "tests/files/primary_with_sign_public.asc"
 
 inp = input(
     "Please make sure *TEST SMARTCARD* is connected and then type Yes to continue: "
@@ -23,6 +26,10 @@ ks = jce.KeyStore(tempdir.name)
 print("Now importing the RSA4096 secret key to the keyring")
 # k = ks.import_key("smartcardtests/2184DF8AF2CAFEB16357FE43E6F848F1DDC66C12.sec")
 k = ks.import_key("tests/files/primary_with_sign.asc")
+
+# We are writing the public key on disk
+with open(PUBLIC_KEY, "w") as fobj:
+    fobj.write(k.get_pub_key())
 
 print("Resetting Yubikey")
 print(rjce.reset_yubikey())
@@ -64,3 +71,19 @@ if ks.verify(k, msg, signature):
     print("The signature is good.")
 else:
     print("Bad signature from the card.")
+
+print("Let us move to a new temporary directory")
+tempdir = tempfile.TemporaryDirectory()
+ks = jce.KeyStore(tempdir.name)
+
+print("Now importing the PUBLIC key to the keyring")
+#
+
+k = ks.import_key(PUBLIC_KEY)
+ks.sync_smartcard()
+other = ks.import_key("tests/files/store/kushal_updated_key.asc")
+
+newother = ks.certify_key(k, other, ["Kushal Das <kushaldas@riseup.net>",], jce.SignatureType.PersonaCertification, password="123456".encode("utf-8"), oncard=True)
+with open("hello.public", "wb") as f:
+    f.write(newother.keyvalue)
+
