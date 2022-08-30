@@ -47,6 +47,15 @@ class Cipher(Enum):
     Cv25519 = "Cv25519"
 
 
+class SignatureType(Enum):
+    """This is used for key signing via certification"""
+
+    GenericCertification = 0
+    PersonaCertification = 1
+    CasualCertification = 2
+    PositiveCertification = 3
+
+
 class Key:
     "Returns a Key object."
 
@@ -233,6 +242,62 @@ class KeyStore:
         key.keyvalue = cert
         return key
 
+    def certify_key(
+        self,
+        key: Union[Key, str],
+        otherkey: Union[Key, str],
+        uids: List[str],
+        sig_type: SignatureType = SignatureType.GenericCertification,
+        password: str = "",
+        oncard=False,
+    ) -> Key:
+        """Certifies the given uids based on a list of values. Returns the new key.
+
+        :param key: Fingerprint or secret Key object using which we will certify.
+        :param other_key: Fingerprint or Key object whom we will certify.
+        :param uids: List of uid values which we will certify using the given SignatureType.
+        :param sig_type: SignatureType, default is SignatureType.GenericCertification
+        :param password: Password of the secret key file or the pin if on card.
+        """
+        if isinstance(key, str):  # Means we have a fingerprint
+            k = self.get_key(key)
+        else:
+            k = key
+
+        if isinstance(otherkey, str):  # Means we have a fingerprint
+            other_k = self.get_key(otherkey)
+        else:
+            other_k  = otherkey
+
+        cert = rjce.certify_key(
+            k.keyvalue, other_k.keyvalue, sig_type.value, uids, password, oncard
+        )
+        # Now if the otherkey is secret, then merge this new public key into the secret key
+        if other_k.keytype == KeyType.SECRET:
+            cert = rjce.merge_keys(other_k.keyvalue, cert, True)
+        # first remove the old one
+        self.delete_key(otherkey)
+        # Now add back the new updated key
+        (
+            uids,
+            fingerprint,
+            keytype,
+            expirationtime,
+            creationtime,
+            othervalues,
+        ) = parse_cert_bytes(cert)
+
+        self._save_key_info_to_db(
+            cert,
+            uids,
+            fingerprint,
+            keytype,
+            expirationtime,
+            creationtime,
+            othervalues,
+        )
+        return self.get_key(fingerprint)
+
     def add_key_file_to_db(
         self,
         fullpath,
@@ -282,7 +347,7 @@ class KeyStore:
                     fromdb["keytype"] == 0
                 ):  # only update if there is a public key in the store
                     key = self.get_key(fingerprint)
-                    newcert = merge_keys(key.keyvalue, cert)
+                    newcert = merge_keys(key.keyvalue, cert, False)
                     uids, fp, kt, et, ct, othervalues = parse_cert_bytes(newcert)
                     etime = str(et.timestamp()) if et else ""
                     ctime = str(ct.timestamp()) if ct else ""
@@ -332,6 +397,29 @@ class KeyStore:
                     sql = f"INSERT INTO uidvalues (value, revoked, key_id) values (?, ?, ?)"
                     cursor.execute(sql, (uid["value"], revoked, key_id))
                     value_id = cursor.lastrowid
+                    # After we added the value, we should check for certification
+                    if len(uid["certifications"]) > 0:
+                        for ucert in uid["certifications"]:
+                            ctime = (
+                                str(ucert["creationtime"].timestamp())
+                                if ucert["creationtime"]
+                                else ""
+                            )
+                            sql = f"INSERT INTO uidcerts (ctype, creation, key_id, value_id) values (?, ?, ?, ?)"
+                            cursor.execute(
+                                sql,
+                                (ucert["certification_type"], ctime, key_id, value_id),
+                            )
+                            # This is the ID of the certification we just added to the database
+                            ucert_id = cursor.lastrowid
+                            # Now time to loop over the details and add them
+                            for citem in ucert["certification_list"]:
+                                # citem is like [('fingerprint', 'F7FC698FAAE2D2EFBECDE98ED1B3ADC0E0238CA6'), ('keyid', 'D1B3ADC0E0238CA6')]
+                                sql = f"INSERT INTO uidcertlist (value, datatype, key_id, value_id, cert_id) values (?, ?, ?, ?, ?)"
+                                cursor.execute(
+                                    sql,
+                                    (citem[1], citem[0], key_id, value_id, ucert_id),
+                                )
                 else:
                     # If no value, then we can skip the rest
                     continue
@@ -641,6 +729,7 @@ class KeyStore:
     def _internal_build_key_list(self, rows, cursor):
         "Internal method to create a list of keys from db result rows"
         finalresult = []
+        sql_for_certs = "SELECT value, datatype FROM uidcertlist WHERE cert_id=?"
         for result in rows:
             if result:
                 key_id = result["id"]
@@ -665,6 +754,27 @@ class KeyStore:
                     email = self._get_one_row_from_table(cursor, "uidemails", value_id)
                     name = self._get_one_row_from_table(cursor, "uidnames", value_id)
                     uri = self._get_one_row_from_table(cursor, "uiduris", value_id)
+                    # Now time to find any certification for the uid value
+                    # TODO: Write a join query in future please
+                    csql = "SELECT id, ctype, creation FROM uidcerts WHERE key_id=? and value_id=?"
+                    cursor.execute(csql, (key_id, value_id))
+                    certrows = cursor.fetchall()
+                    # let us loop over all the certs
+                    certifications = []
+                    for uidcert in certrows:
+                        cert_result = {}
+                        cert_result["creationtime"] = uidcert["creation"]
+                        cert_result["certification_type"] = uidcert["ctype"]
+                        ucertid = uidcert["id"]
+                        cert_issuers = cursor.execute(sql_for_certs, (ucertid,))
+                        issuers = []
+                        for cissuer in cert_issuers:
+                            issuers.append((cissuer["datatype"], cissuer["value"]))
+                        # now put it in the right place
+                        cert_result["certification_list"] = issuers
+                        # Now put all the data in the right place
+                        certifications.append(cert_result)
+
                     uids.append(
                         {
                             "value": row["value"],
@@ -672,6 +782,7 @@ class KeyStore:
                             "email": email,
                             "name": name,
                             "uri": uri,
+                            "certifications": certifications,
                         }
                     )
 

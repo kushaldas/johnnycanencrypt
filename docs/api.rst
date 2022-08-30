@@ -13,13 +13,19 @@ For the rest of the documentation we assume that you imported the module as foll
 
 .. class:: KeyStore(path: str) -> None:
 
-        Returns a KeyStore object. This is the primary class of the module, and all high level usage is available via methods of this class.
-        It takes a path to the directory where it stores/reads the keys. Please make sure that only the **user** has read/write capability
-        to this path.
+        Returns a KeyStore object. This is the primary class of the module, and
+        all high level usage is available via methods of this class. It takes a
+        path to the directory where it stores/reads the keys. Please make sure
+        that only the **user** has read/write capability to this path.
 
-        The keys are represented inside the directory in the **jce.db** sqlite3 database
+        The keys are represented inside the directory in the **jce.db** sqlite3
+        database. Every time there is any change in the DB schema, we
+        automatically create a temporary database called **jce_upgrade.db** in
+        the same path, and then reimport all the keys, and rename the file and
+        continue with the steps. This is one time operation when we do a new
+        release.
 
-        If you can check for existance of any fingerprint (str) or `Key` object in the via `in` opertor.
+        You can check for existance of any fingerprint (str) or `Key` object in the via `in` opertor.
 
         ::
 
@@ -31,6 +37,10 @@ For the rest of the documentation we assume that you imported the module as foll
 
                 Returns the updated key with a new userid. If you need to upload the key to the https://keys.openpgp.org, then remember to
                 have to an email address in the user id.
+
+        .. method:: certify_key(key: Union[Key, str], otherkey: Union[Key, str], uids: List[str], sig_type: SignatureType = SignatureType.GenericCertification, password: str = "", oncard=False) -> Key:
+
+                This method signs the given list of userid(s) in `otherkey` using the primary key of the `key`, by default it signs as *SignatureType.GenericCertification*, but you can do other types too. If the primary key is on a smartcard, then pass `oncard=True`, default value is `False`.
 
         .. method:: create_key(password: str, uids: Optional[Union[List[str], str]] = [], ciphersuite: Cipher = Cipher.RSA4k, creation: Optional[datetime.datetime] = None, expiration: Optional[datetime.datetime] = None, subkeys_expiration= False, whichkeys = 7, can_primary_sign: bool = True) -> Key:
 
@@ -210,7 +220,7 @@ For the rest of the documentation we assume that you imported the module as foll
 
         .. attribute:: uids
 
-                A dictionary holding all uids from the key.
+                A dictionary holding all uids from the key, also stores related **certification** of the given uids.
 
         .. attribute:: creationtime
 
@@ -252,3 +262,8 @@ For the rest of the documentation we assume that you imported the module as foll
 .. class:: KeyType() -> KeyType:
 
         Enum class to mark if a key is public or private. Possible values are **KeyType.PUBLIC** and **KeyType.SECRET**.
+
+.. class:: SignatureType() -> SignatureType:
+
+        Enum class to mark the kind of certification one can do on another key. Possible values are **SignatureType.GenericCertification**,
+        **SignatureType.PersonaCertification**, **SignatureType.CasualCertification**, **SignatureType.PositiveCertification**.

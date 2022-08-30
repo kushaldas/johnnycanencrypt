@@ -67,7 +67,7 @@ def test_merge_certs():
     with open(keypath, "rb") as fobj:
         newdata = fobj.read()
 
-    newcert = rustjce.merge_keys(data, newdata)
+    newcert = rustjce.merge_keys(data, newdata, False)
     assert isinstance(newcert, bytes)
 
     (
@@ -82,6 +82,7 @@ def test_merge_certs():
     assert ctime.date() == creationtime.date()
     assert not expirationtime
 
+
 def test_no_primary_sign():
     keypath = "tests/files/store/secret.asc"
     (
@@ -94,3 +95,32 @@ def test_no_primary_sign():
     ) = rustjce.parse_cert_file(keypath)
     assert othervalues["can_primary_sign"] == False
 
+
+def test_uid_certs():
+    "To test certifications on user ids"
+    keypath = "tests/files/store/kushal_updated_key.asc"
+    (
+        uids,
+        fingerprint,
+        keytype,
+        expirationtime,
+        creationtime,
+        othervalues,
+    ) = rustjce.parse_cert_file(keypath)
+    for uid in uids:
+        if uid["value"] == "Kushal Das <kushaldas@gmail.com>":
+            ctypes = {}
+            assert len(uid["certifications"]) == 17
+            for cert in uid["certifications"]:
+                assert "creationtime" in cert
+                assert "certification_type" in cert
+                clist = cert["certification_list"]
+                assert type(clist) == list
+                for cvalue in clist:
+                    if cvalue[0] == "fingerprint":
+                        ctypes["fp"] = True
+                    if cvalue[0] == "keyid":
+                        ctypes["keyid"] = True
+            # now verify that we have both the values in the certification_list
+            assert ctypes["fp"]
+            assert ctypes["keyid"]

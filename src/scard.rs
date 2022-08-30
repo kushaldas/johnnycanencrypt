@@ -257,6 +257,7 @@ fn sign_hash_in_card(c: Vec<u8>, pin: Vec<u8>) -> Result<Vec<u8>, errors::Talkto
     Ok(aiddata)
 }
 
+#[derive(Clone)]
 pub struct KeyPair<'a> {
     public: &'a Key<key::PublicParts, key::UnspecifiedRole>,
     pin: Vec<u8>,

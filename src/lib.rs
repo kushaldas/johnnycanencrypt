@@ -1,7 +1,10 @@
+use openpgp::packet::Signature;
+use openpgp::KeyHandle;
 use pyo3::create_exception;
 use pyo3::exceptions::*;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
+use pyo3::types::PyTuple;
 use pyo3::types::{PyDateTime, PyDict, PyList};
 use pyo3::wrap_pyfunction;
 
@@ -950,6 +953,144 @@ pub fn sign_file_detached_on_card(
     sign_internal_detached_on_card(certdata, &mut localdata, pin)
 }
 
+#[pyfunction]
+#[pyo3(text_signature = "(certdata, othercertdata, sig_type, uids, password, oncard)")]
+fn certify_key(
+    py: Python,
+    certdata: Vec<u8>,
+    othercertdata: Vec<u8>,
+    sig_type: u8,
+    uids: Vec<String>,
+    password: Vec<u8>,
+    oncard: bool,
+) -> Result<PyObject> {
+    let policy = &P::new();
+
+    let cert = openpgp::Cert::from_bytes(&certdata)?;
+    let othercert = openpgp::Cert::from_bytes(&othercertdata)?;
+
+    let stype = match sig_type {
+        1 => SignatureType::PersonaCertification,
+        2 => SignatureType::CasualCertification,
+        3 => SignatureType::PositiveCertification,
+        _ => SignatureType::GenericCertification,
+    };
+
+    let mut cardkeys: Vec<scard::KeyPair> = Vec::new();
+    let mut keys = Vec::new();
+
+    // We will use this signer for signing.
+    let card_signer: Option<scard::KeyPair> = if oncard {
+        for ka in cert
+            .keys()
+            .with_policy(policy, None)
+            .alive()
+            .revoked(false)
+            .for_certification()
+        {
+            let key = ka.key();
+            let pair = scard::KeyPair::new(password.clone(), key)?;
+            cardkeys.push(pair);
+        }
+        if cardkeys.is_empty() {
+            return Err(JceError::new(format!(
+                "No key is available for certification in the public key."
+            )));
+        }
+        // Now we know for sure that there is a key
+        let key = cardkeys
+            .iter()
+            .next()
+            .expect("We must have a certification key by now");
+
+        Some(key.clone())
+    } else {
+        None
+    };
+
+    let disk_signer = if !oncard {
+        for key in cert
+            .keys()
+            .with_policy(policy, None)
+            .alive()
+            .revoked(false)
+            .for_certification()
+            .secret()
+            .map(|kd| kd.key())
+        {
+            let mut key = key.clone();
+            let algo = key.pk_algo();
+
+            key.secret_mut()
+                .decrypt_in_place(algo, &openpgp::crypto::Password::from(password.clone()))
+                .expect("decryption failed");
+            keys.push(key.into_keypair().unwrap());
+        }
+        if keys.is_empty() {
+            return Err(JceError::new(format!(
+                "No key is available for certification."
+            )));
+        }
+        // Now we know for sure that there is a key
+        let key = keys
+            .iter()
+            .next()
+            .expect("We must have a certification key by now");
+
+        Some(key.clone())
+    } else {
+        None
+    };
+
+    // To store the signatures till we insert them
+    let mut new_certificates: Vec<Signature> = Vec::new();
+    // Now let us find each of given user id values in the given key.
+    for uid in othercert.userids() {
+        if let Ok(userid_value) = std::str::from_utf8(uid.userid().value()) {
+            // Now loop over the given user id values as input
+            dbg!(userid_value.clone());
+            dbg!(uids.clone());
+            for userid in &uids {
+                if userid_value == userid {
+                    dbg!(format!(
+                        "We matched {} with {}",
+                        userid_value.clone(),
+                        userid.clone()
+                    ));
+                    let u = uid.userid();
+                    // Now certify
+                    let sig = match oncard {
+                        true => {
+                            let mut signer = card_signer.as_ref().unwrap().clone();
+                            u.certify(&mut signer, &othercert, stype.clone(), None, None)?
+                        }
+                        false => {
+                            let mut signer = disk_signer.as_ref().unwrap().clone();
+                            u.certify(&mut signer, &othercert, stype.clone(), None, None)?
+                        }
+                    };
+                    new_certificates.push(sig);
+                };
+            }
+        }
+    }
+
+    // Now let us to put the signatures back
+    let finalsig = othercert.insert_packets(new_certificates)?;
+    // Now let us return the secret key as Python Bytes
+    let mut buf = Vec::new();
+    let mut buffer = Vec::new();
+
+    let mut writer = Writer::new(&mut buf, Kind::PublicKey)?;
+    finalsig.as_tsk().serialize(&mut buffer)?;
+    writer.write_all(&buffer)?;
+    writer.finalize()?;
+
+    // Let us return the cert data which can be saved in the database
+    let res = PyBytes::new(py, &buf);
+    Ok(res.into())
+}
+
 // This is the internal function which signs either bytes or an input file on the smartcard
 fn sign_internal_detached_on_card(
     certdata: Vec<u8>,
@@ -1332,10 +1473,15 @@ fn sign_bytes_detached_internal(
 
 #[pyfunction]
 #[pyo3(text_signature = "(certdata, newcertdata)")]
-fn merge_keys(_py: Python, certdata: Vec<u8>, newcertdata: Vec<u8>) -> Result<PyObject> {
+fn merge_keys(
+    _py: Python,
+    certdata: Vec<u8>,
+    newcertdata: Vec<u8>,
+    force: bool,
+) -> Result<PyObject> {
     let cert = openpgp::Cert::from_bytes(&certdata)?;
     let newcert = openpgp::Cert::from_bytes(&newcertdata)?;
-    if cert.as_tsk() == newcert.as_tsk() {
+    if cert.as_tsk() == newcert.as_tsk() && !force {
         return Err(JceError::new(
             "Both keys are same. Can not merge.".to_string(),
         ));
@@ -1915,6 +2061,58 @@ fn internal_parse_cert(
             revoked = true;
         };
         pd.set_item("revoked", revoked)?;
+
+        // This list contains a list of dictionary
+        let certification_list = PyList::empty(py);
+        // Now we will deal with the certifications, that is if anyone else signed this UID.
+        for c in ua.certifications() {
+            // This is the type of certification
+            let c_type = match c.typ() {
+                SignatureType::GenericCertification => "generic",
+                SignatureType::CasualCertification => "casual",
+                SignatureType::PersonaCertification => "persona",
+                SignatureType::PositiveCertification => "postive",
+                _ => "unknown",
+            };
+
+            let creationtime = {
+                let sct = c.signature_creation_time();
+                match sct {
+                    Some(sct_value) => {
+                        let dt: DateTime<Utc> = DateTime::from(sct_value);
+                        Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None)?)
+                    }
+                    None => None,
+                }
+            };
+
+            // Now we need a list of issuers for this certification
+            //
+            let issuer_list = PyList::empty(py);
+            for issuer in c.get_issuers() {
+                //let fp_keyid = PyTuple::new(py, &[issuer.])
+                match issuer {
+                    KeyHandle::Fingerprint(finger) => issuer_list.append(PyTuple::new(
+                        py,
+                        &["fingerprint".to_string(), finger.to_hex()],
+                    ))?,
+                    KeyHandle::KeyID(kid) => issuer_list
+                        .append(PyTuple::new(py, &["keyid".to_string(), kid.to_hex()]))?,
+                }
+            }
+
+            // Now add this one certification
+            let ud_dict = PyDict::new(py);
+            ud_dict.set_item("certification_type", c_type)?;
+            ud_dict.set_item("certification_list", issuer_list)?;
+            ud_dict.set_item("creationtime", creationtime)?;
+
+            certification_list.append(ud_dict)?;
+        }
+
+        // Now let us set the certifications for this user id
+        pd.set_item("certifications", certification_list)?;
+
         plist.append(pd)?;
     }
 
@@ -2018,7 +2216,9 @@ fn create_key(
 
     // To mark if our primary key needs to have signing capability
     let crtbuilder = match can_primary_sign {
-        true => crtbuilder.set_primary_key_flags(KeyFlags::empty().set_signing()),
+        true => {
+            crtbuilder.set_primary_key_flags(KeyFlags::empty().set_signing().set_certification())
+        }
         false => crtbuilder,
     };
 
@@ -2104,6 +2304,7 @@ fn create_key(
     };
 
     let (cert, _) = crtbuilder.generate()?;
+
     let mut buf = Vec::new();
     let mut buffer = Vec::new();
 
@@ -2698,6 +2899,7 @@ fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(add_uid_in_cert))?;
     m.add_wrapped(wrap_pyfunction!(revoke_uid_in_cert))?;
     m.add_wrapped(wrap_pyfunction!(update_subkeys_expiry_in_cert))?;
+    m.add_wrapped(wrap_pyfunction!(certify_key))?;
     m.add("CryptoError", _py.get_type::<CryptoError>())?;
     m.add("SameKeyError", _py.get_type::<SameKeyError>())?;
     m.add_class::<Johnny>()?;

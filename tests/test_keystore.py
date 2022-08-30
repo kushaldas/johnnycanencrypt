@@ -38,10 +38,18 @@ def test_no_such_key():
         ks = jce.KeyStore("tests/files/store")
         key = ks.get_key("A4F388BBB194925AE301F844C52B42177857DD79")
 
+
 def test_create_primary_key_with_encryption():
     ks = jce.KeyStore(tmpdirname.name)
-    newkey = ks.create_key("redhat", "test key42 <42@example.com>", jce.Cipher.RSA4k, whichkeys=1, can_primary_sign=True)
+    newkey = ks.create_key(
+        "redhat",
+        "test key42 <42@example.com>",
+        jce.Cipher.RSA4k,
+        whichkeys=1,
+        can_primary_sign=True,
+    )
     assert newkey.can_primary_sign == True
+
 
 def test_keystore_lifecycle():
     # Before anything let us first delete if any existing db
@@ -322,6 +330,43 @@ def test_ks_sign_verify_file_detached():
     assert ks.verify_file_detached(key, file_to_be_signed, file_to_be_signed + ".asc")
 
 
+def test_ks_userid_signing():
+    pathname = os.path.join(tmpdirname.name, "jce.db")
+    if os.path.exists(pathname):
+        os.remove(pathname)
+    # Now create a fresh db
+    ks = jce.KeyStore(tmpdirname.name)
+    k = ks.import_key("tests/files/store/pgp_keys.asc")
+    t2 = ks.import_key("tests/files/store/secret.asc")
+
+    # now let us sign the keys in kushal's uids
+    k = ks.certify_key(
+        t2,
+        k,
+        ["Kushal Das <kushaldas@gmail.com>", "Kushal Das <kushal@fedoraproject.org>"],
+        jce.SignatureType.PersonaCertification,
+        password="redhat".encode("utf-8"),
+    )
+    # k now contains the new updated key
+    for uid in k.uids:
+        if (
+            uid["value"] == "Kushal Das <kushaldas@gmail.com>"
+            or uid["value"] == "Kushal Das <kushal@fedoraproject.org>"
+        ):
+            certs = uid["certifications"]
+            # Only the new certification
+            assert len(certs) == 1
+            cert = certs[0]
+            assert cert["certification_type"] == "persona"
+            for data in cert["certification_list"]:
+                if data[0] == "fingerprint":
+                    assert data[1] == "F4F388BBB194925AE301F844C52B42177857DD79"
+                if data[0] == "keyid":
+                    assert data[1] == "C52B42177857DD79"
+        else:
+            assert len(uid["certifications"]) == 0
+
+
 def test_ks_creation_expiration_time():
     """
     Tests via Kushal's key and a new key
@@ -520,6 +565,7 @@ def test_ks_upgrade():
         cursor.execute(sql)
         fromdb = cursor.fetchone()
         assert fromdb["upgradedate"] == jce.DB_UPGRADE_DATE
+    # TODO: Now verify the keys inside of the new db, in full.
 
 
 def test_ks_upgrade_failure():
