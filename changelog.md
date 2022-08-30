@@ -2,6 +2,8 @@
 
 ## [unreleased]
 
+## [0.9.0] - 2022-08-30
+
 - Adds `setuptools-rust` as build system.
 - Key.uids now contains the certification details of each user id.
 - `merge_keys` in rjce now takes a force boolean argument.
