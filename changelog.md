@@ -3,6 +3,9 @@
 ## [unreleased]
 
 - Adds `setuptools-rust` as build system.
+- Key.uids now contains the certification details of each user id.
+- `merge_keys` in rjce now takes a force boolean argument.
+- `certify_key` can sign/certify another key by both card and on disk primary key.
 
 ## [0.8.0] - 2022-08-18
 
