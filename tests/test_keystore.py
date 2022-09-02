@@ -32,8 +32,8 @@ def test_no_such_key():
         key = ks.get_key("A4F388BBB194925AE301F844C52B42177857DD79")
 
 
-def test_create_primary_key_with_encryption():
-    ks = jce.KeyStore(tmpdirname.name)
+def test_create_primary_key_with_encryption(tmp_path):
+    ks = jce.KeyStore(tmp_path.as_posix())
     newkey = ks.create_key(
         "redhat",
         "test key42 <42@example.com>",
@@ -45,10 +45,6 @@ def test_create_primary_key_with_encryption():
 
 
 def test_keystore_lifecycle(tmp_path):
-    # Before anything let us first delete if any existing db
-    pathname = os.path.join(tmpdirname.name, "jce.db")
-    if os.path.exists(pathname):
-        os.remove(pathname)
     # Now create a fresh db
     ks = jce.KeyStore(tmp_path.as_posix())
     newkey = ks.create_key("redhat", "test key1 <email@example.com>", jce.Cipher.RSA4k)
@@ -321,12 +317,9 @@ def test_ks_sign_verify_file_detached(tmp_path):
     assert ks.verify_file_detached(key, file_to_be_signed.as_posix(), file_to_be_signed.as_posix() + ".asc")
 
 
-def test_ks_userid_signing():
-    pathname = os.path.join(tmpdirname.name, "jce.db")
-    if os.path.exists(pathname):
-        os.remove(pathname)
+def test_ks_userid_signing(tmp_path):
     # Now create a fresh db
-    ks = jce.KeyStore(tmpdirname.name)
+    ks = jce.KeyStore(tmp_path.as_posix())
     k = ks.import_key((BASE_TESTSDIR / "files/store/pgp_keys.asc").as_posix())
     t2 = ks.import_key((BASE_TESTSDIR / "files/store/secret.asc").as_posix())
 
