@@ -7,7 +7,6 @@ It uses amazing [sequoia-pgp](https://sequoia-pgp.org/) library for the actual O
 
 You can also use Yubikeys for the private key operations using this module.
 
-
 ## How to build?
 
 First install [Rustup toolchain](https://rustup.rs) for your user.
