@@ -43,7 +43,12 @@ def test_sign_verify_file_cleartext():
     j = jce.Johnny(_get_cert_data(BASE_TESTSDIR / "files/secret.asc"))
     tempdir = tempfile.TemporaryDirectory()
     output = os.path.join(tempdir.name, "sign.asc")
-    j.sign_file((BASE_TESTSDIR / "files/text.txt").as_posix().encode(), output.encode("utf-8"), "redhat", True)
+    j.sign_file(
+        (BASE_TESTSDIR / "files/text.txt").as_posix().encode(),
+        output.encode("utf-8"),
+        "redhat",
+        True,
+    )
     assert os.path.exists(output)
     with open(output) as fobj:
         data = fobj.read()
@@ -60,7 +65,12 @@ def test_sign_verify_file():
     tempdir = tempfile.TemporaryDirectory()
     # output = os.path.join(tempdir.name, "sign.asc")
     output = "/tmp/sign.asc"
-    j.sign_file((BASE_TESTSDIR / "files/text.txt").as_posix().encode(), output.encode("utf-8"), "redhat", False)
+    j.sign_file(
+        (BASE_TESTSDIR / "files/text.txt").as_posix().encode(),
+        output.encode("utf-8"),
+        "redhat",
+        False,
+    )
     assert os.path.exists(output)
     with open(output) as fobj:
         data = fobj.read()

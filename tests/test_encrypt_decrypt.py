@@ -32,7 +32,10 @@ def test_encryption_of_multiple_keys_to_files():
     if os.path.exists(output):
         os.remove(output)
     certs = []
-    for keyfilename in [BASE_TESTSDIR / "files/public.asc", BASE_TESTSDIR / "files/hellopublic.asc"]:
+    for keyfilename in [
+        BASE_TESTSDIR / "files/public.asc",
+        BASE_TESTSDIR / "files/hellopublic.asc",
+    ]:
         certs.append(_get_cert_data(keyfilename))
     jce.encrypt_bytes_to_file(
         certs,
@@ -60,7 +63,10 @@ def test_encryption_of_multiple_keys_of_a_file():
     decrypted_output = "/tmp/text.txt"
     clean_outputfiles(output, decrypted_output)
     certs = []
-    for keyfilename in [BASE_TESTSDIR / "files/public.asc", BASE_TESTSDIR / "files/hellopublic.asc"]:
+    for keyfilename in [
+        BASE_TESTSDIR / "files/public.asc",
+        BASE_TESTSDIR / "files/hellopublic.asc",
+    ]:
         certs.append(_get_cert_data(keyfilename))
 
     jce.encrypt_file_internal(
@@ -91,7 +97,10 @@ def test_encryption_of_multiple_keys_of_a_file():
 def test_encryption_of_multiple_keys_to_bytes():
     "Encrypt bytes using multiple keys"
     certs = []
-    for keyfilename in [BASE_TESTSDIR / "files/public.asc", BASE_TESTSDIR / "files/hellopublic.asc"]:
+    for keyfilename in [
+        BASE_TESTSDIR / "files/public.asc",
+        BASE_TESTSDIR / "files/hellopublic.asc",
+    ]:
         certs.append(_get_cert_data(keyfilename))
     encrypted = jce.encrypt_bytes_to_bytes(
         certs,
@@ -153,7 +162,9 @@ def test_encrypt_decrypt_files_armored():
 
     # Now encrypt and then decrypt
     j = jce.Johnny(_get_cert_data(BASE_TESTSDIR / "files/public.asc"))
-    assert j.encrypt_file(inputfile.as_posix().encode("utf-8"), output.encode("utf-8"), armor=True)
+    assert j.encrypt_file(
+        inputfile.as_posix().encode("utf-8"), output.encode("utf-8"), armor=True
+    )
     jp = jce.Johnny(_get_cert_data(BASE_TESTSDIR / "files/secret.asc"))
     assert jp.decrypt_file(
         output.encode("utf-8"), decrypted_output.encode("utf-8"), "redhat"
@@ -189,7 +200,10 @@ def test_encryption_of_multiple_keys_of_a_filehandler():
     decrypted_output = "/tmp/text2.txt"
     clean_outputfiles(output, decrypted_output)
     certs = []
-    for keyfilename in [BASE_TESTSDIR / "files/public.asc", BASE_TESTSDIR / "files/hellopublic.asc"]:
+    for keyfilename in [
+        BASE_TESTSDIR / "files/public.asc",
+        BASE_TESTSDIR / "files/hellopublic.asc",
+    ]:
         certs.append(_get_cert_data(keyfilename))
 
     with open(inputfile, "rb") as fobj:

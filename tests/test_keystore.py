@@ -96,7 +96,9 @@ def test_keystore_contains_key():
     ks = jce.KeyStore(tmpdirname.name)
     keypath = BASE_TESTSDIR / "files/store/secret.asc"
     k = ks.import_key(keypath.as_posix())
-    _, fingerprint, keytype, exp, ctime, othervalues = jce.parse_cert_file(keypath.as_posix())
+    _, fingerprint, keytype, exp, ctime, othervalues = jce.parse_cert_file(
+        keypath.as_posix()
+    )
 
     # First only the fingerprint
     assert fingerprint in ks
@@ -555,7 +557,9 @@ def test_key_with_multiple_uids():
 def test_ks_upgrade():
     "tests db upgrade from an old db"
     tempdir = tempfile.TemporaryDirectory()
-    shutil.copy(BASE_TESTSDIR / "files/store/oldjce.db", os.path.join(tempdir.name, "jce.db"))
+    shutil.copy(
+        BASE_TESTSDIR / "files/store/oldjce.db", os.path.join(tempdir.name, "jce.db")
+    )
     ks = jce.KeyStore(tempdir.name)
     con = sqlite3.connect(ks.dbpath)
     con.row_factory = sqlite3.Row
@@ -572,9 +576,12 @@ def test_ks_upgrade():
 def test_ks_upgrade_failure():
     "tests db upgrade failure from an old db because of existing file"
     tempdir = tempfile.TemporaryDirectory()
-    shutil.copy(BASE_TESTSDIR / "files/store/oldjce.db", os.path.join(tempdir.name, "jce.db"))
     shutil.copy(
-        BASE_TESTSDIR / "files/store/oldjce.db", os.path.join(tempdir.name, "jce_upgrade.db")
+        BASE_TESTSDIR / "files/store/oldjce.db", os.path.join(tempdir.name, "jce.db")
+    )
+    shutil.copy(
+        BASE_TESTSDIR / "files/store/oldjce.db",
+        os.path.join(tempdir.name, "jce_upgrade.db"),
     )
     with pytest.raises(RuntimeError):
         ks = jce.KeyStore(tempdir.name)
@@ -582,7 +589,9 @@ def test_ks_upgrade_failure():
 
 def test_get_encrypted_for():
     ks = jce.KeyStore(BASE_TESTSDIR / "files/store/")
-    keyids = rjce.file_encrypted_for((BASE_TESTSDIR / "files/double_recipient.asc").as_posix())
+    keyids = rjce.file_encrypted_for(
+        (BASE_TESTSDIR / "files/double_recipient.asc").as_posix()
+    )
     assert keyids == ["1CF980B8E69E112A", "5A7A1560D46ED4F6"]
     with open(BASE_TESTSDIR / "files/double_recipient.asc", "rb") as fobj:
         data = fobj.read()
@@ -590,7 +599,9 @@ def test_get_encrypted_for():
     assert keyids == ["1CF980B8E69E112A", "5A7A1560D46ED4F6"]
 
 
-@vcr.use_cassette((BASE_TESTSDIR / "files/test_fetch_key_by_fingerprint.yml").as_posix())
+@vcr.use_cassette(
+    (BASE_TESTSDIR / "files/test_fetch_key_by_fingerprint.yml").as_posix()
+)
 def test_fetch_key_by_fingerprint():
     tempdir = tempfile.TemporaryDirectory()
     ks = jce.KeyStore(tempdir.name)
@@ -601,7 +612,9 @@ def test_fetch_key_by_fingerprint():
     assert uid["name"] == "Tor Browser Developers"
 
 
-@vcr.use_cassette((BASE_TESTSDIR / "files/test_fetch_nonexistingkey_by_fingerprint.yml").as_posix())
+@vcr.use_cassette(
+    (BASE_TESTSDIR / "files/test_fetch_nonexistingkey_by_fingerprint.yml").as_posix()
+)
 def test_fetch_nonexistingkey_by_fingerprint():
     tempdir = tempfile.TemporaryDirectory()
     ks = jce.KeyStore(tempdir.name)
@@ -620,7 +633,9 @@ def test_fetch_key_by_email():
     assert key.fingerprint == "2871635BE3B4E5C04F02B848C353BFE051D06C33"
 
 
-@vcr.use_cassette((BASE_TESTSDIR / "files/test_fetch_nonexistingkey_by_email.yml").as_posix())
+@vcr.use_cassette(
+    (BASE_TESTSDIR / "files/test_fetch_nonexistingkey_by_email.yml").as_posix()
+)
 def test_fetch_nonexistingkey_by_email():
     tempdir = tempfile.TemporaryDirectory()
     ks = jce.KeyStore(tempdir.name)
