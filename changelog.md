@@ -2,6 +2,10 @@
 
 ## [unreleased]
 
+### Fixed
+
+- Fixes #111 to verify compressed signed message.
+
 ## [0.9.0] - 2022-08-30
 
 - Adds `setuptools-rust` as build system.
