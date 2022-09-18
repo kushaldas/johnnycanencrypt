@@ -35,6 +35,7 @@ use crate::openpgp::crypto::Decryptor;
 use crate::openpgp::packet::key;
 use crate::openpgp::packet::signature::SignatureBuilder;
 use crate::openpgp::parse::{PacketParser, PacketParserResult, Parse};
+use crate::openpgp::policy::NullPolicy as NP;
 use crate::openpgp::policy::Policy;
 use crate::openpgp::policy::StandardPolicy as P;
 use crate::openpgp::serialize::stream::{Armorer, Encryptor, LiteralWriter, Message, Signer};
@@ -880,10 +881,12 @@ impl VerificationHelper for VHelper {
     fn check(&mut self, structure: MessageStructure) -> openpgp::Result<()> {
         let mut good = false;
         for (i, layer) in structure.into_iter().enumerate() {
-            match (i, layer) {
+            match layer {
+                MessageLayer::Encryption { .. } => (),
+                MessageLayer::Compression { .. } => (),
                 // First, we are interested in signatures over the
-                // data, i.e. level 0 signatures.
-                (0, MessageLayer::SignatureGroup { results }) => {
+                // data or inside.
+                MessageLayer::SignatureGroup { results } if i == 0 || i == 1 || i == 2 => {
                     // Finally, given a VerificationResult, which only says
                     // whether the signature checks out mathematically, we apply
                     // our policy.
@@ -893,7 +896,9 @@ impl VerificationHelper for VHelper {
                         None => return Err(anyhow::anyhow!("No signature")),
                     }
                 }
-                _ => return Err(anyhow::anyhow!("Unexpected message structure")),
+                _ => {
+                    return Err(anyhow::anyhow!("Unexpected message structure"));
+                }
             }
         }
 

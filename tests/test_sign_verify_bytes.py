@@ -81,6 +81,21 @@ def test_sign_verify_file():
     assert jp.verify_file(output.encode("utf-8"))
 
 
+def test_sign_from_gpg_verify_file():
+    "This will verify a signed message fro gpg"
+    jp = jce.Johnny(
+        _get_cert_data(BASE_TESTSDIR / "files/store/kushal_updated_key.asc")
+    )
+    assert jp.verify_file(str(BASE_TESTSDIR / "files/msg.txt.asc").encode("utf-8"))
+
+
+def test_sign_from_different_key_file():
+    "This will verify a signed message fro gpg"
+    jp = jce.Johnny(_get_cert_data(BASE_TESTSDIR / "files/public.asc"))
+    with pytest.raises(jce.CryptoError):
+        jp.verify_file(str(BASE_TESTSDIR / "files/msg.txt.asc").encode("utf-8"))
+
+
 def test_verify_bytes_detached():
     j = jce.Johnny(_get_cert_data(BASE_TESTSDIR / "files/secret.asc"))
     signature = j.sign_bytes_detached(DATA.encode("utf-8"), "redhat")
