@@ -97,7 +97,7 @@ def test_verify_signed_file():
 
     tempdir = tempfile.TemporaryDirectory()
     output = os.path.join(tempdir.name, "result.txt")
-    assert jp.verify_file_and_extract(
+    assert jp.verify_and_extract_file(
         str(BASE_TESTSDIR / "files/msg.txt.asc").encode("utf-8"), output.encode("utf-8")
     )
 

@@ -9,7 +9,7 @@
 ### Added
 
 - `verify_and_extract_bytes` function to extract the verified bytes.
-- `verify_file_and_extract` function to extract the verified file.
+- `verify_and_extract_file` function to extract the verified file.
 
 ## [0.9.0] - 2022-08-30
 
