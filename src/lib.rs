@@ -13,10 +13,10 @@ use std::fmt;
 use std::fs::File;
 use std::io;
 use std::io::Write;
+use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
 use std::str;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-
 extern crate anyhow;
 extern crate sequoia_openpgp as openpgp;
 extern crate talktosc;
@@ -35,7 +35,6 @@ use crate::openpgp::crypto::Decryptor;
 use crate::openpgp::packet::key;
 use crate::openpgp::packet::signature::SignatureBuilder;
 use crate::openpgp::parse::{PacketParser, PacketParserResult, Parse};
-use crate::openpgp::policy::NullPolicy as NP;
 use crate::openpgp::policy::Policy;
 use crate::openpgp::policy::StandardPolicy as P;
 use crate::openpgp::serialize::stream::{Armorer, Encryptor, LiteralWriter, Message, Signer};
@@ -1053,15 +1052,8 @@ fn certify_key(
     for uid in othercert.userids() {
         if let Ok(userid_value) = std::str::from_utf8(uid.userid().value()) {
             // Now loop over the given user id values as input
-            dbg!(userid_value.clone());
-            dbg!(uids.clone());
             for userid in &uids {
                 if userid_value == userid {
-                    dbg!(format!(
-                        "We matched {} with {}",
-                        userid_value.clone(),
-                        userid.clone()
-                    ));
                     let u = uid.userid();
                     // Now certify
                     let sig = match oncard {
@@ -2850,6 +2842,19 @@ impl Johnny {
         let mut tmp = tempfile::tempfile()?;
         std::io::copy(&mut v, &mut tmp)?;
         Ok(v.message_processed())
+    }
+
+    pub fn verify_and_extract_bytes(&self, py: Python<'_>, data: Vec<u8>) -> Result<PyObject> {
+        let p = P::new();
+        let vh = VHelper::new(&self.cert);
+        let mut v = VerifierBuilder::from_bytes(&data[..])?.with_policy(&p, None, vh)?;
+        let mut tmp = tempfile::tempfile()?;
+        std::io::copy(&mut v, &mut tmp)?;
+        tmp.seek(SeekFrom::Start(0))?;
+        let mut inside: Vec<u8> = Vec::new();
+        let _ = tmp.read_to_end(&mut inside)?;
+        let output = PyBytes::new(py, &inside);
+        Ok(output.into())
     }
 
     pub fn verify_file(&self, filepath: Vec<u8>) -> Result<bool> {

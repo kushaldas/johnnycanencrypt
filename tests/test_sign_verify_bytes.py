@@ -89,6 +89,16 @@ def test_sign_from_gpg_verify_file():
     assert jp.verify_file(str(BASE_TESTSDIR / "files/msg.txt.asc").encode("utf-8"))
 
 
+def test_verify_bytes_from_signed_message():
+    "This will verify a signed message fro gpg"
+    jp = jce.Johnny(
+        _get_cert_data(BASE_TESTSDIR / "files/store/kushal_updated_key.asc")
+    )
+    with open(BASE_TESTSDIR / "files/msg.txt.asc", "rb") as fobj:
+        data = fobj.read()
+    assert b"I \xe2\x9d\xa4\xef\xb8\x8f Anwesha.\n" == jp.verify_and_extract_bytes(data)
+
+
 def test_sign_from_different_key_file():
     "This will verify a signed message fro gpg"
     jp = jce.Johnny(_get_cert_data(BASE_TESTSDIR / "files/public.asc"))
