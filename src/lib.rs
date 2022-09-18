@@ -2866,6 +2866,16 @@ impl Johnny {
         std::io::copy(&mut v, &mut tmp)?;
         Ok(v.message_processed())
     }
+
+    pub fn verify_file_and_extract(&self, filepath: Vec<u8>, output: Vec<u8>) -> Result<bool> {
+        let p = P::new();
+        let vh = VHelper::new(&self.cert);
+        let path = Path::new(str::from_utf8(&filepath[..])?);
+        let mut v = VerifierBuilder::from_file(path)?.with_policy(&p, None, vh)?;
+        let mut file = File::create(str::from_utf8(&output[..])?)?;
+        std::io::copy(&mut v, &mut file)?;
+        Ok(v.message_processed())
+    }
 }
 
 #[pyfunction]
