@@ -6,6 +6,11 @@
 
 - Fixes #111 to verify compressed signed message.
 
+### Added
+
+- `verify_and_extract_bytes` function to extract the verified bytes.
+- `verify_and_extract_file` function to extract the verified file.
+
 ## [0.9.0] - 2022-08-30
 
 - Adds `setuptools-rust` as build system.

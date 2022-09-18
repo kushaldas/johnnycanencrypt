@@ -267,7 +267,7 @@ class KeyStore:
         if isinstance(otherkey, str):  # Means we have a fingerprint
             other_k = self.get_key(otherkey)
         else:
-            other_k  = otherkey
+            other_k = otherkey
 
         cert = rjce.certify_key(
             k.keyvalue, other_k.keyvalue, sig_type.value, uids, password, oncard

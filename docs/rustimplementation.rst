@@ -80,11 +80,53 @@ In most cases you don't have to use these, but if you have a reason, feel free t
 
                 .. note:: Remember to save the signature somewhere on disk.
 
-        .. method:: verify_bytes(data: bytes, signature: bytes)
+        .. method:: verify_bytes(data: bytes)
+
+                Verifies if the signature is correct for the given signed data (as bytes). Returns `True` or `False`.
+
+                ::
+
+                        >>> j = jce.Johnny("tests/files/public.asc")
+                        >>> j.verify_bytes(encrypted_bytes)
+
+        .. method:: verify_and_extract_bytes(data: bytes)
+
+                Verifies if the signature is correct for the given signed data (as bytes). Returns the actual message in Bytes.
+
+                ::
+
+                        >>> j = jce.Johnny("tests/files/public.asc")
+                        >>> j.verify_and_extract_bytes(encrypted_bytes)
+
+
+        .. method:: verify_bytes_detached(data: bytes, signature: bytes)
 
                 Verifies if the signature is correct for the given data (as bytes). Returns `True` or `False`.
 
                 ::
 
-                        >>> j = jce.Johnny("tests/files/secret.asc")
+                        >>> j = jce.Johnny("tests/files/public.asc")
                         >>> j.verify_bytes(encrypted_bytes, signature)
+
+        .. method:: verify_file(filepath: bytes)
+
+                Verifies if the signature is correct for the given signed file (path as bytes). Returns `True` or `False`.
+
+                ::
+
+                        >>> j = jce.Johnny("tests/files/public.asc")
+                        >>> j.verify_file(encrypted_bytes, signature)
+
+        .. method:: verify_and_extract_file(filepath: bytes, output: bytes)
+
+                Verifies and extracts the message from the signed file, return `True` in case of a success.
+
+
+        .. method:: verify_file_detached(filepath: bytes, signature: bytes)
+
+                Verifies if the signature is correct for the given signed file (path as bytes). Returns `True` or `False`.
+
+                ::
+
+                        >>> j = jce.Johnny("tests/files/public.asc")
+                        >>> j.verify_file_detached(encrypted_bytes, signature)
