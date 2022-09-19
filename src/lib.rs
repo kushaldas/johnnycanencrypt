@@ -19,6 +19,7 @@ use std::str;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 extern crate anyhow;
 extern crate sequoia_openpgp as openpgp;
+extern crate sshkeys;
 extern crate talktosc;
 extern crate tempfile;
 
@@ -1606,6 +1607,87 @@ fn upload_to_smartcard(
     Ok(result)
 }
 
+#[pyfunction]
+#[pyo3(text_signature = "(certdata, comment)")]
+fn get_ssh_pubkey(_py: Python, certdata: Vec<u8>, comment: Option<String>) -> Result<String> {
+    let cert = openpgp::Cert::from_bytes(&certdata)?;
+
+    let policy = P::new();
+    let valid_ka = cert
+        .keys()
+        .subkeys()
+        .with_policy(&policy, None)
+        .alive()
+        .revoked(false)
+        .for_authentication();
+    for ka in valid_ka {
+        // First let us get the value of e from the public key
+        let public = ka.parts_as_public();
+        let (key_type, kind) = match public.mpis().clone() {
+            openpgp::crypto::mpi::PublicKey::RSA { ref e, ref n } => {
+                let key = sshkeys::RsaPublicKey {
+                    e: e.value().to_vec(),
+                    n: n.value().to_vec(),
+                };
+                let key_type = sshkeys::KeyType::from_name("ssh-rsa").unwrap();
+                let kind = sshkeys::PublicKeyKind::Rsa(key);
+                (key_type, kind)
+            }
+            openpgp::crypto::mpi::PublicKey::ECDSA { curve, q, .. } => {
+                let (ssh_curve, name) = match curve {
+                    openpgp::types::Curve::NistP256 => (
+                        sshkeys::Curve::from_identifier("nistp256").unwrap(),
+                        "ecdsa-sha2-nistp256",
+                    ),
+                    openpgp::types::Curve::NistP384 => (
+                        sshkeys::Curve::from_identifier("nistp384").unwrap(),
+                        "ecdsa-sha2-nistp384",
+                    ),
+                    openpgp::types::Curve::NistP521 => (
+                        sshkeys::Curve::from_identifier("nistp521").unwrap(),
+                        "ecdsa-sha2-nistp521",
+                    ),
+                    _ => {
+                        return Err(JceError::new("Unknown ECDSA curve for us.".to_string()));
+                    }
+                };
+                let key_type = sshkeys::KeyType::from_name(name).unwrap();
+                let kind = sshkeys::PublicKeyKind::Ecdsa(sshkeys::EcdsaPublicKey {
+                    curve: ssh_curve,
+                    key: q.value().to_vec(),
+                    sk_application: None,
+                });
+                (key_type, kind)
+            }
+            openpgp::crypto::mpi::PublicKey::EdDSA { curve: _, q } => {
+                let key_type = sshkeys::KeyType::from_name("ssh-ed25519").unwrap();
+                let kind = sshkeys::PublicKeyKind::Ed25519(sshkeys::Ed25519PublicKey {
+                    key: q.value().to_vec(),
+                    sk_application: None,
+                });
+                (key_type, kind)
+            }
+            _ => {
+                return Err(JceError::new("Unknown Public Key.".to_string()));
+            }
+        };
+        let public_key = sshkeys::PublicKey {
+            key_type,
+            kind,
+            comment: comment,
+        };
+        let mut keydata = vec![];
+        public_key.write(&mut keydata)?;
+
+        let s = String::from_utf8_lossy(&keydata).to_string();
+        return Ok(s);
+    }
+
+    return Err(JceError::new(
+        "Could not find authentication subkey for ssh.".to_string(),
+    ));
+}
+
 #[allow(unused)]
 fn parse_and_move_a_key(
     cert: openpgp::Cert,
@@ -2920,6 +3002,7 @@ fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(revoke_uid_in_cert))?;
     m.add_wrapped(wrap_pyfunction!(update_subkeys_expiry_in_cert))?;
     m.add_wrapped(wrap_pyfunction!(certify_key))?;
+    m.add_wrapped(wrap_pyfunction!(get_ssh_pubkey))?;
     m.add("CryptoError", _py.get_type::<CryptoError>())?;
     m.add("SameKeyError", _py.get_type::<SameKeyError>())?;
     m.add_class::<Johnny>()?;
