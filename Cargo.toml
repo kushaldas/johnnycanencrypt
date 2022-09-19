@@ -28,6 +28,7 @@ chrono = "0.4.22"
 tempfile = "3.0.0"
 #talktosc = { git = "https://github.com/kushaldas/talktosc", branch="main"}
 talktosc = "0.1.3"
+sshkeys = "0.3.2"
  
 [dependencies.pyo3]
 version = "0.16.4"

@@ -21,6 +21,10 @@ In most cases you don't have to use these, but if you have a reason, feel free t
 
         .. note:: Use this function if you have to encrypt for multiple recipents.
 
+.. function:: get_ssh_pubkey(certdata, comment: Optional[str]) -> str:
+
+        This function takes a public key and optional comment and then provides a string representing the authentication subkey to be used inside of SSH.
+
 .. class:: Johnny(filepath)
 
         It creates an object of type `Johnny`, you can provide path to the either public key, or the private key based on the operation

@@ -10,6 +10,8 @@
 
 - `verify_and_extract_bytes` function to extract the verified bytes.
 - `verify_and_extract_file` function to extract the verified file.
+- `get_ssh_pubkey` to get ssh style key for authentication subkey in rjce #114.
+- Adds https://docs.rs/sshkeys/0.3.2/sshkeys/index.html as dependency.
 
 ## [0.9.0] - 2022-08-30
 
