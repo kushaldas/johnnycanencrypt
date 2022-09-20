@@ -2,6 +2,9 @@
 
 ## [unreleased]
 
+
+## [0.10.0] - 2022-09-20
+
 ### Fixed
 
 - Fixes #111 to verify compressed signed message.
