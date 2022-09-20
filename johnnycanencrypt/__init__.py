@@ -1308,7 +1308,7 @@ class KeyStore:
                 f"The signature file at {signature_path} is missing."
             )
         if not os.path.exists(filepath):
-            raise FileNotFoundError(f"The file at {filepath} is missing.")
+            raise FileNotFoundError(f"The file at {str(filepath)} is missing.")
 
         # Let us read the signature
         with open(signature_path, "rb") as fobj:
@@ -1333,7 +1333,7 @@ class KeyStore:
             k = key
 
         if not os.path.exists(filepath):
-            raise FileNotFoundError(f"The file at {filepath} is missing.")
+            raise FileNotFoundError(f"The file at {str(filepath)} is missing.")
 
         if type(filepath) == str:
             filepath = filepath.encode("utf-8")
@@ -1374,7 +1374,7 @@ class KeyStore:
             k = key
 
         if not os.path.exists(filepath):
-            raise FileNotFoundError(f"The file at {filepath} is missing.")
+            raise FileNotFoundError(f"The file at {str(filepath)} is missing.")
 
         if isinstance(filepath, str):
             input_filepath = filepath.encode("utf-8")
