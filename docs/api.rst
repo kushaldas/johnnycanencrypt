@@ -188,13 +188,25 @@ For the rest of the documentation we assume that you imported the module as foll
                 Returns the armored signature of the *filepath* argument using the secret key (either fingerprint or secret `Key` object).
                 If you pass *write=True*, it will also write the armored signature to a file named as *filepath.asc* 
 
-        .. method:: verify_bytes_detached(key, data, signature) -> bool:
+        .. method:: verify(key, data: Union[str, bytes], signature:Optional[str]) -> bool:
 
-                Verifies the given *data* using the public key, and signature string, returns **True** or **False** as result. 
+                Verifies the given *data* using the public key, and signature string if given, returns **True** or **False** as result.
 
-        .. method:: verify_file_detached(key, filepath, signature_path) -> bool:
+        .. method:: verify_file_detached(key: Union[str, Key], filepath: Union[str, bytes], signature_path) -> bool:
 
-                Verifies the given filepath using the public key, and signature string, returns **True** or **False** as result. 
+                Verifies the given *filepath* using the public key, and signature string, returns **True** or **False** as result.
+
+        .. method:: verify_file(key, filepath) -> bool:
+
+                Verifies the given signed *filepath* using the public key, returns **True** or **False** as result.
+
+        .. method:: verify_and_extract_bytes(key: Union[str, Key], data: Union[str, bytes]) -> bytes:
+
+                Verifies the given signed *data* using the public key,  returns the actual data as bytes.
+
+        .. method:: verify_and_extract_file(self, key: Union[str, Key], filepath: Union[str, bytes], output: Union[str, bytes]) -> bool::
+
+                Verifies the given signed *filepath* and writes the actual data in *output*.
 
 
 .. class:: Cipher() -> Cipher:

@@ -1289,7 +1289,7 @@ class KeyStore:
 
         return signature
 
-    def verify_file_detached(self, key, filepath, signature_path):
+    def verify_file_detached(self, key, filepath: Union[str, bytes], signature_path):
         """Verifies the given filepath based on the signature file.
 
         :param key: Fingerprint or public Key object
@@ -1314,7 +1314,7 @@ class KeyStore:
         with open(signature_path, "rb") as fobj:
             signature_in_bytes = fobj.read()
 
-        if type(filepath) == str:
+        if isinstance(filepath, str):
             filepath = filepath.encode("utf-8")
         jp = Johnny(k.keyvalue)
         return jp.verify_file_detached(filepath, signature_in_bytes)
@@ -1339,6 +1339,56 @@ class KeyStore:
             filepath = filepath.encode("utf-8")
         jp = Johnny(k.keyvalue)
         return jp.verify_file(filepath)
+
+    def verify_and_extract_bytes(self, key: Union[str, Key], data: Union[str, bytes]) -> bytes:
+        """Verifies the given data and returns the acutal data.
+
+        :param key: Fingerprint or public Key object.
+        :param data: Data to be signed.
+
+        :returns: bytes
+        """
+        if isinstance(key, str):  # Means we have a fingerprint
+            k = self.get_key(key)
+        else:
+            k = key
+
+        if isinstance(data, str):
+            data = data.encode("utf-8")
+        jp = Johnny(k.keyvalue)
+
+        return jp.verify_and_extract_bytes(data)
+
+    def verify_and_extract_file(self, key: Union[str, Key], filepath: Union[str, bytes], output: bytes) -> bool:
+        """Verifies the given signed file and saves the actual data in output.
+
+        :param key: Fingerprint or public Key object.
+        :param filepath: Signed file as bytes.
+        :param output: Output path for the original content.
+
+        :returns: bool
+        """
+        if isinstance(key, str):  # Means we have a fingerprint
+            k = self.get_key(key)
+        else:
+            k = key
+
+        if not os.path.exists(filepath):
+            raise FileNotFoundError(f"The file at {filepath} is missing.")
+
+        if isinstance(filepath, str):
+            input_filepath = filepath.encode("utf-8")
+        else:
+            input_filepath = filepath
+
+        if isinstance(output, str):
+            outputpath = output.encode("utf-8")
+        else:
+            outputpath = output
+        jp = Johnny(k.keyvalue)
+
+        return jp.verify_and_extract_file(input_filepath, outputpath)
+
 
     def fetch_key_by_fingerprint(self, fingerprint: str):
         """Fetches key from keys.openpgp.org based on the fingerprint.

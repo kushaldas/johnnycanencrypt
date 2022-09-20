@@ -440,7 +440,7 @@ def test_get_pub_key():
     fingerprint = "F51C310E02DC1B7771E176D8A1C5C364EB5B9A20"
     key = ks.get_key(fingerprint)
     # verify that the key is a secret
-    key.keytype == 1
+    assert key.keytype == jce.KeyType.SECRET
 
     # now get the public key
     pub_key = key.get_pub_key()
