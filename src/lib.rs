@@ -76,6 +76,14 @@ impl fmt::Display for JceError {
     }
 }
 
+impl std::convert::From<std::fmt::Error> for JceError {
+    fn from(err: std::fmt::Error) -> JceError {
+        JceError {
+            msg: err.to_string(),
+        }
+    }
+}
+
 impl std::convert::From<anyhow::Error> for JceError {
     fn from(err: anyhow::Error) -> JceError {
         JceError {
@@ -1608,6 +1616,50 @@ fn upload_to_smartcard(
 }
 
 #[pyfunction]
+#[pyo3(text_signature = "(certdata)")]
+fn get_signing_pubkey(py: Python, certdata: Vec<u8>) -> Result<PyObject> {
+    // Note: For now we will return the first signing key (maybe the primary key).
+    use std::fmt::Write;
+    let pd = PyDict::new(py);
+    let cert = openpgp::Cert::from_bytes(&certdata)?;
+
+    let policy = P::new();
+    let valid_ka = cert
+        .keys()
+        .with_policy(&policy, None)
+        .alive()
+        .revoked(false)
+        .for_signing();
+    for ka in valid_ka {
+        // First let us get the value of e from the public key
+        let public = ka.parts_as_public();
+        match public.mpis().clone() {
+            openpgp::crypto::mpi::PublicKey::RSA { ref e, ref n } => {
+                let mut result_n = String::new();
+                let internal = n.value().to_vec();
+                for v in internal.clone().iter() {
+                    write!(&mut result_n, "{:02X}", v)?;
+                }
+                let mut result_e = String::new();
+                let internal = e.value().to_vec();
+                for v in internal.clone().iter() {
+                    write!(&mut result_e, "{:02X}", v)?;
+                }
+                pd.set_item("key_type", "RSA")?;
+                pd.set_item("n", result_n)?;
+                pd.set_item("e", result_e)?;
+                return Ok(pd.into());
+            }
+            _ => {
+                return Err(JceError::new("Not yet implemented".to_string()));
+            }
+        };
+    }
+
+    return Err(JceError::new("Could not find signing key.".to_string()));
+}
+
+#[pyfunction]
 #[pyo3(text_signature = "(certdata, comment)")]
 fn get_ssh_pubkey(_py: Python, certdata: Vec<u8>, comment: Option<String>) -> Result<String> {
     let cert = openpgp::Cert::from_bytes(&certdata)?;
@@ -3003,6 +3055,7 @@ fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(update_subkeys_expiry_in_cert))?;
     m.add_wrapped(wrap_pyfunction!(certify_key))?;
     m.add_wrapped(wrap_pyfunction!(get_ssh_pubkey))?;
+    m.add_wrapped(wrap_pyfunction!(get_signing_pubkey))?;
     m.add("CryptoError", _py.get_type::<CryptoError>())?;
     m.add("SameKeyError", _py.get_type::<SameKeyError>())?;
     m.add_class::<Johnny>()?;
