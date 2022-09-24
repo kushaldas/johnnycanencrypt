@@ -44,7 +44,8 @@ Please read the [Introduction](https://johnnycanencrypt.readthedocs.io/en/latest
 
 ## API documentation
 
-Please go through the [full API documentation](https://johnnycanencrypt.readthedocs.io/en/latest/api.html) for detailed descriptions.
+Please go through the [full API documentation](https://johnnycanencrypt.readthedocs.io/en/latest/api.html) for detailed
+descriptions.
 
 ## LICENSE: GPLv3+
 
