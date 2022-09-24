@@ -134,7 +134,7 @@ impl JceError {
 /// Takes the secret key data, a list of subkey fingerprints as str,
 /// expirytime as the duration to be added as integer, and the secret key password.
 #[pyfunction]
-#[pyo3(text_signature = "(certdata, fingerprints, expirytime, pass)")]
+#[pyo3(text_signature = "(certdata, fingerprints, expirytime, password)")]
 pub fn update_subkeys_expiry_in_cert(
     py: Python,
     certdata: Vec<u8>,
@@ -184,12 +184,12 @@ pub fn update_subkeys_expiry_in_cert(
 }
 
 #[pyfunction]
-#[pyo3(text_signature = "(certdata, uid, pass)")]
+#[pyo3(text_signature = "(certdata, uid, password)")]
 pub fn revoke_uid_in_cert(
     py: Python,
     certdata: Vec<u8>,
     uid: Vec<u8>,
-    pass: String,
+    password: String,
 ) -> Result<PyObject> {
     // This is where we will store all the signing keys
     let mut cert = openpgp::Cert::from_bytes(&certdata)?;
@@ -209,7 +209,7 @@ pub fn revoke_uid_in_cert(
                 .key()
                 .clone()
                 .parts_into_secret()?
-                .decrypt_secret(&openpgp::crypto::Password::from(pass))?
+                .decrypt_secret(&openpgp::crypto::Password::from(password))?
                 .into_keypair()?
         }
         false => {
@@ -249,12 +249,12 @@ pub fn revoke_uid_in_cert(
 }
 
 #[pyfunction]
-#[pyo3(text_signature = "(certdata, uid, pass)")]
+#[pyo3(text_signature = "(certdata, uid, password)")]
 pub fn add_uid_in_cert(
     py: Python,
     certdata: Vec<u8>,
     uid: Vec<u8>,
-    pass: String,
+    password: String,
 ) -> Result<PyObject> {
     // This is where we will store all the signing keys
     let cert = openpgp::Cert::from_bytes(&certdata)?;
@@ -274,7 +274,7 @@ pub fn add_uid_in_cert(
                 .key()
                 .clone()
                 .parts_into_secret()?
-                .decrypt_secret(&openpgp::crypto::Password::from(pass))?
+                .decrypt_secret(&openpgp::crypto::Password::from(password))?
                 .into_keypair()?
         }
         false => {
@@ -310,7 +310,7 @@ pub fn add_uid_in_cert(
 pub fn update_password(
     py: Python,
     certdata: Vec<u8>,
-    pass: String,
+    password: String,
     newpass: String,
 ) -> Result<PyObject> {
     let p = P::new();
@@ -322,7 +322,7 @@ pub fn update_password(
         .key()
         .clone()
         .parts_into_secret()?
-        .decrypt_secret(&openpgp::crypto::Password::from(pass.clone()))?;
+        .decrypt_secret(&openpgp::crypto::Password::from(password.clone()))?;
     let pkey = key.encrypt_secret(&openpgp::crypto::Password::from(newpass.clone()))?;
 
     for key in cert
@@ -336,7 +336,7 @@ pub fn update_password(
         let k = key
             .clone()
             .parts_into_secret()?
-            .decrypt_secret(&openpgp::crypto::Password::from(pass.clone()))?;
+            .decrypt_secret(&openpgp::crypto::Password::from(password.clone()))?;
         let newk = k.encrypt_secret(&openpgp::crypto::Password::from(newpass.clone()))?;
         keys.push(newk.clone());
     }
@@ -1478,7 +1478,7 @@ fn sign_bytes_detached_internal(
 }
 
 #[pyfunction]
-#[pyo3(text_signature = "(certdata, newcertdata)")]
+#[pyo3(text_signature = "(certdata, newcertdata, force)")]
 fn merge_keys(
     _py: Python,
     certdata: Vec<u8>,

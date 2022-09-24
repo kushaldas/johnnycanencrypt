@@ -270,7 +270,7 @@ class KeyStore:
             other_k = otherkey
 
         cert = rjce.certify_key(
-            k.keyvalue, other_k.keyvalue, sig_type.value, uids, password, oncard
+            k.keyvalue, other_k.keyvalue, sig_type.value, uids, password.encode("utf-8"), oncard
         )
         # Now if the otherkey is secret, then merge this new public key into the secret key
         if other_k.keytype == KeyType.SECRET:
@@ -279,7 +279,7 @@ class KeyStore:
         self.delete_key(otherkey)
         # Now add back the new updated key
         (
-            uids,
+            nuids,
             fingerprint,
             keytype,
             expirationtime,
@@ -289,7 +289,7 @@ class KeyStore:
 
         self._save_key_info_to_db(
             cert,
-            uids,
+            nuids,
             fingerprint,
             keytype,
             expirationtime,
