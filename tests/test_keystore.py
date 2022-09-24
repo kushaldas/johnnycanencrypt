@@ -33,6 +33,9 @@ def test_nonexisting_keystore_path():
     with pytest.raises(OSError):
         ks = jce.KeyStore(BASE_TESTSDIR / "files2/")
 
+def test_str():
+    ks = jce.KeyStore("/tmp")
+    assert str(ks) == "<KeyStore dbpath=/tmp/jce.db>"
 
 def test_no_such_key():
     with pytest.raises(jce.KeyNotFoundError):

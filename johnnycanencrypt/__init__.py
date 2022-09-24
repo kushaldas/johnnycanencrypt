@@ -151,6 +151,9 @@ class KeyStore:
             # verify if it has the same database schema
             self.upgrade_if_required()
 
+    def __str__(self) -> str:
+        return f"<KeyStore dbpath={self.dbpath}>"
+
     def upgrade_if_required(self):
         "Upgrades the database schema if required"
         SHOULD_WE = False
