@@ -348,7 +348,7 @@ def test_ks_userid_signing():
         k,
         ["Kushal Das <kushaldas@gmail.com>", "Kushal Das <kushal@fedoraproject.org>"],
         jce.SignatureType.PersonaCertification,
-        password="redhat".encode("utf-8"),
+        password="redhat",
     )
     # k now contains the new updated key
     for uid in k.uids:
