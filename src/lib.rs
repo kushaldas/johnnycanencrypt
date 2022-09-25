@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © 2020 Kushal Das <mail@kushaldas.in>
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 use openpgp::packet::Signature;
 use openpgp::KeyHandle;
 use pyo3::create_exception;
