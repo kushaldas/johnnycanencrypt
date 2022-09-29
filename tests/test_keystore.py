@@ -22,9 +22,11 @@ def test_nonexisting_keystore_path():
     with pytest.raises(OSError):
         ks = jce.KeyStore(BASE_TESTSDIR / "files2/")
 
-def test_str():
-    ks = jce.KeyStore("/tmp")
-    assert str(ks) == "<KeyStore dbpath=/tmp/jce.db>"
+
+def test_str(tmp_path):
+    ks = jce.KeyStore(tmp_path)
+    assert str(ks) == f"<KeyStore dbpath={tmp_path.as_posix()}/jce.db>"
+
 
 def test_no_such_key():
     with pytest.raises(jce.KeyNotFoundError):

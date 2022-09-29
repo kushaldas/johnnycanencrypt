@@ -1,5 +1,4 @@
 import os
-import tempfile
 
 import pytest
 
@@ -38,11 +37,10 @@ def test_sign_cleartext():
     assert jp.verify_bytes(signed_data.encode("utf-8"))
 
 
-def test_sign_verify_file_cleartext():
+def test_sign_verify_file_cleartext(tmp_path):
     "This will sign a file in cleartext"
     j = jce.Johnny(_get_cert_data(BASE_TESTSDIR / "files/secret.asc"))
-    tempdir = tempfile.TemporaryDirectory()
-    output = os.path.join(tempdir.name, "sign.asc")
+    output = (tmp_path / "sign.asc").as_posix()
     j.sign_file(
         (BASE_TESTSDIR / "files/text.txt").as_posix().encode(),
         output.encode("utf-8"),
@@ -59,12 +57,10 @@ def test_sign_verify_file_cleartext():
     assert jp.verify_file(output.encode("utf-8"))
 
 
-def test_sign_verify_file():
+def test_sign_verify_file(tmp_path):
     "This will sign a file as a PGP message"
     j = jce.Johnny(_get_cert_data(BASE_TESTSDIR / "files/secret.asc"))
-    tempdir = tempfile.TemporaryDirectory()
-    # output = os.path.join(tempdir.name, "sign.asc")
-    output = "/tmp/sign.asc"
+    output = (tmp_path / "sign.asc").as_posix()
     j.sign_file(
         (BASE_TESTSDIR / "files/text.txt").as_posix().encode(),
         output.encode("utf-8"),
@@ -89,14 +85,12 @@ def test_sign_from_gpg_verify_file():
     assert jp.verify_file(str(BASE_TESTSDIR / "files/msg.txt.asc").encode("utf-8"))
 
 
-def test_verify_signed_file():
+def test_verify_signed_file(tmp_path):
     "This will verify a signed message from gpg and extract"
     jp = jce.Johnny(
         _get_cert_data(BASE_TESTSDIR / "files/store/kushal_updated_key.asc")
     )
-
-    tempdir = tempfile.TemporaryDirectory()
-    output = os.path.join(tempdir.name, "result.txt")
+    output = (tmp_path / "result.txt").as_posix()
     assert jp.verify_and_extract_file(
         str(BASE_TESTSDIR / "files/msg.txt.asc").encode("utf-8"), output.encode("utf-8")
     )
