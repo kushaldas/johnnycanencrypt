@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: © 2020 Kushal Das <mail@kushaldas.in>
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 import os
 import sqlite3
 import urllib.parse
@@ -12,7 +15,7 @@ from .johnnycanencrypt import (
     CryptoError,
     Johnny,
     SameKeyError,
-    create_newkey,
+    create_key,
     encrypt_bytes_to_bytes,
     encrypt_bytes_to_file,
     encrypt_file_internal,
@@ -45,6 +48,15 @@ class Cipher(Enum):
     Cv25519 = "Cv25519"
 
 
+class SignatureType(Enum):
+    """This is used for key signing via certification"""
+
+    GenericCertification = 0
+    PersonaCertification = 1
+    CasualCertification = 2
+    PositiveCertification = 3
+
+
 class Key:
     """Returns a Key object."""
 
@@ -59,6 +71,8 @@ class Key:
         creationtime=None,
         othervalues={},
         oncard: str = "",
+        can_primary_sign: bool = False,
+        primary_on_card: str = "",
     ):
         self.keyvalue = keyvalue
         self.keytype = keytype
@@ -73,6 +87,8 @@ class Key:
         )
         self.othervalues = othervalues
         self.oncard = oncard
+        self.can_primary_sign = can_primary_sign
+        self.primary_on_card = primary_on_card
 
     def __repr__(self):
         return f"<Key fingerprint={self.fingerprint} type={self.keytype.name}>"
@@ -135,6 +151,9 @@ class KeyStore:
             # Now we have db already
             # verify if it has the same database schema
             self.upgrade_if_required()
+
+    def __str__(self) -> str:
+        return f"<KeyStore dbpath={self.dbpath}>"
 
     def upgrade_if_required(self):
         """Upgrades the database schema if required"""
@@ -202,9 +221,14 @@ class KeyStore:
             cursor = con.cursor()
             for row in existing_records:
                 oncard = row["oncard"]
+                # The following because this column may not exist at all
+                try:
+                    primary_on_card = row["primary_on_card"]
+                except IndexError:
+                    primary_on_card = ""
                 fingerprint = row["fingerprint"]
-                sql = "UPDATE keys set oncard=? where fingerprint=?"
-                cursor.execute(sql, (oncard, fingerprint))
+                sql = "UPDATE keys set oncard=?, primary_on_card=? where fingerprint=?"
+                cursor.execute(sql, (oncard, primary_on_card, fingerprint))
         # Now let us rename the file
         os.rename(self.dbpath, oldpath)
         self.dbpath = oldpath
@@ -221,6 +245,62 @@ class KeyStore:
         assert cert != key.keyvalue
         key.keyvalue = cert
         return key
+
+    def certify_key(
+        self,
+        key: Union[Key, str],
+        otherkey: Union[Key, str],
+        uids: List[str],
+        sig_type: SignatureType = SignatureType.GenericCertification,
+        password: str = "",
+        oncard=False,
+    ) -> Key:
+        """Certifies the given uids based on a list of values. Returns the new key.
+
+        :param key: Fingerprint or secret Key object using which we will certify.
+        :param other_key: Fingerprint or Key object whom we will certify.
+        :param uids: List of uid values which we will certify using the given SignatureType.
+        :param sig_type: SignatureType, default is SignatureType.GenericCertification
+        :param password: Password of the secret key file or the pin if on card.
+        """
+        if isinstance(key, str):  # Means we have a fingerprint
+            k = self.get_key(key)
+        else:
+            k = key
+
+        if isinstance(otherkey, str):  # Means we have a fingerprint
+            other_k = self.get_key(otherkey)
+        else:
+            other_k = otherkey
+
+        cert = rjce.certify_key(
+            k.keyvalue, other_k.keyvalue, sig_type.value, uids, password.encode("utf-8"), oncard
+        )
+        # Now if the otherkey is secret, then merge this new public key into the secret key
+        if other_k.keytype == KeyType.SECRET:
+            cert = rjce.merge_keys(other_k.keyvalue, cert, True)
+        # first remove the old one
+        self.delete_key(otherkey)
+        # Now add back the new updated key
+        (
+            nuids,
+            fingerprint,
+            keytype,
+            expirationtime,
+            creationtime,
+            othervalues,
+        ) = parse_cert_bytes(cert)
+
+        self._save_key_info_to_db(
+            cert,
+            nuids,
+            fingerprint,
+            keytype,
+            expirationtime,
+            creationtime,
+            othervalues,
+        )
+        return self.get_key(fingerprint)
 
     def add_key_file_to_db(
         self,
@@ -257,6 +337,7 @@ class KeyStore:
         ktype = 1 if keytype else 0
         subkeys = othervalues["subkeys"]
         mainkeyid = othervalues["keyid"]
+        can_primary_sign = othervalues["can_primary_sign"]
         with con:
             cursor = con.cursor()
             # First let us check if a key already exists
@@ -270,7 +351,7 @@ class KeyStore:
                     fromdb["keytype"] == 0
                 ):  # only update if there is a public key in the store
                     key = self.get_key(fingerprint)
-                    newcert = merge_keys(key.keyvalue, cert)
+                    newcert = merge_keys(key.keyvalue, cert, False)
                     uids, fp, kt, et, ct, othervalues = parse_cert_bytes(newcert)
                     etime = str(et.timestamp()) if et else ""
                     ctime = str(ct.timestamp()) if ct else ""
@@ -283,8 +364,19 @@ class KeyStore:
                 cursor.execute(sql, (cert, ktype, etime, ctime, key_id))
             else:
                 # Now insert the new key
-                sql = "INSERT INTO keys (keyvalue, fingerprint, keyid, keytype, expiration, creation) VALUES(?, ?, ?, ?, ?, ?)"
-                cursor.execute(sql, (cert, fingerprint, mainkeyid, ktype, etime, ctime))
+                sql = "INSERT INTO keys (keyvalue, fingerprint, keyid, keytype, expiration, creation, can_primary_sign) VALUES(?, ?, ?, ?, ?, ?, ?)"
+                cursor.execute(
+                    sql,
+                    (
+                        cert,
+                        fingerprint,
+                        mainkeyid,
+                        ktype,
+                        etime,
+                        ctime,
+                        can_primary_sign,
+                    ),
+                )
                 # This `key_id` is the database id
                 key_id = cursor.lastrowid
             # Now let us add the subkey and keyid details
@@ -309,6 +401,29 @@ class KeyStore:
                     sql = f"INSERT INTO uidvalues (value, revoked, key_id) values (?, ?, ?)"
                     cursor.execute(sql, (uid["value"], revoked, key_id))
                     value_id = cursor.lastrowid
+                    # After we added the value, we should check for certification
+                    if len(uid["certifications"]) > 0:
+                        for ucert in uid["certifications"]:
+                            ctime = (
+                                str(ucert["creationtime"].timestamp())
+                                if ucert["creationtime"]
+                                else ""
+                            )
+                            sql = f"INSERT INTO uidcerts (ctype, creation, key_id, value_id) values (?, ?, ?, ?)"
+                            cursor.execute(
+                                sql,
+                                (ucert["certification_type"], ctime, key_id, value_id),
+                            )
+                            # This is the ID of the certification we just added to the database
+                            ucert_id = cursor.lastrowid
+                            # Now time to loop over the details and add them
+                            for citem in ucert["certification_list"]:
+                                # citem is like [('fingerprint', 'F7FC698FAAE2D2EFBECDE98ED1B3ADC0E0238CA6'), ('keyid', 'D1B3ADC0E0238CA6')]
+                                sql = f"INSERT INTO uidcertlist (value, datatype, key_id, value_id, cert_id) values (?, ?, ?, ?, ?)"
+                                cursor.execute(
+                                    sql,
+                                    (citem[1], citem[0], key_id, value_id, ucert_id),
+                                )
                 else:
                     # If no value, then we can skip the rest
                     continue
@@ -325,12 +440,10 @@ class KeyStore:
         :param other: Either fingerprint as str or `Key` object.
         :returns: boolean result
         """
-        fingerprint = ""
-        if type(other) == str:
-            assert isinstance(other, str)
+        fingerprint: str = ""
+        if isinstance(other, str):
             fingerprint = other
-        elif type(other) == Key:
-            assert isinstance(other, Key)
+        elif isinstance(other, Key):
             fingerprint = other.fingerprint
         try:
             if self.get_key(fingerprint):
@@ -518,8 +631,8 @@ class KeyStore:
         # Regnerate the key object and return it
         return self.get_key(fingerprint)
 
-    def import_cert(self, keypath: str, onplace=False) -> Key:
-        """Imports a given cert from the given path.
+    def import_key(self, keypath: str, onplace=False) -> Key:
+        """Imports a given key from the given file path.
 
         :param keypath: Path to the pgp key file.
         :param onplace: Default value is False, if True means the keyfile is in the right directory
@@ -618,6 +731,7 @@ class KeyStore:
     def _internal_build_key_list(self, rows, cursor):
         """Internal method to create a list of keys from db result rows"""
         finalresult = []
+        sql_for_certs = "SELECT value, datatype FROM uidcertlist WHERE cert_id=?"
         for result in rows:
             if result:
                 key_id = result["id"]
@@ -628,6 +742,8 @@ class KeyStore:
                 creationtime = result["creation"]
                 keytype = KeyType.SECRET if result["keytype"] else KeyType.PUBLIC
                 oncard = result["oncard"]
+                can_primary_sign = result["can_primary_sign"]
+                primary_on_card = result["primary_on_card"]
 
                 # Now get the uids
                 sql = "SELECT id, value, revoked FROM uidvalues WHERE key_id=?"
@@ -640,6 +756,27 @@ class KeyStore:
                     email = self._get_one_row_from_table(cursor, "uidemails", value_id)
                     name = self._get_one_row_from_table(cursor, "uidnames", value_id)
                     uri = self._get_one_row_from_table(cursor, "uiduris", value_id)
+                    # Now time to find any certification for the uid value
+                    # TODO: Write a join query in future please
+                    csql = "SELECT id, ctype, creation FROM uidcerts WHERE key_id=? and value_id=?"
+                    cursor.execute(csql, (key_id, value_id))
+                    certrows = cursor.fetchall()
+                    # let us loop over all the certs
+                    certifications = []
+                    for uidcert in certrows:
+                        cert_result = {}
+                        cert_result["creationtime"] = uidcert["creation"]
+                        cert_result["certification_type"] = uidcert["ctype"]
+                        ucertid = uidcert["id"]
+                        cert_issuers = cursor.execute(sql_for_certs, (ucertid,))
+                        issuers = []
+                        for cissuer in cert_issuers:
+                            issuers.append((cissuer["datatype"], cissuer["value"]))
+                        # now put it in the right place
+                        cert_result["certification_list"] = issuers
+                        # Now put all the data in the right place
+                        certifications.append(cert_result)
+
                     uids.append(
                         {
                             "value": row["value"],
@@ -647,6 +784,7 @@ class KeyStore:
                             "email": email,
                             "name": name,
                             "uri": uri,
+                            "certifications": certifications,
                         }
                     )
 
@@ -705,6 +843,8 @@ class KeyStore:
                         creationtime,
                         othervalues,
                         oncard,
+                        can_primary_sign,
+                        primary_on_card,
                     )
                 )
         if finalresult:
@@ -785,7 +925,7 @@ class KeyStore:
                         results.append(key)
         return results
 
-    def create_newkey(
+    def create_key(
         self,
         password: str,
         uids: Optional[Union[List[str], str]] = [],
@@ -794,6 +934,7 @@ class KeyStore:
         expiration=None,
         subkeys_expiration=False,
         whichkeys=7,
+        can_primary_sign=False,
     ) -> Key:
         """Returns a public `Key` object after creating a new key in the store
 
@@ -804,6 +945,7 @@ class KeyStore:
         :param expiration: datetime.datetime, default 0 (Never)
         :param subkeys_expiration: Bool (default False), pass True if you want to set the expiry date to the subkeys instead of master key.
         :param whichkeys: Decides which all subkeys to generate, 1 (for encryption), 2 for signing, 4 for authentication. Add the numbers for mixed result.
+        :param can_primary_sign: Boolean to indicate if the primary key can do signing
         """
         if creation:
             ctime = creation.timestamp()
@@ -821,7 +963,7 @@ class KeyStore:
         elif isinstance(uids, list):
             finaluids = uids
 
-        public, secret, fingerprint = create_newkey(
+        public, secret, fingerprint = create_key(
             password,
             finaluids,
             ciphersuite.value,
@@ -829,13 +971,14 @@ class KeyStore:
             int(etime),
             subkeys_expiration,
             whichkeys,
+            can_primary_sign,
         )
         # Now save the secret key
         key_filename = os.path.join(self.path, f"{fingerprint}.sec")
         with open(key_filename, "w") as fobj:
             fobj.write(secret)
 
-        key = self.import_cert(key_filename)
+        key = self.import_key(key_filename)
 
         # TODO: should we remove the key_filename from the disk?
         return key
@@ -845,14 +988,12 @@ class KeyStore:
 
         :param key: Either str representation of the fingerprint or a Key object
         """
-        if type(key) == str:
-            assert isinstance(key, str)
+        if isinstance(key, str):
             fingerprint = key
-        elif type(key) == Key:
-            assert isinstance(key, Key)
+        elif isinstance(key, Key):
             fingerprint = key.fingerprint
         else:
-            raise TypeError(f"Wrong datatype for {key}")
+            raise TypeError(f"Wrong datatype for {str(key)}")
 
         if not fingerprint in self:
             raise KeyNotFoundError(
@@ -863,18 +1004,18 @@ class KeyStore:
             cursor = con.cursor()
             cursor.execute("DELETE FROM keys where fingerprint=?", (fingerprint,))
 
-    def _find_keys(self, keys):
+    def _find_keys(self, keys: List[Union[str, Key]]):
         """To find all the key paths"""
         final_keys = []
         for k in keys:
-            if type(k) == str:  # Means fingerprint
+            if isinstance(k, str):  # Means fingerprint
                 key = self.get_key(k)
                 final_keys.append(key.keyvalue)
             else:
                 final_keys.append(k.keyvalue)
         return final_keys
 
-    def encrypt(self, keys, data, outputfile="", armor=True):
+    def encrypt(self, keys: Union[List[Union[str, Key]], Union[str, Key]], data: Union[str, bytes], outputfile: Union[str, bytes]="", armor=True):
         """Encrypts the given data with the list of keys and returns the output.
 
         :param keys: List of fingerprints or Key objects
@@ -882,7 +1023,7 @@ class KeyStore:
         :param outputfile: If provided the output will be wriiten in the location.
         :param armor: Default is True, for armored output.
         """
-        if type(keys) != list:
+        if not isinstance(keys, list):
             finalkeys = [
                 keys,
             ]
@@ -890,7 +1031,7 @@ class KeyStore:
             finalkeys = keys
         final_key_paths = self._find_keys(finalkeys)
         # Check if we return data
-        if type(data) == str:
+        if isinstance(data, str):
             finaldata = data.encode("utf-8")
         else:
             finaldata = data
@@ -898,7 +1039,7 @@ class KeyStore:
             return encrypt_bytes_to_bytes(final_key_paths, finaldata, armor)
 
         # For encryption to a file
-        if type(outputfile) == str:
+        if isinstance(outputfile, str):
             encrypted_file = outputfile.encode("utf-8")
         else:
             encrypted_file = outputfile
@@ -906,14 +1047,14 @@ class KeyStore:
         encrypt_bytes_to_file(final_key_paths, finaldata, encrypted_file, armor)
         return True
 
-    def decrypt(self, key, data, password=""):
+    def decrypt(self, key: Union[str, Key], data, password=""):
         """Decrypts the given bytes and returns plain text bytes.
 
         :param key: Fingerprint or secret Key object
         :param data: Encrypted data in bytes.
         :param password: Password for the secret key
         """
-        if type(key) == str:  # Means we have a fingerprint
+        if isinstance(key, str):  # Means we have a fingerprint
             k = self.get_key(key)
         else:
             k = key
@@ -954,7 +1095,7 @@ class KeyStore:
             if not os.path.exists(inputfilepath):
                 raise FileNotFoundError(f"{inputfilepath} can not be found.")
 
-        if type(keys) != list:
+        if not isinstance(keys, list):
             finalkeys = [
                 keys,
             ]
@@ -963,7 +1104,7 @@ class KeyStore:
         final_key_paths = self._find_keys(finalkeys)
 
         # For encryption to a file
-        if type(outputfilepath) == str:
+        if isinstance(outputfilepath, str):
             encrypted_file = outputfilepath.encode("utf-8")
         else:
             encrypted_file = outputfilepath
@@ -974,7 +1115,7 @@ class KeyStore:
             encrypt_filehandler_to_file(final_key_paths, fh, encrypted_file, armor)
         return True
 
-    def decrypt_file(self, key, encrypted_path, outputfile, password=""):
+    def decrypt_file(self, key: Union[str, Key], encrypted_path, outputfile, password=""):
         """Decryptes the given file to the output path.
 
         :param key: Fingerprint or secret Key object
@@ -983,12 +1124,12 @@ class KeyStore:
         :param password: Password for the secret key
         """
         use_filehandler = False
-        if type(key) == str:  # Means we have a fingerprint
+        if isinstance(key, str):  # Means we have a fingerprint
             k = self.get_key(key)
         else:
             k = key
 
-        if type(encrypted_path) == str:
+        if isinstance(encrypted_path, str):
             inputfile = encrypted_path.encode("utf-8")
         elif isinstance(encrypted_path, bytes):
             inputfile = encrypted_path
@@ -996,7 +1137,7 @@ class KeyStore:
             fh = encrypted_path
             use_filehandler = True
 
-        if type(outputfile) == str:
+        if isinstance(outputfile, str):
             outputpath = outputfile.encode("utf-8")
         else:
             outputpath = outputfile
@@ -1018,7 +1159,7 @@ class KeyStore:
         else:
             return jp.decrypt_filehandler(fh, outputpath, password)
 
-    def sign(self, key, data, password):
+    def sign_detached(self, key: Union[str, Key], data: Union[str, bytes], password):
         """Signs the given data with the key.
 
         :param key: Fingerprint or secret Key object
@@ -1027,12 +1168,12 @@ class KeyStore:
 
         :returns: The signature as string
         """
-        if type(key) == str:  # Means we have a fingerprint
+        if isinstance(key, str):  # Means we have a fingerprint
             k = self.get_key(key)
         else:
             k = key
 
-        if type(data) == str:
+        if isinstance(data, str):
             data = data.encode("utf-8")
 
         if k.keytype == KeyType.PUBLIC and k.oncard is not None:
@@ -1043,7 +1184,7 @@ class KeyStore:
         jp = Johnny(k.keyvalue)
         return jp.sign_bytes_detached(data, password)
 
-    def verify(self, key, data, signature):
+    def verify(self, key: Union[str, Key], data: Union[str, bytes], signature: Optional[str]) -> bool:
         """Verifies the given data and the signature
 
         :param key: Fingerprint or public Key object
@@ -1052,33 +1193,81 @@ class KeyStore:
 
         :returns: Boolean
         """
-        if type(key) == str:  # Means we have a fingerprint
+        if isinstance(key, str):  # Means we have a fingerprint
             k = self.get_key(key)
         else:
             k = key
 
-        if type(data) == str:
+        if isinstance(data, str):
             data = data.encode("utf-8")
         jp = Johnny(k.keyvalue)
-        return jp.verify_bytes(data, signature.encode("utf-8"))
 
-    def sign_file(self, key, filepath, password, write=False):
+        if signature:
+            return jp.verify_bytes_detached(data, signature.encode("utf-8"))
+        else:
+            return jp.verify_bytes(data)
+
+    def sign_file(self, key: Union[str, Key], filepath: Union[str, bytes], outputpath: Union[str, bytes], password, cleartext=False) -> bool:
+        """Signs the given input file with key and saves in the outputpath.
+
+        :param key: Fingerprint or secret Key object, public key in case card based operation.
+        :param filepath: str value of the path to the file.
+        :param outputpath: str value of the path to the output signed file.
+        :param password: Password the secret key file or the user pin of the card
+        :param cleartext: If the signed file should be in cleartext or not, default False.
+
+        :returns: Boolean result of the signing operation.
+        """
+        signature = ""
+        if isinstance(key, str):  # Means we have a fingerprint
+            k = self.get_key(key)
+        else:
+            k = key
+
+        if isinstance(filepath, str):
+            filepath_in_bytes = filepath.encode("utf-8")
+        else:
+            filepath_in_bytes = filepath
+
+        if isinstance(outputpath, str):
+            outputpath_in_bytes = outputpath.encode("utf-8")
+        else:
+            outputpath_in_bytes = outputpath
+
+        if k.keytype == KeyType.PUBLIC and k.oncard is not None:
+            result = rjce.sign_file_on_card(
+                k.keyvalue,
+                filepath_in_bytes,
+                outputpath_in_bytes,
+                password.encode("utf-8"),
+                cleartext,
+            )
+
+        else:
+            jp = Johnny(k.keyvalue)
+            result = jp.sign_file(
+                filepath_in_bytes, outputpath_in_bytes, password, cleartext
+            )
+
+        return result
+
+    def sign_file_detached(self, key: Union[str, Key], filepath: Union[str, bytes], password: str, write=False):
         """Signs the given data with the key. It also writes filename.asc in the same directory of the file as the signature if write value is True.
 
         :param key: Fingerprint or secret Key object
         :param filepath: str value of the path to the file.
-        :param password: Password of the secret key file.
+        :param password: Password of the secret key file as str.
         :param write: boolean value (default False), determines if we should write the signature to a file.
 
         :returns: The signature as string
         """
         signature = ""
-        if type(key) == str:  # Means we have a fingerprint
+        if isinstance(key, str):  # Means we have a fingerprint
             k = self.get_key(key)
         else:
             k = key
 
-        if type(filepath) == str:
+        if isinstance(filepath, str):
             filepath_in_bytes = filepath.encode("utf-8")
         else:
             filepath_in_bytes = filepath
@@ -1094,13 +1283,13 @@ class KeyStore:
 
         # Now check if we have to write the file on disk
         if write:
-            sig_file_name = filepath + ".asc"
+            sig_file_name = f'{filepath_in_bytes.decode("utf-8")}.asc'
             with open(sig_file_name, "w") as fobj:
                 fobj.write(signature)
 
         return signature
 
-    def verify_file(self, key, filepath, signature_path):
+    def verify_file_detached(self, key: Union[str, Key], filepath: Union[str, bytes], signature_path):
         """Verifies the given filepath based on the signature file.
 
         :param key: Fingerprint or public Key object
@@ -1109,7 +1298,7 @@ class KeyStore:
 
         :returns: Boolean
         """
-        if type(key) == str:  # Means we have a fingerprint
+        if isinstance(key, str):  # Means we have a fingerprint
             k = self.get_key(key)
         else:
             k = key
@@ -1119,16 +1308,90 @@ class KeyStore:
                 f"The signature file at {signature_path} is missing."
             )
         if not os.path.exists(filepath):
-            raise FileNotFoundError(f"The file at {filepath} is missing.")
+            raise FileNotFoundError(f"The file at {str(filepath)} is missing.")
 
         # Let us read the signature
         with open(signature_path, "rb") as fobj:
             signature_in_bytes = fobj.read()
 
-        if type(filepath) == str:
+        if isinstance(filepath, str):
             filepath = filepath.encode("utf-8")
         jp = Johnny(k.keyvalue)
-        return jp.verify_file(filepath, signature_in_bytes)
+        return jp.verify_file_detached(filepath, signature_in_bytes)
+
+    def verify_file(self, key: Union[str, Key], filepath):
+        """Verifies the given filepath.
+
+        :param key: Fingerprint or public Key object
+        :param filepath: File to be verified.
+
+        :returns: Boolean
+        """
+        if isinstance(key, str):  # Means we have a fingerprint
+            k = self.get_key(key)
+        else:
+            k = key
+
+        if not os.path.exists(filepath):
+            raise FileNotFoundError(f"The file at {str(filepath)} is missing.")
+
+        if isinstance(filepath, str):
+            input_filepath = filepath.encode("utf-8")
+        else:
+            input_filepath = filepath
+
+        jp = Johnny(k.keyvalue)
+        return jp.verify_file(input_filepath)
+
+    def verify_and_extract_bytes(self, key: Union[str, Key], data: Union[str, bytes]) -> bytes:
+        """Verifies the given data and returns the acutal data.
+
+        :param key: Fingerprint or public Key object.
+        :param data: Data to be signed.
+
+        :returns: bytes
+        """
+        if isinstance(key, str):  # Means we have a fingerprint
+            k = self.get_key(key)
+        else:
+            k = key
+
+        if isinstance(data, str):
+            data = data.encode("utf-8")
+        jp = Johnny(k.keyvalue)
+
+        return jp.verify_and_extract_bytes(data)
+
+    def verify_and_extract_file(self, key: Union[str, Key], filepath: Union[str, bytes], output: bytes) -> bool:
+        """Verifies the given signed file and saves the actual data in output.
+
+        :param key: Fingerprint or public Key object.
+        :param filepath: Signed file as bytes.
+        :param output: Output path for the original content.
+
+        :returns: bool
+        """
+        if isinstance(key, str):  # Means we have a fingerprint
+            k = self.get_key(key)
+        else:
+            k = key
+
+        if not os.path.exists(filepath):
+            raise FileNotFoundError(f"The file at {str(filepath)} is missing.")
+
+        if isinstance(filepath, str):
+            input_filepath = filepath.encode("utf-8")
+        else:
+            input_filepath = filepath
+
+        if isinstance(output, str):
+            outputpath = output.encode("utf-8")
+        else:
+            outputpath = output
+        jp = Johnny(k.keyvalue)
+
+        return jp.verify_and_extract_file(input_filepath, outputpath)
+
 
     def fetch_key_by_fingerprint(self, fingerprint: str):
         """Fetches key from keys.openpgp.org based on the fingerprint.
@@ -1194,6 +1457,7 @@ class KeyStore:
 
         :returns: The fingerprint of the primary key.
         """
+        fingerprint: str = ""
         data = rjce.get_card_details()
         if not data["serial_number"]:
             return "No data found."
@@ -1215,4 +1479,21 @@ class KeyStore:
                 sql = "SELECT fingerprint from keys where id=?"
                 cursor.execute(sql, (fromdb["key_id"],))
                 result = cursor.fetchone()
-                return result["fingerprint"]
+                fingerprint = result["fingerprint"]
+            # Now let us see if we can find the primary key on the card
+            sql = "SELECT DISTINCT id, fingerprint FROM keys where fingerprint IN (?, ?, ?)"
+            sig_f = convert_fingerprint(data["sig_f"])
+            enc_f = convert_fingerprint(data["enc_f"])
+            auth_f = convert_fingerprint(data["auth_f"])
+            cursor.execute(sql, (sig_f, enc_f, auth_f))
+            fromdb = cursor.fetchone()
+            if fromdb:
+                # Means we found the main key, now we have to mark it with the serial number of the card
+                sql = "UPDATE keys SET primary_on_card=? WHERE id=?"
+                cursor.execute(sql, (data["serial_number"], fromdb["id"]))
+                sql = "SELECT fingerprint from keys where id=?"
+                cursor.execute(sql, (fromdb["id"],))
+                result = cursor.fetchone()
+                fingerprint = result["fingerprint"]
+
+            return fingerprint

@@ -1,7 +1,13 @@
+// SPDX-FileCopyrightText: © 2020 Kushal Das <mail@kushaldas.in>
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+use openpgp::packet::Signature;
+use openpgp::KeyHandle;
 use pyo3::create_exception;
 use pyo3::exceptions::*;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
+use pyo3::types::PyTuple;
 use pyo3::types::{PyDateTime, PyDict, PyList};
 use pyo3::wrap_pyfunction;
 
@@ -10,13 +16,15 @@ use std::fmt;
 use std::fs::File;
 use std::io;
 use std::io::Write;
+use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
 use std::str;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-
 extern crate anyhow;
 extern crate sequoia_openpgp as openpgp;
+extern crate sshkeys;
 extern crate talktosc;
+extern crate tempfile;
 
 use crate::openpgp::armor;
 use openpgp::armor::{Kind, Writer};
@@ -24,18 +32,20 @@ use openpgp::armor::{Kind, Writer};
 use crate::openpgp::crypto::{KeyPair, SessionKey};
 use crate::openpgp::parse::stream::{
     DecryptionHelper, DecryptorBuilder, DetachedVerifierBuilder, MessageLayer, MessageStructure,
-    VerificationHelper,
+    VerificationHelper, VerifierBuilder,
 };
 
 use crate::openpgp::crypto::Decryptor;
 use crate::openpgp::packet::key;
+use crate::openpgp::packet::signature::SignatureBuilder;
 use crate::openpgp::parse::{PacketParser, PacketParserResult, Parse};
 use crate::openpgp::policy::Policy;
 use crate::openpgp::policy::StandardPolicy as P;
-use crate::openpgp::serialize::stream::{Encryptor, LiteralWriter, Message, Signer};
+use crate::openpgp::serialize::stream::{Armorer, Encryptor, LiteralWriter, Message, Signer};
 use crate::openpgp::serialize::Marshal;
 use crate::openpgp::serialize::MarshalInto;
 use crate::openpgp::types::KeyFlags;
+use crate::openpgp::types::SignatureType;
 use crate::openpgp::types::SymmetricAlgorithm;
 use crate::openpgp::Packet;
 use chrono::prelude::*;
@@ -66,6 +76,14 @@ pub type Result<T> = ::std::result::Result<T, JceError>;
 impl fmt::Display for JceError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.msg)
+    }
+}
+
+impl std::convert::From<std::fmt::Error> for JceError {
+    fn from(err: std::fmt::Error) -> JceError {
+        JceError {
+            msg: err.to_string(),
+        }
     }
 }
 
@@ -119,7 +137,7 @@ impl JceError {
 /// Takes the secret key data, a list of subkey fingerprints as str,
 /// expirytime as the duration to be added as integer, and the secret key password.
 #[pyfunction]
-#[pyo3(text_signature = "(certdata, fingerprints, expirytime, pass)")]
+#[pyo3(text_signature = "(certdata, fingerprints, expirytime, password)")]
 pub fn update_subkeys_expiry_in_cert(
     py: Python,
     certdata: Vec<u8>,
@@ -169,12 +187,12 @@ pub fn update_subkeys_expiry_in_cert(
 }
 
 #[pyfunction]
-#[pyo3(text_signature = "(certdata, uid, pass)")]
+#[pyo3(text_signature = "(certdata, uid, password)")]
 pub fn revoke_uid_in_cert(
     py: Python,
     certdata: Vec<u8>,
     uid: Vec<u8>,
-    pass: String,
+    password: String,
 ) -> Result<PyObject> {
     // This is where we will store all the signing keys
     let mut cert = openpgp::Cert::from_bytes(&certdata)?;
@@ -194,7 +212,7 @@ pub fn revoke_uid_in_cert(
                 .key()
                 .clone()
                 .parts_into_secret()?
-                .decrypt_secret(&openpgp::crypto::Password::from(pass))?
+                .decrypt_secret(&openpgp::crypto::Password::from(password))?
                 .into_keypair()?
         }
         false => {
@@ -234,12 +252,12 @@ pub fn revoke_uid_in_cert(
 }
 
 #[pyfunction]
-#[pyo3(text_signature = "(certdata, uid, pass)")]
+#[pyo3(text_signature = "(certdata, uid, password)")]
 pub fn add_uid_in_cert(
     py: Python,
     certdata: Vec<u8>,
     uid: Vec<u8>,
-    pass: String,
+    password: String,
 ) -> Result<PyObject> {
     // This is where we will store all the signing keys
     let cert = openpgp::Cert::from_bytes(&certdata)?;
@@ -259,7 +277,7 @@ pub fn add_uid_in_cert(
                 .key()
                 .clone()
                 .parts_into_secret()?
-                .decrypt_secret(&openpgp::crypto::Password::from(pass))?
+                .decrypt_secret(&openpgp::crypto::Password::from(password))?
                 .into_keypair()?
         }
         false => {
@@ -295,7 +313,7 @@ pub fn add_uid_in_cert(
 pub fn update_password(
     py: Python,
     certdata: Vec<u8>,
-    pass: String,
+    password: String,
     newpass: String,
 ) -> Result<PyObject> {
     let p = P::new();
@@ -307,7 +325,7 @@ pub fn update_password(
         .key()
         .clone()
         .parts_into_secret()?
-        .decrypt_secret(&openpgp::crypto::Password::from(pass.clone()))?;
+        .decrypt_secret(&openpgp::crypto::Password::from(password.clone()))?;
     let pkey = key.encrypt_secret(&openpgp::crypto::Password::from(newpass.clone()))?;
 
     for key in cert
@@ -321,7 +339,7 @@ pub fn update_password(
         let k = key
             .clone()
             .parts_into_secret()?
-            .decrypt_secret(&openpgp::crypto::Password::from(pass.clone()))?;
+            .decrypt_secret(&openpgp::crypto::Password::from(password.clone()))?;
         let newk = k.encrypt_secret(&openpgp::crypto::Password::from(newpass.clone()))?;
         keys.push(newk.clone());
     }
@@ -874,10 +892,12 @@ impl VerificationHelper for VHelper {
     fn check(&mut self, structure: MessageStructure) -> openpgp::Result<()> {
         let mut good = false;
         for (i, layer) in structure.into_iter().enumerate() {
-            match (i, layer) {
+            match layer {
+                MessageLayer::Encryption { .. } => (),
+                MessageLayer::Compression { .. } => (),
                 // First, we are interested in signatures over the
-                // data, i.e. level 0 signatures.
-                (0, MessageLayer::SignatureGroup { results }) => {
+                // data or inside.
+                MessageLayer::SignatureGroup { results } if i == 0 || i == 1 || i == 2 => {
                     // Finally, given a VerificationResult, which only says
                     // whether the signature checks out mathematically, we apply
                     // our policy.
@@ -887,7 +907,9 @@ impl VerificationHelper for VHelper {
                         None => return Err(anyhow::anyhow!("No signature")),
                     }
                 }
-                _ => return Err(anyhow::anyhow!("Unexpected message structure")),
+                _ => {
+                    return Err(anyhow::anyhow!("Unexpected message structure"));
+                }
             }
         }
 
@@ -916,8 +938,7 @@ fn get_keys(cert: &openpgp::cert::Cert, password: String) -> Vec<openpgp::crypto
         let mut key = key.clone();
         let algo = key.pk_algo();
 
-        let _keypair = key
-            .secret_mut()
+        key.secret_mut()
             .decrypt_in_place(algo, &openpgp::crypto::Password::from(password.clone()))
             .expect("decryption failed");
         keys.push(key.into_keypair().unwrap());
@@ -947,6 +968,138 @@ pub fn sign_file_detached_on_card(
     let mut localdata = File::open(file)?;
     sign_internal_detached_on_card(certdata, &mut localdata, pin)
 }
+
+#[pyfunction]
+#[pyo3(text_signature = "(certdata, othercertdata, sig_type, uids, password, oncard)")]
+fn certify_key(
+    py: Python,
+    certdata: Vec<u8>,
+    othercertdata: Vec<u8>,
+    sig_type: u8,
+    uids: Vec<String>,
+    password: Vec<u8>,
+    oncard: bool,
+) -> Result<PyObject> {
+    let policy = &P::new();
+
+    let cert = openpgp::Cert::from_bytes(&certdata)?;
+    let othercert = openpgp::Cert::from_bytes(&othercertdata)?;
+
+    let stype = match sig_type {
+        1 => SignatureType::PersonaCertification,
+        2 => SignatureType::CasualCertification,
+        3 => SignatureType::PositiveCertification,
+        _ => SignatureType::GenericCertification,
+    };
+
+    let mut cardkeys: Vec<scard::KeyPair> = Vec::new();
+    let mut keys = Vec::new();
+
+    // We will use this signer for signing.
+    let card_signer: Option<scard::KeyPair> = if oncard {
+        for ka in cert
+            .keys()
+            .with_policy(policy, None)
+            .alive()
+            .revoked(false)
+            .for_certification()
+        {
+            let key = ka.key();
+            let pair = scard::KeyPair::new(password.clone(), key)?;
+            cardkeys.push(pair);
+        }
+        if cardkeys.is_empty() {
+            return Err(JceError::new(format!(
+                "No key is available for certification in the public key."
+            )));
+        }
+        // Now we know for sure that there is a key
+        let key = cardkeys
+            .iter()
+            .next()
+            .expect("We must have a certification key by now");
+
+        Some(key.clone())
+    } else {
+        None
+    };
+
+    let disk_signer = if !oncard {
+        for key in cert
+            .keys()
+            .with_policy(policy, None)
+            .alive()
+            .revoked(false)
+            .for_certification()
+            .secret()
+            .map(|kd| kd.key())
+        {
+            let mut key = key.clone();
+            let algo = key.pk_algo();
+
+            key.secret_mut()
+                .decrypt_in_place(algo, &openpgp::crypto::Password::from(password.clone()))
+                .expect("decryption failed");
+            keys.push(key.into_keypair().unwrap());
+        }
+        if keys.is_empty() {
+            return Err(JceError::new(format!(
+                "No key is available for certification."
+            )));
+        }
+        // Now we know for sure that there is a key
+        let key = keys
+            .iter()
+            .next()
+            .expect("We must have a certification key by now");
+
+        Some(key.clone())
+    } else {
+        None
+    };
+
+    // To store the signatures till we insert them
+    let mut new_certificates: Vec<Signature> = Vec::new();
+    // Now let us find each of given user id values in the given key.
+    for uid in othercert.userids() {
+        if let Ok(userid_value) = std::str::from_utf8(uid.userid().value()) {
+            // Now loop over the given user id values as input
+            for userid in &uids {
+                if userid_value == userid {
+                    let u = uid.userid();
+                    // Now certify
+                    let sig = match oncard {
+                        true => {
+                            let mut signer = card_signer.as_ref().unwrap().clone();
+                            u.certify(&mut signer, &othercert, stype.clone(), None, None)?
+                        }
+                        false => {
+                            let mut signer = disk_signer.as_ref().unwrap().clone();
+                            u.certify(&mut signer, &othercert, stype.clone(), None, None)?
+                        }
+                    };
+                    new_certificates.push(sig);
+                };
+            }
+        }
+    }
+
+    // Now let us to put the signatures back
+    let finalsig = othercert.insert_packets(new_certificates)?;
+    // Now let us return the secret key as Python Bytes
+    let mut buf = Vec::new();
+    let mut buffer = Vec::new();
+
+    let mut writer = Writer::new(&mut buf, Kind::PublicKey)?;
+    finalsig.as_tsk().serialize(&mut buffer)?;
+    writer.write_all(&buffer)?;
+    writer.finalize()?;
+
+    // Let us return the cert data which can be saved in the database
+    let res = PyBytes::new(py, &buf);
+    Ok(res.into())
+}
+
 // This is the internal function which signs either bytes or an input file on the smartcard
 fn sign_internal_detached_on_card(
     certdata: Vec<u8>,
@@ -961,7 +1114,6 @@ fn sign_internal_detached_on_card(
     for ka in cert
         .keys()
         .with_policy(policy, None)
-        .subkeys()
         .alive()
         .revoked(false)
         .for_signing()
@@ -997,6 +1149,295 @@ fn sign_internal_detached_on_card(
     sink.finalize().expect("Failed to write data");
 
     Ok(String::from_utf8(result)?)
+}
+
+#[pyfunction]
+#[pyo3(text_signature = "(certdata, filepath, output, pin)")]
+pub fn sign_file_on_card(
+    certdata: Vec<u8>,
+    filepath: Vec<u8>,
+    output: Vec<u8>,
+    pin: Vec<u8>,
+    cleartext: bool,
+) -> Result<bool> {
+    let file = Path::new(str::from_utf8(&filepath[..])?);
+    let mut localdata = File::open(file)?;
+
+    // This is where the signed message will go
+    let mut outfile = File::create(str::from_utf8(&output[..])?)?;
+    sign_file_internal_on_card(certdata, &mut localdata, &mut outfile, pin, cleartext)
+}
+
+fn sign_file_internal_on_card(
+    certdata: Vec<u8>,
+    input: &mut dyn io::Read,
+    output: &mut (dyn io::Write + Send + Sync),
+    pin: Vec<u8>,
+    cleartext: bool,
+) -> Result<bool> {
+    // TODO: WHY?
+    let mut input = input;
+
+    let cert = openpgp::Cert::from_bytes(&certdata)?;
+    let policy = &P::new();
+    // This is where we will store all the signing keys
+    let mut keys: Vec<scard::KeyPair> = Vec::new();
+    // Note: We are only selecting subkeys for signing via card
+    for ka in cert
+        .keys()
+        .with_policy(policy, None)
+        .alive()
+        .revoked(false)
+        .for_signing()
+    {
+        let key = ka.key();
+        let pair = scard::KeyPair::new(pin.clone(), key)?;
+        keys.push(pair);
+    }
+
+    let mut sink = Message::new(output);
+
+    // Stream an OpenPGP message.
+    let mut message = Message::new(&mut sink);
+    if !cleartext {
+        message = Armorer::new(message).build()?;
+    };
+
+    let builder = match cleartext {
+        false => SignatureBuilder::new(SignatureType::Binary),
+        true => SignatureBuilder::new(SignatureType::Text),
+    };
+    // Now, create a signer with the builder.
+    let mut signer =
+        Signer::with_template(message, keys.pop().expect("No key for signing"), builder);
+
+    // Now if we need cleartext signature
+    if cleartext {
+        signer = signer.cleartext();
+    }
+
+    for s in keys {
+        signer = signer.add_signer(s);
+    }
+
+    // Emit a literal data packet or direct writer for cleartext.
+    let mut writer = match cleartext {
+        false => LiteralWriter::new(signer.build()?).build()?,
+        true => signer.build()?,
+    };
+
+    // Copy all the data.
+    io::copy(&mut input, &mut writer).expect("Failed to sign data");
+
+    // Finally, teardown the stack to ensure all the data is written.
+    // signer.finalize().expect("Failed to write data");
+    writer.finalize()?;
+
+    sink.finalize()?;
+
+    Ok(true)
+}
+
+#[pyfunction]
+#[pyo3(text_signature = "(certdata, data, pin)")]
+pub fn sign_bytes_on_card(
+    certdata: Vec<u8>,
+    data: Vec<u8>,
+    pin: Vec<u8>,
+    cleartext: bool,
+) -> Result<Vec<u8>> {
+    let mut localdata = io::Cursor::new(data);
+    sign_bytes_internal_on_card(certdata, &mut localdata, pin, cleartext)
+}
+
+fn sign_bytes_internal_on_card(
+    certdata: Vec<u8>,
+    input: &mut dyn io::Read,
+    pin: Vec<u8>,
+    cleartext: bool,
+) -> Result<Vec<u8>> {
+    // TODO: WHY?
+    let mut input = input;
+
+    let cert = openpgp::Cert::from_bytes(&certdata)?;
+    let policy = &P::new();
+    // This is where we will store all the signing keys
+    let mut keys: Vec<scard::KeyPair> = Vec::new();
+    // Note: We are only selecting subkeys for signing via card
+    for ka in cert
+        .keys()
+        .with_policy(policy, None)
+        .alive()
+        .revoked(false)
+        .for_signing()
+    {
+        let key = ka.key();
+        let pair = scard::KeyPair::new(pin.clone(), key)?;
+        keys.push(pair);
+    }
+
+    let mut result = Vec::new();
+    let mut sink = Message::new(&mut result);
+
+    // Stream an OpenPGP message.
+    let mut message = Message::new(&mut sink);
+    if !cleartext {
+        message = Armorer::new(message).build()?;
+    };
+
+    let builder = match cleartext {
+        false => SignatureBuilder::new(SignatureType::Binary),
+        true => SignatureBuilder::new(SignatureType::Text),
+    };
+    // Now, create a signer with the builder.
+    let mut signer =
+        Signer::with_template(message, keys.pop().expect("No key for signing"), builder);
+
+    // Now if we need cleartext signature
+    if cleartext {
+        signer = signer.cleartext();
+    }
+
+    for s in keys {
+        signer = signer.add_signer(s);
+    }
+
+    // Emit a literal data packet or direct writer for cleartext.
+    let mut writer = match cleartext {
+        false => LiteralWriter::new(signer.build()?).build()?,
+        true => signer.build()?,
+    };
+
+    // Copy all the data.
+    io::copy(&mut input, &mut writer).expect("Failed to sign data");
+
+    // Finally, teardown the stack to ensure all the data is written.
+    // signer.finalize().expect("Failed to write data");
+    writer.finalize()?;
+
+    sink.finalize()?;
+
+    Ok(result)
+}
+
+fn sign_file_internal(
+    cert: &openpgp::cert::Cert,
+    input: &mut dyn io::Read,
+    output: &mut (dyn io::Write + Send + Sync),
+    password: String,
+    cleartext: bool,
+) -> Result<bool> {
+    // TODO: WHY?
+    let mut input = input;
+
+    let mut keys = get_keys(cert, password);
+
+    if keys.is_empty() {
+        return Err(JceError::new("No signing key is present.".to_string()));
+    }
+
+    let mut sink = Message::new(output);
+
+    // Stream an OpenPGP message.
+    let mut message = Message::new(&mut sink);
+    if !cleartext {
+        message = Armorer::new(message).build()?;
+    };
+
+    let builder = match cleartext {
+        false => SignatureBuilder::new(SignatureType::Binary),
+        true => SignatureBuilder::new(SignatureType::Text),
+    };
+    // Now, create a signer with the builder.
+    let mut signer =
+        Signer::with_template(message, keys.pop().expect("No key for signing"), builder);
+
+    // Now if we need cleartext signature
+    if cleartext {
+        signer = signer.cleartext();
+    }
+
+    for s in keys {
+        signer = signer.add_signer(s);
+    }
+
+    // Emit a literal data packet or direct writer for cleartext.
+    let mut writer = match cleartext {
+        false => LiteralWriter::new(signer.build()?).build()?,
+        true => signer.build()?,
+    };
+
+    // Copy all the data.
+    io::copy(&mut input, &mut writer).expect("Failed to sign data");
+
+    // Finally, teardown the stack to ensure all the data is written.
+    // signer.finalize().expect("Failed to write data");
+    writer.finalize()?;
+
+    sink.finalize()?;
+    Ok(true)
+}
+
+fn sign_bytes_internal(
+    py: Python,
+    cert: &openpgp::cert::Cert,
+    input: &mut dyn io::Read,
+    password: String,
+    cleartext: bool,
+) -> Result<PyObject> {
+    // TODO: WHY?
+    let mut input = input;
+
+    let mut keys = get_keys(cert, password);
+
+    if keys.is_empty() {
+        return Err(JceError::new("No signing key is present.".to_string()));
+    }
+
+    let mut result = Vec::new();
+    let mut sink = Message::new(&mut result);
+
+    // Stream an OpenPGP message.
+    let mut message = Message::new(&mut sink);
+    if !cleartext {
+        message = Armorer::new(message).build()?;
+    };
+
+    let builder = match cleartext {
+        false => SignatureBuilder::new(SignatureType::Binary),
+        true => SignatureBuilder::new(SignatureType::Text),
+    };
+    // Now, create a signer with the builder.
+    let mut signer =
+        Signer::with_template(message, keys.pop().expect("No key for signing"), builder);
+
+    // Now if we need cleartext signature
+    if cleartext {
+        signer = signer.cleartext();
+    }
+
+    for s in keys {
+        signer = signer.add_signer(s);
+    }
+
+    // Emit a literal data packet or direct writer for cleartext.
+    let mut writer = match cleartext {
+        false => LiteralWriter::new(signer.build()?).build()?,
+        true => signer.build()?,
+    };
+
+    // Copy all the data.
+    io::copy(&mut input, &mut writer).expect("Failed to sign data");
+
+    // Finally, teardown the stack to ensure all the data is written.
+    // signer.finalize().expect("Failed to write data");
+    writer.finalize()?;
+
+    sink.finalize()?;
+
+    // Let us return the cert data which can be saved in the database
+    let res = PyBytes::new(py, &result);
+    Ok(res.into())
 }
 
 fn sign_bytes_detached_internal(
@@ -1040,11 +1481,16 @@ fn sign_bytes_detached_internal(
 }
 
 #[pyfunction]
-#[pyo3(text_signature = "(certdata, newcertdata)")]
-fn merge_keys(_py: Python, certdata: Vec<u8>, newcertdata: Vec<u8>) -> Result<PyObject> {
+#[pyo3(text_signature = "(certdata, newcertdata, force)")]
+fn merge_keys(
+    _py: Python,
+    certdata: Vec<u8>,
+    newcertdata: Vec<u8>,
+    force: bool,
+) -> Result<PyObject> {
     let cert = openpgp::Cert::from_bytes(&certdata)?;
     let newcert = openpgp::Cert::from_bytes(&newcertdata)?;
-    if cert.as_tsk() == newcert.as_tsk() {
+    if cert.as_tsk() == newcert.as_tsk() && !force {
         return Err(JceError::new(
             "Both keys are same. Can not merge.".to_string(),
         ));
@@ -1110,7 +1556,34 @@ fn get_pub_key(_py: Python, certdata: Vec<u8>) -> Result<String> {
 }
 
 #[pyfunction]
-#[pyo3(text_signature = "(certdata, pin, password)")]
+#[pyo3(text_signature = "(certdata, pin, password, whichslot)")]
+fn upload_primary_to_smartcard(
+    _py: Python,
+    certdata: Vec<u8>,
+    pin: Vec<u8>,
+    password: String,
+    whichslot: u8,
+) -> Result<bool> {
+    let cert = openpgp::Cert::from_bytes(&certdata)?;
+
+    // whichslot, 2 for signing, 4 for authentication
+    // Can be either of this.
+
+    // Here the key slot is something I decided
+    // 2 -- singing slot on the key
+    // 3 -- authentication slot on the key
+    let mut result = false;
+
+    if (whichslot & 0x02) == 0x02 {
+        result = parse_and_move_a_key(cert.clone(), 2, pin.clone(), password.clone(), true)?;
+    } else if (whichslot & 0x04) == 0x04 {
+        result = parse_and_move_a_key(cert, 3, pin, password, true)?;
+    }
+    Ok(result)
+}
+
+#[pyfunction]
+#[pyo3(text_signature = "(certdata, pin, password, whichkeys)")]
 fn upload_to_smartcard(
     _py: Python,
     certdata: Vec<u8>,
@@ -1133,24 +1606,150 @@ fn upload_to_smartcard(
     // 3 -- authentication key
     let mut result = false;
     if (whichkeys & 0x01) == 0x01 {
-        result = parse_and_move_a_subkey(cert.clone(), 1, pin.clone(), password.clone())?;
+        result = parse_and_move_a_key(cert.clone(), 1, pin.clone(), password.clone(), false)?;
     }
 
     if (whichkeys & 0x02) == 0x02 {
-        result = parse_and_move_a_subkey(cert.clone(), 2, pin.clone(), password.clone())?;
+        result = parse_and_move_a_key(cert.clone(), 2, pin.clone(), password.clone(), false)?;
     }
     if (whichkeys & 0x04) == 0x04 {
-        result = parse_and_move_a_subkey(cert, 3, pin, password)?;
+        result = parse_and_move_a_key(cert, 3, pin, password, false)?;
     }
     Ok(result)
 }
 
+#[pyfunction]
+#[pyo3(text_signature = "(certdata)")]
+fn get_signing_pubkey(py: Python, certdata: Vec<u8>) -> Result<PyObject> {
+    // Note: For now we will return the first signing key (maybe the primary key).
+    use std::fmt::Write;
+    let pd = PyDict::new(py);
+    let cert = openpgp::Cert::from_bytes(&certdata)?;
+
+    let policy = P::new();
+    let valid_ka = cert
+        .keys()
+        .with_policy(&policy, None)
+        .alive()
+        .revoked(false)
+        .for_signing();
+    for ka in valid_ka {
+        // First let us get the value of e from the public key
+        let public = ka.parts_as_public();
+        match public.mpis().clone() {
+            openpgp::crypto::mpi::PublicKey::RSA { ref e, ref n } => {
+                let mut result_n = String::new();
+                let internal = n.value().to_vec();
+                for v in internal.clone().iter() {
+                    write!(&mut result_n, "{:02X}", v)?;
+                }
+                let mut result_e = String::new();
+                let internal = e.value().to_vec();
+                for v in internal.clone().iter() {
+                    write!(&mut result_e, "{:02X}", v)?;
+                }
+                pd.set_item("key_type", "RSA")?;
+                pd.set_item("n", result_n)?;
+                pd.set_item("e", result_e)?;
+                return Ok(pd.into());
+            }
+            _ => {
+                return Err(JceError::new("Not yet implemented".to_string()));
+            }
+        };
+    }
+
+    return Err(JceError::new("Could not find signing key.".to_string()));
+}
+
+#[pyfunction]
+#[pyo3(text_signature = "(certdata, comment)")]
+fn get_ssh_pubkey(_py: Python, certdata: Vec<u8>, comment: Option<String>) -> Result<String> {
+    let cert = openpgp::Cert::from_bytes(&certdata)?;
+
+    let policy = P::new();
+    let valid_ka = cert
+        .keys()
+        .subkeys()
+        .with_policy(&policy, None)
+        .alive()
+        .revoked(false)
+        .for_authentication();
+    for ka in valid_ka {
+        // First let us get the value of e from the public key
+        let public = ka.parts_as_public();
+        let (key_type, kind) = match public.mpis().clone() {
+            openpgp::crypto::mpi::PublicKey::RSA { ref e, ref n } => {
+                let key = sshkeys::RsaPublicKey {
+                    e: e.value().to_vec(),
+                    n: n.value().to_vec(),
+                };
+                let key_type = sshkeys::KeyType::from_name("ssh-rsa").unwrap();
+                let kind = sshkeys::PublicKeyKind::Rsa(key);
+                (key_type, kind)
+            }
+            openpgp::crypto::mpi::PublicKey::ECDSA { curve, q, .. } => {
+                let (ssh_curve, name) = match curve {
+                    openpgp::types::Curve::NistP256 => (
+                        sshkeys::Curve::from_identifier("nistp256").unwrap(),
+                        "ecdsa-sha2-nistp256",
+                    ),
+                    openpgp::types::Curve::NistP384 => (
+                        sshkeys::Curve::from_identifier("nistp384").unwrap(),
+                        "ecdsa-sha2-nistp384",
+                    ),
+                    openpgp::types::Curve::NistP521 => (
+                        sshkeys::Curve::from_identifier("nistp521").unwrap(),
+                        "ecdsa-sha2-nistp521",
+                    ),
+                    _ => {
+                        return Err(JceError::new("Unknown ECDSA curve for us.".to_string()));
+                    }
+                };
+                let key_type = sshkeys::KeyType::from_name(name).unwrap();
+                let kind = sshkeys::PublicKeyKind::Ecdsa(sshkeys::EcdsaPublicKey {
+                    curve: ssh_curve,
+                    key: q.value().to_vec(),
+                    sk_application: None,
+                });
+                (key_type, kind)
+            }
+            openpgp::crypto::mpi::PublicKey::EdDSA { curve: _, q } => {
+                let key_type = sshkeys::KeyType::from_name("ssh-ed25519").unwrap();
+                let kind = sshkeys::PublicKeyKind::Ed25519(sshkeys::Ed25519PublicKey {
+                    key: q.value().to_vec(),
+                    sk_application: None,
+                });
+                (key_type, kind)
+            }
+            _ => {
+                return Err(JceError::new("Unknown Public Key.".to_string()));
+            }
+        };
+        let public_key = sshkeys::PublicKey {
+            key_type,
+            kind,
+            comment: comment,
+        };
+        let mut keydata = vec![];
+        public_key.write(&mut keydata)?;
+
+        let s = String::from_utf8_lossy(&keydata).to_string();
+        return Ok(s);
+    }
+
+    return Err(JceError::new(
+        "Could not find authentication subkey for ssh.".to_string(),
+    ));
+}
+
 #[allow(unused)]
-fn parse_and_move_a_subkey(
+fn parse_and_move_a_key(
     cert: openpgp::Cert,
     keytype: i8,
     pin: Vec<u8>,
     password: String,
+    primary: bool,
 ) -> Result<bool> {
     let policy = P::new();
     // To flag if it is a RSA key, or ECDH or EdDSA
@@ -1173,21 +1772,87 @@ fn parse_and_move_a_subkey(
     let mut ts = 0_u64;
 
     let mut fp: Option<openpgp::Fingerprint> = None;
-    let mut valid_ka = cert
-        .keys()
-        .subkeys()
-        .with_policy(&policy, None)
-        .secret()
-        .alive()
-        .revoked(false);
-    valid_ka = match keytype {
-        1 => valid_ka.for_storage_encryption(),
-        2 => valid_ka.for_signing(),
-        3 => valid_ka.for_authentication(),
-        _ => return Err(JceError::new("wrong value for the keytype".to_string())),
-    };
-    for ka in valid_ka {
-        // First let us get the value of e from the public key
+    if !primary {
+        // Means we are here for subkeys
+        let mut valid_ka = cert
+            .keys()
+            .subkeys()
+            .with_policy(&policy, None)
+            .secret()
+            .alive()
+            .revoked(false);
+
+        valid_ka = match keytype {
+            1 => valid_ka.for_storage_encryption(),
+            2 => valid_ka.for_signing(),
+            3 => valid_ka.for_authentication(),
+            _ => return Err(JceError::new("wrong value for the keytype".to_string())),
+        };
+        for ka in valid_ka {
+            // First let us get the value of e from the public key
+            let public = ka.parts_as_public();
+            match public.mpis().clone() {
+                openpgp::crypto::mpi::PublicKey::RSA { ref e, ref n } => {
+                    main_e = Some(e.clone());
+                    main_e_for_second_use = Some(e.clone());
+                    main_n = Some(n.clone());
+                }
+                openpgp::crypto::mpi::PublicKey::ECDH { curve, q, .. } => {
+                    main_curve = Some(curve.clone());
+                    main_eq = Some(q.clone());
+                }
+                openpgp::crypto::mpi::PublicKey::EdDSA { curve, q } => {
+                    main_curve = Some(curve.clone());
+                    main_eq = Some(q.clone());
+                }
+                _ => (),
+            }
+            let key = ka
+                .key()
+                .clone()
+                .decrypt_secret(&openpgp::crypto::Password::from(password.clone()))?;
+            let ctime = key.creation_time();
+            let dt: DateTime<Utc> = DateTime::from(ctime);
+            ts = dt.timestamp() as u64;
+
+            fp = Some(key.fingerprint());
+
+            // NOTE: all integers has to converted via to_be_bytes, and then remove any extra 0 in the
+            // front.
+            //let dd: u32 = 65537;
+            //dbg!(dd.to_be_bytes());
+
+            if let Some(openpgp::packet::key::SecretKeyMaterial::Unencrypted(ref u)) =
+                key.optional_secret()
+            {
+                u.map(|mpis| match mpis.clone() {
+                    openpgp::crypto::mpi::SecretKeyMaterial::RSA { d, p, q, u } => {
+                        main_d = Some(d);
+                        main_p = Some(p);
+                        main_q = Some(q);
+                        main_u = Some(u);
+                        what_kind_of_key = "rsa";
+                    }
+                    openpgp::crypto::mpi::SecretKeyMaterial::ECDH { scalar } => {
+                        main_scalar = Some(scalar);
+                        what_kind_of_key = "ECDH";
+                    }
+                    openpgp::crypto::mpi::SecretKeyMaterial::EdDSA { scalar } => {
+                        main_scalar = Some(scalar);
+                        what_kind_of_key = "EdDSA";
+                    }
+                    _ => (),
+                });
+            }
+        }
+    // End of the block for subkeys
+    } else {
+        // Here we will work with the primary key.
+
+        let ka = cert
+            .primary_key()
+            .with_policy(&policy, None)?
+            .parts_into_secret()?;
         let public = ka.parts_as_public();
         match public.mpis().clone() {
             openpgp::crypto::mpi::PublicKey::RSA { ref e, ref n } => {
@@ -1215,11 +1880,6 @@ fn parse_and_move_a_subkey(
 
         fp = Some(key.fingerprint());
 
-        // NOTE: all integers has to converted via to_be_bytes, and then remove any extra 0 in the
-        // front.
-        //let dd: u32 = 65537;
-        //dbg!(dd.to_be_bytes());
-
         if let Some(openpgp::packet::key::SecretKeyMaterial::Unencrypted(ref u)) =
             key.optional_secret()
         {
@@ -1242,7 +1902,7 @@ fn parse_and_move_a_subkey(
                 _ => (),
             });
         }
-    }
+    } // End of the block for primary key
     let mut result: Vec<u8> = Vec::new();
     // Let us create the TLV for 5F48
     let mut for5f48: Vec<u8> = vec![0x5F, 0x48];
@@ -1254,17 +1914,17 @@ fn parse_and_move_a_subkey(
     match what_kind_of_key {
         "rsa" => {
             // First the exponent
-            let values: Vec<u8> = main_e.unwrap().value().iter().copied().collect();
+            let values: Vec<u8> = main_e.unwrap().value().to_vec();
             for value in values {
                 result.push(value);
             }
             // Then the p
-            let values: Vec<u8> = main_p.unwrap().value().iter().copied().collect();
+            let values: Vec<u8> = main_p.unwrap().value().to_vec();
             for value in values {
                 result.push(value);
             }
             // Then the q
-            let values: Vec<u8> = main_q.unwrap().value().iter().copied().collect();
+            let values: Vec<u8> = main_q.unwrap().value().to_vec();
             for value in values {
                 result.push(value);
             }
@@ -1492,8 +2152,7 @@ fn internal_parse_cert(
         Ok(value) => match value.key_expiration_time() {
             Some(etime) => {
                 let dt: DateTime<Utc> = DateTime::from(etime);
-                let pd = Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None)?);
-                pd
+                Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None)?)
             }
             _ => None,
         },
@@ -1536,6 +2195,58 @@ fn internal_parse_cert(
             revoked = true;
         };
         pd.set_item("revoked", revoked)?;
+
+        // This list contains a list of dictionary
+        let certification_list = PyList::empty(py);
+        // Now we will deal with the certifications, that is if anyone else signed this UID.
+        for c in ua.certifications() {
+            // This is the type of certification
+            let c_type = match c.typ() {
+                SignatureType::GenericCertification => "generic",
+                SignatureType::CasualCertification => "casual",
+                SignatureType::PersonaCertification => "persona",
+                SignatureType::PositiveCertification => "postive",
+                _ => "unknown",
+            };
+
+            let creationtime = {
+                let sct = c.signature_creation_time();
+                match sct {
+                    Some(sct_value) => {
+                        let dt: DateTime<Utc> = DateTime::from(sct_value);
+                        Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None)?)
+                    }
+                    None => None,
+                }
+            };
+
+            // Now we need a list of issuers for this certification
+            //
+            let issuer_list = PyList::empty(py);
+            for issuer in c.get_issuers() {
+                //let fp_keyid = PyTuple::new(py, &[issuer.])
+                match issuer {
+                    KeyHandle::Fingerprint(finger) => issuer_list.append(PyTuple::new(
+                        py,
+                        &["fingerprint".to_string(), finger.to_hex()],
+                    ))?,
+                    KeyHandle::KeyID(kid) => issuer_list
+                        .append(PyTuple::new(py, &["keyid".to_string(), kid.to_hex()]))?,
+                }
+            }
+
+            // Now add this one certification
+            let ud_dict = PyDict::new(py);
+            ud_dict.set_item("certification_type", c_type)?;
+            ud_dict.set_item("certification_list", issuer_list)?;
+            ud_dict.set_item("creationtime", creationtime)?;
+
+            certification_list.append(ud_dict)?;
+        }
+
+        // Now let us set the certifications for this user id
+        pd.set_item("certifications", certification_list)?;
+
         plist.append(pd)?;
     }
 
@@ -1544,16 +2255,14 @@ fn internal_parse_cert(
         let expirationtime = match ka.key_expiration_time() {
             Some(etime) => {
                 let dt: DateTime<Utc> = DateTime::from(etime);
-                let pd = Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None)?);
-                pd
+                Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None)?)
             }
             _ => None,
         };
 
         let creationtime = {
             let dt: DateTime<Utc> = DateTime::from(ka.creation_time());
-            let pd = Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None)?);
-            pd
+            Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None)?)
         };
 
         // To find what kind of subkey is this.
@@ -1585,9 +2294,16 @@ fn internal_parse_cert(
         ))?;
     }
 
+    // To find out if the primary key can sign or not.
+    let can_primary_sign = match cert.primary_key().with_policy(&p, None) {
+        Ok(pkey) => pkey.for_signing(),
+        _ => false,
+    };
+
     let othervalues = PyDict::new(py);
     othervalues.set_item("keyid", cert.primary_key().keyid().to_hex())?;
     othervalues.set_item("subkeys", subkeys)?;
+    othervalues.set_item("can_primary_sign", can_primary_sign)?;
 
     Ok((
         plist.into(),
@@ -1602,8 +2318,10 @@ fn internal_parse_cert(
 /// This function takes a password and an userid as strings, returns a tuple of public and private
 /// key and the fingerprint in hex. Remember to save the keys for future use.
 #[pyfunction]
-#[pyo3(text_signature = "(password, userid, cipher, creation, expiration)")]
-fn create_newkey(
+#[pyo3(
+    text_signature = "(password, userid, cipher, creation, expiration, subkeys_expiration, whichkeys, can_primary_sign)"
+)]
+fn create_key(
     password: String,
     userids: Vec<String>,
     cipher: String,
@@ -1611,6 +2329,7 @@ fn create_newkey(
     expiration: i64,
     subkeys_expiration: bool,
     whichkeys: u8,
+    can_primary_sign: bool,
 ) -> Result<(String, String, String)> {
     let mut cdt: Option<DateTime<Utc>> = None;
     // Default we create RSA4k keys
@@ -1628,6 +2347,14 @@ fn create_newkey(
     for uid in userids {
         crtbuilder = crtbuilder.add_userid(uid);
     }
+
+    // To mark if our primary key needs to have signing capability
+    let crtbuilder = match can_primary_sign {
+        true => {
+            crtbuilder.set_primary_key_flags(KeyFlags::empty().set_signing().set_certification())
+        }
+        false => crtbuilder,
+    };
 
     let crtbuilder = match creation {
         0 => crtbuilder,
@@ -1711,6 +2438,7 @@ fn create_newkey(
     };
 
     let (cert, _) = crtbuilder.generate()?;
+
     let mut buf = Vec::new();
     let mut buffer = Vec::new();
 
@@ -2180,6 +2908,38 @@ impl Johnny {
         Ok(true)
     }
 
+    pub fn sign_bytes(
+        &self,
+        py: Python,
+        data: Vec<u8>,
+        password: String,
+        cleartext: bool,
+    ) -> Result<PyObject> {
+        let mut localdata = io::Cursor::new(data);
+        sign_bytes_internal(py, &self.cert, &mut localdata, password, cleartext)
+    }
+
+    pub fn sign_file(
+        &self,
+        inputpath: Vec<u8>,
+        output: Vec<u8>,
+        password: String,
+        cleartext: bool,
+    ) -> Result<bool> {
+        // This is the file we will sign.
+        let file = Path::new(str::from_utf8(&inputpath[..])?);
+        let mut localdata = File::open(file)?;
+        // This is where the signed message will go
+        let mut outfile = File::create(str::from_utf8(&output[..])?)?;
+        sign_file_internal(
+            &self.cert,
+            &mut localdata,
+            &mut outfile,
+            password,
+            cleartext,
+        )
+    }
+
     pub fn sign_bytes_detached(&self, data: Vec<u8>, password: String) -> Result<String> {
         let mut localdata = io::Cursor::new(data);
         sign_bytes_detached_internal(&self.cert, &mut localdata, password)
@@ -2191,7 +2951,7 @@ impl Johnny {
         sign_bytes_detached_internal(&self.cert, &mut localdata, password)
     }
 
-    pub fn verify_bytes(&self, data: Vec<u8>, sig: Vec<u8>) -> Result<bool> {
+    pub fn verify_bytes_detached(&self, data: Vec<u8>, sig: Vec<u8>) -> Result<bool> {
         let p = P::new();
         let vh = VHelper::new(&self.cert);
         let mut v = DetachedVerifierBuilder::from_bytes(&sig[..])?.with_policy(&p, None, vh)?;
@@ -2200,7 +2960,8 @@ impl Johnny {
             Err(_) => Ok(false),
         }
     }
-    pub fn verify_file(&self, filepath: Vec<u8>, sig: Vec<u8>) -> Result<bool> {
+
+    pub fn verify_file_detached(&self, filepath: Vec<u8>, sig: Vec<u8>) -> Result<bool> {
         let p = P::new();
         let vh = VHelper::new(&self.cert);
         let mut v = DetachedVerifierBuilder::from_bytes(&sig[..])?.with_policy(&p, None, vh)?;
@@ -2209,6 +2970,48 @@ impl Johnny {
             Ok(()) => Ok(true),
             Err(_) => Ok(false),
         }
+    }
+
+    pub fn verify_bytes(&self, data: Vec<u8>) -> Result<bool> {
+        let p = P::new();
+        let vh = VHelper::new(&self.cert);
+        let mut v = VerifierBuilder::from_bytes(&data[..])?.with_policy(&p, None, vh)?;
+        let mut tmp = tempfile::tempfile()?;
+        std::io::copy(&mut v, &mut tmp)?;
+        Ok(v.message_processed())
+    }
+
+    pub fn verify_and_extract_bytes(&self, py: Python<'_>, data: Vec<u8>) -> Result<PyObject> {
+        let p = P::new();
+        let vh = VHelper::new(&self.cert);
+        let mut v = VerifierBuilder::from_bytes(&data[..])?.with_policy(&p, None, vh)?;
+        let mut tmp = tempfile::tempfile()?;
+        std::io::copy(&mut v, &mut tmp)?;
+        tmp.seek(SeekFrom::Start(0))?;
+        let mut inside: Vec<u8> = Vec::new();
+        let _ = tmp.read_to_end(&mut inside)?;
+        let output = PyBytes::new(py, &inside);
+        Ok(output.into())
+    }
+
+    pub fn verify_file(&self, filepath: Vec<u8>) -> Result<bool> {
+        let p = P::new();
+        let vh = VHelper::new(&self.cert);
+        let path = Path::new(str::from_utf8(&filepath[..])?);
+        let mut v = VerifierBuilder::from_file(path)?.with_policy(&p, None, vh)?;
+        let mut tmp = tempfile::tempfile()?;
+        std::io::copy(&mut v, &mut tmp)?;
+        Ok(v.message_processed())
+    }
+
+    pub fn verify_and_extract_file(&self, filepath: Vec<u8>, output: Vec<u8>) -> Result<bool> {
+        let p = P::new();
+        let vh = VHelper::new(&self.cert);
+        let path = Path::new(str::from_utf8(&filepath[..])?);
+        let mut v = VerifierBuilder::from_file(path)?.with_policy(&p, None, vh)?;
+        let mut file = File::create(str::from_utf8(&output[..])?)?;
+        std::io::copy(&mut v, &mut file)?;
+        Ok(v.message_processed())
     }
 }
 
@@ -2229,14 +3032,16 @@ fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(change_user_pin))?;
     m.add_wrapped(wrap_pyfunction!(sign_bytes_detached_on_card))?;
     m.add_wrapped(wrap_pyfunction!(sign_file_detached_on_card))?;
+    m.add_wrapped(wrap_pyfunction!(sign_file_on_card))?;
     m.add_wrapped(wrap_pyfunction!(set_name))?;
     m.add_wrapped(wrap_pyfunction!(set_url))?;
     m.add_wrapped(wrap_pyfunction!(get_card_details))?;
     m.add_wrapped(wrap_pyfunction!(decrypt_bytes_on_card))?;
     m.add_wrapped(wrap_pyfunction!(decrypt_file_on_card))?;
     m.add_wrapped(wrap_pyfunction!(decrypt_filehandler_on_card))?;
-    m.add_wrapped(wrap_pyfunction!(create_newkey))?;
+    m.add_wrapped(wrap_pyfunction!(create_key))?;
     m.add_wrapped(wrap_pyfunction!(upload_to_smartcard))?;
+    m.add_wrapped(wrap_pyfunction!(upload_primary_to_smartcard))?;
     m.add_wrapped(wrap_pyfunction!(get_pub_key))?;
     m.add_wrapped(wrap_pyfunction!(bytes_encrypted_for))?;
     m.add_wrapped(wrap_pyfunction!(file_encrypted_for))?;
@@ -2251,6 +3056,9 @@ fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(add_uid_in_cert))?;
     m.add_wrapped(wrap_pyfunction!(revoke_uid_in_cert))?;
     m.add_wrapped(wrap_pyfunction!(update_subkeys_expiry_in_cert))?;
+    m.add_wrapped(wrap_pyfunction!(certify_key))?;
+    m.add_wrapped(wrap_pyfunction!(get_ssh_pubkey))?;
+    m.add_wrapped(wrap_pyfunction!(get_signing_pubkey))?;
     m.add("CryptoError", _py.get_type::<CryptoError>())?;
     m.add("SameKeyError", _py.get_type::<SameKeyError>())?;
     m.add_class::<Johnny>()?;

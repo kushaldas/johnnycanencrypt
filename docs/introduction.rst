@@ -27,11 +27,11 @@ keys in there. For our example, we will use the keys from our tests directory.
 ::
 
         >>> ks = jce.KeyStore("/var/lib/myapplication/keys")
-        >>> ks.import_cert("tests/files/store/secret.asc")
+        >>> ks.import_key("tests/files/store/secret.asc")
         <Key fingerprint=F4F388BBB194925AE301F844C52B42177857DD79 type=SECRET>
-        >>> ks.import_cert("tests/files/store/pgp_keys.asc")
+        >>> ks.import_key("tests/files/store/pgp_keys.asc")
         <Key fingerprint=A85FF376759C994A8A1168D8D8219C8C43F6C5E1 type=PUBLIC>
-        >>> ks.import_cert("tests/files/store/public.asc")
+        >>> ks.import_key("tests/files/store/public.asc")
         <Key fingerprint=F4F388BBB194925AE301F844C52B42177857DD79 type=PUBLIC>
 
 Now, if we check the directory from the shell, we will find the keys imported there.
@@ -89,11 +89,11 @@ Now let us import the key and verify.
 
 ::
 
-        >>> torkey = ks.import_cert("./kounek7zrdx745qydx6p59t9mqjpuhdf.pub")
+        >>> torkey = ks.import_key("./kounek7zrdx745qydx6p59t9mqjpuhdf.pub")
         >>> torkey
         <Key fingerprint=EF6E286DDA85EA2A4BA7DE684E2C6E8793298290 type=PUBLIC>
         >>> filepath="./tor-browser-linux64-10.0_en-US.tar.xz"
         >>> signaturepath="./tor-browser-linux64-10.0_en-US.tar.xz.asc"
-        >>> ks.verify_file(torkey, filepath, signaturepath)
+        >>> ks.verify_file_detached(torkey, filepath, signaturepath)
         True
 

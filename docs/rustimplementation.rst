@@ -9,19 +9,6 @@ You can import the low level functions or `Johnny` class by the following way:
 
 In most cases you don't have to use these, but if you have a reason, feel free to use them.
 
-.. function:: create_newkey(password, userid)
-
-        Use the `create_newkey` function in the module to create a new keypair. It takes two arguments as str, a password, and userid.
-        By default it creates the key with RSA4096, and returns a tuple of public,secret key as str. Raises `FileNotFound` error
-        if the key file can not be accessed.
-
-        ::
-
-                >>> public, secret = jce.newkey("my super secret password using diceware", "test <test@example.com>")
-
-
-        .. note:: Remember to save both the public and serect keys in a file to use in future.
-
 .. function:: encrypt_bytes_to_file(publickeys, data, output, armor=False)
 
         This function takes a list of public key file paths, and encrypts the given data in bytes to an output
@@ -33,6 +20,10 @@ In most cases you don't have to use these, but if you have a reason, feel free t
 
 
         .. note:: Use this function if you have to encrypt for multiple recipents.
+
+.. function:: get_ssh_pubkey(certdata, comment: Optional[str]) -> str:
+
+        This function takes a public key and optional comment and then provides a string representing the authentication subkey to be used inside of SSH.
 
 .. class:: Johnny(filepath)
 
@@ -93,11 +84,53 @@ In most cases you don't have to use these, but if you have a reason, feel free t
 
                 .. note:: Remember to save the signature somewhere on disk.
 
-        .. method:: verify_bytes(data: bytes, signature: bytes)
+        .. method:: verify_bytes(data: bytes)
+
+                Verifies if the signature is correct for the given signed data (as bytes). Returns `True` or `False`.
+
+                ::
+
+                        >>> j = jce.Johnny("tests/files/public.asc")
+                        >>> j.verify_bytes(encrypted_bytes)
+
+        .. method:: verify_and_extract_bytes(data: bytes)
+
+                Verifies if the signature is correct for the given signed data (as bytes). Returns the actual message in Bytes.
+
+                ::
+
+                        >>> j = jce.Johnny("tests/files/public.asc")
+                        >>> j.verify_and_extract_bytes(encrypted_bytes)
+
+
+        .. method:: verify_bytes_detached(data: bytes, signature: bytes)
 
                 Verifies if the signature is correct for the given data (as bytes). Returns `True` or `False`.
 
                 ::
 
-                        >>> j = jce.Johnny("tests/files/secret.asc")
+                        >>> j = jce.Johnny("tests/files/public.asc")
                         >>> j.verify_bytes(encrypted_bytes, signature)
+
+        .. method:: verify_file(filepath: bytes)
+
+                Verifies if the signature is correct for the given signed file (path as bytes). Returns `True` or `False`.
+
+                ::
+
+                        >>> j = jce.Johnny("tests/files/public.asc")
+                        >>> j.verify_file(encrypted_bytes, signature)
+
+        .. method:: verify_and_extract_file(filepath: bytes, output: bytes)
+
+                Verifies and extracts the message from the signed file, return `True` in case of a success.
+
+
+        .. method:: verify_file_detached(filepath: bytes, signature: bytes)
+
+                Verifies if the signature is correct for the given signed file (path as bytes). Returns `True` or `False`.
+
+                ::
+
+                        >>> j = jce.Johnny("tests/files/public.asc")
+                        >>> j.verify_file_detached(encrypted_bytes, signature)

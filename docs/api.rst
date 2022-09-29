@@ -13,13 +13,19 @@ For the rest of the documentation we assume that you imported the module as foll
 
 .. class:: KeyStore(path: str) -> None:
 
-        Returns a KeyStore object. This is the primary class of the module, and all high level usage is available via methods of this class.
-        It takes a path to the directory where it stores/reads the keys. Please make sure that only the **user** has read/write capability
-        to this path.
+        Returns a KeyStore object. This is the primary class of the module, and
+        all high level usage is available via methods of this class. It takes a
+        path to the directory where it stores/reads the keys. Please make sure
+        that only the **user** has read/write capability to this path.
 
-        The keys are represented inside the directory in the **jce.db** sqlite3 database
+        The keys are represented inside the directory in the **jce.db** sqlite3
+        database. Every time there is any change in the DB schema, we
+        automatically create a temporary database called **jce_upgrade.db** in
+        the same path, and then reimport all the keys, and rename the file and
+        continue with the steps. This is one time operation when we do a new
+        release.
 
-        If you can check for existance of any fingerprint (str) or `Key` object in the via `in` opertor.
+        You can check for existance of any fingerprint (str) or `Key` object in the via `in` opertor.
 
         ::
 
@@ -32,7 +38,11 @@ For the rest of the documentation we assume that you imported the module as foll
                 Returns the updated key with a new userid. If you need to upload the key to the https://keys.openpgp.org, then remember to
                 have to an email address in the user id.
 
-        .. method:: create_newkey(password: str, uids: Optional[Union[List[str], str]] = [], ciphersuite: Cipher = Cipher.RSA4k, creation: Optional[datetime.datetime] = None, expiration: Optional[datetime.datetime] = None, subkeys_expiration= False, whichkeys = 7) -> Key:
+        .. method:: certify_key(key: Union[Key, str], otherkey: Union[Key, str], uids: List[str], sig_type: SignatureType = SignatureType.GenericCertification, password: str = "", oncard=False) -> Key:
+
+                This method signs the given list of userid(s) in `otherkey` using the primary key of the `key`, by default it signs as *SignatureType.GenericCertification*, but you can do other types too. If the primary key is on a smartcard, then pass `oncard=True`, default value is `False`.
+
+        .. method:: create_key(password: str, uids: Optional[Union[List[str], str]] = [], ciphersuite: Cipher = Cipher.RSA4k, creation: Optional[datetime.datetime] = None, expiration: Optional[datetime.datetime] = None, subkeys_expiration= False, whichkeys = 7, can_primary_sign: bool = True) -> Key:
 
                 Returns the public part of the newly created `Key` in the store
                 directory. You can mention ciphersuite :class:`Cipher`  as
@@ -44,13 +54,15 @@ For the rest of the documentation we assume that you imported the module as foll
                 strings using a List for multiple uids. It can also create a key without
                 any uids.
 
+                If you want the primary key to have signing capability, then pass `can_primary_sign=True`.
+
                 You can pass `whichkeys = 1` to generate only the encryption subkey, 2 for signing, 4 for authentication.
                 By default it will create all three subkeys (7).
 
                 ::
 
                         >>> ks = jce.KeyStore("/var/lib/myamazingapp")
-                        >>> newkey = ks.create_newkey("supersecretpassphrasefromdiceware", "test key1 <email@example.com>", jce.KeyType.RSA4k)
+                        >>> newkey = ks.create_key("supersecretpassphrasefromdiceware", "test key1 <email@example.com>", jce.KeyType.RSA4k)
 
         .. method:: encrypt(keys, data, outputfile="", armor=True) -> bytes:
 
@@ -149,14 +161,14 @@ For the rest of the documentation we assume that you imported the module as foll
                 **KeyNotFoundError** in case no such keyid is found on the
                 store.
 
-        .. method:: import_cert(keypath: str) -> Key:
+        .. method:: import_key(keypath: str) -> Key:
 
                 Imports a pgp key file from a path on the system. 
                 The method returns the newly import `Key` object to the caller.
 
                 ::
 
-                        >>> key = ks.import_cert("tests/files/store/public.asc")
+                        >>> key = ks.import_key("tests/files/store/public.asc")
                         >>> print(key)
 
         .. method:: revoke_userid(key: Key, userid: str, pass: str) -> Key:
@@ -167,22 +179,34 @@ For the rest of the documentation we assume that you imported the module as foll
 
                 Updates the expiry time for the given subkeys (as a list of fingerprints) for the given secret key.
 
-        .. method:: sign(key, data, password) -> str:
+        .. method:: sign_detached(key, data, password) -> str:
 
                 Signs the given *data* (can be either str or bytes) using the secret key. Returns the armored signature string.
 
-        .. method:: sign_file(key, filepath, password, write=False) -> str:
+        .. method:: sign_file_detached(key, filepath, password, write=False) -> str:
 
                 Returns the armored signature of the *filepath* argument using the secret key (either fingerprint or secret `Key` object).
                 If you pass *write=True*, it will also write the armored signature to a file named as *filepath.asc* 
 
-        .. method:: verify(key, data, signature) -> bool:
+        .. method:: verify(key, data: Union[str, bytes], signature:Optional[str]) -> bool:
 
-                Verifies the given *data* using the public key, and signature string, returns **True** or **False** as result. 
+                Verifies the given *data* using the public key, and signature string if given, returns **True** or **False** as result.
 
-        .. method:: verify_file(key, filepath, signature_path) -> bool:
+        .. method:: verify_file_detached(key: Union[str, Key], filepath: Union[str, bytes], signature_path) -> bool:
 
-                Verifies the given filepath using the public key, and signature string, returns **True** or **False** as result. 
+                Verifies the given *filepath* using the public key, and signature string, returns **True** or **False** as result.
+
+        .. method:: verify_file(key, filepath) -> bool:
+
+                Verifies the given signed *filepath* using the public key, returns **True** or **False** as result.
+
+        .. method:: verify_and_extract_bytes(key: Union[str, Key], data: Union[str, bytes]) -> bytes:
+
+                Verifies the given signed *data* using the public key,  returns the actual data as bytes.
+
+        .. method:: verify_and_extract_file(self, key: Union[str, Key], filepath: Union[str, bytes], output: Union[str, bytes]) -> bool::
+
+                Verifies the given signed *filepath* and writes the actual data in *output*.
 
 
 .. class:: Cipher() -> Cipher:
@@ -190,7 +214,7 @@ For the rest of the documentation we assume that you imported the module as foll
         This is the enum class to metion the type of ciphersuite to be used while creating a new key. Possible values are **Cipher.RSA4k**,
         **Cipher.RSA2k**, **Cipher.Cv25519**.
 
-.. class:: Key(keyvalue: bytes, fingerprint: str, uids: Dict[str, str] = {}, keytype: KeyType=KeyType.PUBLIC, expirationtime=None, creationtime=None) -> Key:
+.. class:: Key(keyvalue: bytes, fingerprint: str, uids: Dict[str, str] = {}, keytype: KeyType=KeyType.PUBLIC, expirationtime=None, creationtime=None, othervalues={}, oncard: str = "", can_primary_sign: bool = False, primary_on_card: str = "") -> Key:
 
         Returns a Key object  and fingerprint. The keytype enum :class:`KeyType`. 
 
@@ -208,7 +232,7 @@ For the rest of the documentation we assume that you imported the module as foll
 
         .. attribute:: uids
 
-                A dictionary holding all uids from the key.
+                A dictionary holding all uids from the key, also stores related **certification** of the given uids.
 
         .. attribute:: creationtime
 
@@ -226,9 +250,21 @@ For the rest of the documentation we assume that you imported the module as foll
 
                 The keyid of the master key
 
+        .. attribute:: primary_on_card
+
+                A string containing the smartcard ID, this will be populated only after `sync_smartcard` call in the `KeyStore`.
+
+        .. attribute:: oncard
+
+                A string containing the smartcard ID if the card contains any of the subkeys, this will be populated only after `sync_smartcard` call in the `KeyStore`.
+
         .. attribute:: othervalues
 
                 A dictionary containing subkeys's keyids and fingerprints.
+        
+        .. attribute:: can_primary_sign
+
+                A boolean value telling if the primary key has signing capability or not.
 
         .. method:: available_subkeys() -> Tuple[bool, bool, bool]:
 
@@ -238,3 +274,8 @@ For the rest of the documentation we assume that you imported the module as foll
 .. class:: KeyType() -> KeyType:
 
         Enum class to mark if a key is public or private. Possible values are **KeyType.PUBLIC** and **KeyType.SECRET**.
+
+.. class:: SignatureType() -> SignatureType:
+
+        Enum class to mark the kind of certification one can do on another key. Possible values are **SignatureType.GenericCertification**,
+        **SignatureType.PersonaCertification**, **SignatureType.CasualCertification**, **SignatureType.PositiveCertification**.

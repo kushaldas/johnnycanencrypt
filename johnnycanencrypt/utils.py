@@ -9,7 +9,9 @@ CREATE TABLE keys (
 	expiration TEXT,
 	creation TEXT,
 	keytype INTEGER,
-    oncard TEXT
+    can_primary_sign INTEGER,
+    oncard TEXT,
+    primary_on_card TEXT
 );
 
 CREATE TABLE subkeys (
@@ -33,6 +35,38 @@ CREATE TABLE uidvalues (
 	key_id INTEGER,
 	FOREIGN KEY (key_id)
 	REFERENCES keys (id)
+		ON DELETE CASCADE
+);
+
+CREATE TABLE uidcerts (
+	id INTEGER PRIMARY KEY,
+    ctype TEXT NOT NULL,
+	creation TEXT,
+	key_id INTEGER,
+	value_id INTEGER,
+	FOREIGN KEY (key_id)
+	REFERENCES keys (id)
+		ON DELETE CASCADE
+	FOREIGN KEY (value_id)
+	REFERENCES uidvalues (id)
+		ON DELETE CASCADE
+);
+
+CREATE TABLE uidcertlist (
+	id INTEGER PRIMARY KEY,
+	value TEXT,
+	datatype TEXT,
+	key_id INTEGER,
+	value_id INTEGER,
+	cert_id INTEGER,
+	FOREIGN KEY (key_id)
+	REFERENCES keys (id)
+		ON DELETE CASCADE
+	FOREIGN KEY (value_id)
+	REFERENCES uidvalues (id)
+		ON DELETE CASCADE
+	FOREIGN KEY (cert_id)
+	REFERENCES uidcerts (id)
 		ON DELETE CASCADE
 );
 
@@ -78,7 +112,7 @@ CREATE TABLE uiduris (
 CREATE TABLE dbupgrade (upgradedate TEXT)
 """
 
-DB_UPGRADE_DATE = "20210118"
+DB_UPGRADE_DATE = "20220828"
 
 
 def _get_cert_data(filepath):

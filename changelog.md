@@ -2,10 +2,49 @@
 
 ## [unreleased]
 
+
+## [0.10.0] - 2022-09-20
+
+### Fixed
+
+- Fixes #111 to verify compressed signed message.
+
 ### Added
 
-- Pin retries left in the card now can be retrieved
+- `verify_and_extract_bytes` function to extract the verified bytes.
+- `verify_and_extract_file` function to extract the verified file.
+- `get_ssh_pubkey` to get ssh style key for authentication subkey in rjce #114.
+- Adds https://docs.rs/sshkeys/0.3.2/sshkeys/index.html as dependency.
 
+## [0.9.0] - 2022-08-30
+
+- Adds `setuptools-rust` as build system.
+- Key.uids now contains the certification details of each user id.
+- `merge_keys` in rjce now takes a force boolean argument.
+- `certify_key` can sign/certify another key by both card and on disk primary key.
+
+## [0.8.0] - 2022-08-18
+
+### Added
+
+- #96 `create_key` can now have signing capability for primary key.
+- #97 `sync_smartcard` can identify if the primary key is on card.
+- `upload_primary_to_smartcard` function in rjce.
+- Renamed internal function `parse_and_move_a_subkey` to `parse_and_move_a_key`
+
+## [0.7.0] - 2022-08-17
+
+### Added
+
+- `get_card_details` now also tells Pin retries left in the card.
+- `sign_file_on_card` function in rjce.
+- `sign_bytes_on_card` function in rjce.
+- `verify_file` & `verify_file_detached` are two different functions in KeyStore (breaking change).
+- `verify` takes optional detached signature to verify the given bytes.
+- `sign_detached` will do detached signature, `sign` is for the other usecase.
+- renamed `create_newkey` to `create_key` (breaking change).
+- renamed `import_cert` to `import_key` (breaking change).
+- Updates all dependencies.
 
 ### Fixed
 
