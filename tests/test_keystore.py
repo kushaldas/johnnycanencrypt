@@ -82,7 +82,7 @@ def test_keystore_lifecycle(tmp_path):
 
 
 def test_keystore_contains_key(tmp_path):
-    "verifies __contains__ method for keystore"
+    """Verifies __contains__ method for keystore"""
     ks = jce.KeyStore(tmp_path.as_posix())
     keypath = BASE_TESTSDIR / "files/store/secret.asc"
     k = ks.import_key(keypath.as_posix())
@@ -161,7 +161,7 @@ def test_key_equality():
 
 
 def test_ks_update_expiry_time_for_subkeys(tmp_path):
-    "Updates expiry time for a given subkey"
+    """Updates expiry time for a given subkey"""
     ks = jce.KeyStore(tmp_path.as_posix())
     ks.import_key((BASE_TESTSDIR / "files/store/hellosecret.asc").as_posix())
     ks.import_key((BASE_TESTSDIR / "files/store/secret.asc").as_posix())
@@ -182,7 +182,7 @@ def test_ks_update_expiry_time_for_subkeys(tmp_path):
 
 
 def test_ks_encrypt_decrypt_bytes():
-    "Encrypts and decrypt some bytes"
+    """Encrypts and decrypt some bytes"""
     ks = jce.KeyStore(BASE_TESTSDIR / "files/store")
     public_key = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
     encrypted = ks.encrypt(public_key, DATA)
@@ -195,7 +195,7 @@ def test_ks_encrypt_decrypt_bytes():
 
 
 def test_ks_encrypt_decrypt_bytes_multiple_recipients():
-    "Encrypts and decrypt some bytes"
+    """Encrypts and decrypt some bytes"""
     ks = jce.KeyStore(BASE_TESTSDIR / "files/store")
     key1 = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
     key2 = ks.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
@@ -214,7 +214,7 @@ def test_ks_encrypt_decrypt_bytes_multiple_recipients():
 
 
 def test_ks_encrypt_decrypt_bytes_to_file(tmp_path):
-    "Encrypts and decrypt some bytes"
+    """Encrypts and decrypt some bytes"""
     outputfile = tmp_path / "encrypted.asc"
     ks = jce.KeyStore(BASE_TESTSDIR / "files/store")
     secret_key = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
@@ -229,7 +229,7 @@ def test_ks_encrypt_decrypt_bytes_to_file(tmp_path):
 
 
 def test_ks_encrypt_decrypt_bytes_to_file_multiple_recipients(tmp_path):
-    "Encrypts and decrypt some bytes"
+    """Encrypts and decrypt some bytes"""
     outputfile = tmp_path / "encrypted.asc"
     ks = jce.KeyStore(BASE_TESTSDIR / "files/store")
     key1 = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
@@ -245,7 +245,7 @@ def test_ks_encrypt_decrypt_bytes_to_file_multiple_recipients(tmp_path):
 
 
 def test_ks_encrypt_decrypt_file(tmp_path):
-    "Encrypts and decrypt some bytes"
+    """Encrypts and decrypt some bytes"""
     inputfile = BASE_TESTSDIR / "files/text.txt"
     output = tmp_path / "text-encrypted.pgp"
     decrypted_output = tmp_path / "text.txt"
@@ -259,7 +259,7 @@ def test_ks_encrypt_decrypt_file(tmp_path):
 
 
 def test_ks_encrypt_decrypt_filehandler(tmp_path):
-    "Encrypts and decrypt some bytes"
+    """Encrypts and decrypt some bytes"""
     inputfile = BASE_TESTSDIR / "files/text.txt"
     output = tmp_path / "text-encrypted.pgp"
     decrypted_output = tmp_path / "text.txt"
@@ -275,7 +275,7 @@ def test_ks_encrypt_decrypt_filehandler(tmp_path):
 
 
 def test_ks_encrypt_decrypt_file_multiple_recipients(tmp_path):
-    "Encrypts and decrypt some bytes"
+    """Encrypts and decrypt some bytes"""
     inputfile = BASE_TESTSDIR / "files/text.txt"
     output = tmp_path / "text-encrypted.pgp"
     decrypted_output = tmp_path / "text.txt"
@@ -487,7 +487,7 @@ def test_add_userid_fails_for_public(tmp_path):
 
 
 def test_update_subkey_expiry_time():
-    "Updates the expirytime for a given subkey"
+    """Updates the expirytime for a given subkey"""
     ks = jce.KeyStore(BASE_TESTSDIR / "files/store")
     key = ks.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
     fps = [
@@ -531,7 +531,7 @@ def test_key_with_multiple_uids(tmp_path):
 
 
 def test_ks_upgrade(tmp_path):
-    "tests db upgrade from an old db"
+    """Tests db upgrade from an old db"""
     shutil.copy(BASE_TESTSDIR / "files/store/oldjce.db",  tmp_path / "jce.db")
 
     ks = jce.KeyStore(tmp_path.as_posix())
@@ -548,7 +548,7 @@ def test_ks_upgrade(tmp_path):
 
 
 def test_ks_upgrade_failure(tmp_path):
-    "tests db upgrade failure from an old db because of existing file"
+    """Tests db upgrade failure from an old db because of existing file"""
     shutil.copy(BASE_TESTSDIR / "files/store/oldjce.db", tmp_path / "jce.db")
     shutil.copy(
         BASE_TESTSDIR / "files/store/oldjce.db", tmp_path / "jce_upgrade.db"

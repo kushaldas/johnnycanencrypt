@@ -9,7 +9,7 @@ DATA = "Kushal loves 🦀"
 
 
 def test_encryption_of_multiple_keys_to_files(tmp_path):
-    "Encrypt bytes to a file using multiple keys"
+    """Encrypt bytes to a file using multiple keys"""
     output = tmp_path / "multiple-enc.asc"
     if os.path.exists(output):
         os.remove(output)
@@ -39,7 +39,7 @@ def test_encryption_of_multiple_keys_to_files(tmp_path):
 
 
 def test_encryption_of_multiple_keys_of_a_file(tmp_path):
-    "Encrypt bytes to a file using multiple keys"
+    """Encrypt bytes to a file using multiple keys"""
     inputfile = BASE_TESTSDIR / "files/text.txt"
     output = tmp_path / "text-encrypted.pgp"
     decrypted_output = tmp_path / "text.txt"
@@ -76,7 +76,7 @@ def test_encryption_of_multiple_keys_of_a_file(tmp_path):
 
 
 def test_encryption_of_multiple_keys_to_bytes():
-    "Encrypt bytes using multiple keys"
+    """Encrypt bytes using multiple keys"""
     certs = []
     for keyfilename in [
         BASE_TESTSDIR / "files/public.asc",
@@ -99,7 +99,7 @@ def test_encryption_of_multiple_keys_to_bytes():
 
 
 def test_encrypt_decrypt_bytes():
-    "Tests raw bytes as output"
+    """Tests raw bytes as output"""
     jp = jce.Johnny(_get_cert_data(BASE_TESTSDIR / "files/public.asc"))
     enc = jp.encrypt_bytes(DATA.encode("utf-8"))
     jp = jce.Johnny(_get_cert_data(BASE_TESTSDIR / "files/secret.asc"))
@@ -108,7 +108,7 @@ def test_encrypt_decrypt_bytes():
 
 
 def test_encrypt_decrypt_bytes_armored():
-    "Tests ascii-armored output"
+    """Tests ascii-armored output"""
     j = jce.Johnny(_get_cert_data(BASE_TESTSDIR / "files/public.asc"))
     enc = j.encrypt_bytes(DATA.encode("utf-8"), armor=True)
     assert enc.startswith(b"-----BEGIN PGP MESSAGE-----")
@@ -118,7 +118,7 @@ def test_encrypt_decrypt_bytes_armored():
 
 
 def test_encrypt_decrypt_files(tmp_path):
-    "Tests encrypt/decrypt file in binary format"
+    """Tests encrypt/decrypt file in binary format"""
     inputfile = BASE_TESTSDIR / "files/text.txt"
     output = tmp_path / "text-encrypted.pgp"
     decrypted_output = tmp_path / "text.txt"
@@ -173,7 +173,7 @@ def test_decrypt_multiple_recipient_data():
 
 
 def test_encryption_of_multiple_keys_of_a_filehandler(tmp_path):
-    "Encrypt bytes to an opened file using multiple keys"
+    """Encrypt bytes to an opened file using multiple keys"""
     inputfile = BASE_TESTSDIR / "files/text.txt"
     output = tmp_path / "text-encrypted2.pgp"
     decrypted_output = tmp_path / "text2.txt"
