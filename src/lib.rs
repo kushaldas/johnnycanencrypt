@@ -2319,7 +2319,7 @@ fn internal_parse_cert(
 /// key and the fingerprint in hex. Remember to save the keys for future use.
 #[pyfunction]
 #[pyo3(
-    text_signature = "(password, userid, cipher, creation, expiration, subkeys_expiration, whichkeys, can_primary_sign)"
+    text_signature = "(password, userid, cipher, creation, expiration, subkeys_expiration, whichkeys, can_primary_sign, can_primary_expire)"
 )]
 fn create_key(
     password: String,
@@ -2330,6 +2330,7 @@ fn create_key(
     subkeys_expiration: bool,
     whichkeys: u8,
     can_primary_sign: bool,
+    can_primary_expire: bool,
 ) -> Result<(String, String, String)> {
     let mut cdt: Option<DateTime<Utc>> = None;
     // Default we create RSA4k keys
@@ -2407,9 +2408,12 @@ fn create_key(
                     0,
                 ),
             };
-            if !subkeys_expiration {
+            let crtbuilder = if can_primary_expire {
                 crtbuilder.set_validity_period(validity)
             } else {
+                crtbuilder
+            };
+            if subkeys_expiration {
                 let crtbuilder = if (whichkeys & 0x01) == 0x01 {
                     crtbuilder.add_subkey(
                         KeyFlags::empty()
@@ -2432,6 +2436,8 @@ fn create_key(
                 } else {
                     crtbuilder
                 };
+                crtbuilder
+            } else {
                 crtbuilder
             }
         }

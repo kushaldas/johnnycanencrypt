@@ -20,7 +20,7 @@ sudo dnf install nettle clang clang-devel nettle-devel python3-devel pcsc-lite-d
 ### Build dependencies in Debian Bullseye
 
 ```
-sudo apt install -y python3-dev libnettle8 nettle-dev libhogweed6 python3-pip python3-venv clang libpcsclite-dev libpcsclite1 libclang-9-dev
+sudo apt install -y python3-dev libnettle8 nettle-dev libhogweed6 python3-pip python3-venv clang libpcsclite-dev libpcsclite1 libclang-9-dev pkg-config
 
 ```
 

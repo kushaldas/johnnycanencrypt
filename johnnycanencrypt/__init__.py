@@ -937,6 +937,7 @@ class KeyStore:
         subkeys_expiration=False,
         whichkeys=7,
         can_primary_sign=False,
+        can_primary_expire=False,
     ) -> Key:
         """Returns a public `Key` object after creating a new key in the store
 
@@ -945,9 +946,10 @@ class KeyStore:
         :param ciphersuite: Default Cipher.RSA4k, other values are Cipher.RSA2k, Cipher.Cv25519
         :param creation: datetime.datetime, default datetime.now() (via rust)
         :param expiration: datetime.datetime, default 0 (Never)
-        :param subkeys_expiration: Bool (default False), pass True if you want to set the expiry date to the subkeys instead of master key.
+        :param subkeys_expiration: Bool (default False), pass True if you want to set the expiry date to the subkeys.
         :param whichkeys: Decides which all subkeys to generate, 1 (for encryption), 2 for signing, 4 for authentication. Add the numbers for mixed result.
         :param can_primary_sign: Boolean to indicate if the primary key can do signing
+        :param can_primary_expire: Boolean to indicate if the primary key can expire, default False.
         """
         if creation:
             ctime = creation.timestamp()
@@ -974,6 +976,7 @@ class KeyStore:
             subkeys_expiration,
             whichkeys,
             can_primary_sign,
+            can_primary_expire,
         )
         # Now save the secret key
         key_filename = os.path.join(self.path, f"{fingerprint}.sec")
