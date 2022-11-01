@@ -6,6 +6,7 @@
 
 - Type annotation for the rust part of the codebase.
 - `can_primary_expire` new argument to `create_key` function call.
+- Updated `pyo3` dependency to `0.17.2`.
 
 ## [0.10.0] - 2022-09-20
 
