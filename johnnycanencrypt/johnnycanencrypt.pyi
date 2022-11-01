@@ -66,6 +66,7 @@ def create_key(
     subkeys_expiration: bool,
     whichkeys: int,
     can_primary_sign: bool,
+    can_primary_expire: bool,
 ) -> Tuple[str, str, str]: ...
 def encrypt_filehandler_to_file(
     publickeys: List[bytes], fh: io.TextIOWrapper, output: bytes, armor: Optional[bool]

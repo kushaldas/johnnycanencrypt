@@ -375,10 +375,10 @@ def test_ks_creation_expiration_time(tmp_path):
     assert ctime.date() == newk.creationtime.date()
     assert not newk.expirationtime
 
-    # Now both creation and expirationtime
+    # Now both creation and expirationtime for primary key
     ctime = datetime.datetime(2008, 10, 10, 20, 53, 47)
     etime = datetime.datetime(2025, 12, 15, 20, 53, 47)
-    newk = ks.create_key("redhat", "Another test key", creation=ctime, expiration=etime)
+    newk = ks.create_key("redhat", "Another test key", creation=ctime, expiration=etime, can_primary_expire=True)
     assert ctime.date() == newk.creationtime.date()
     assert etime.date() == newk.expirationtime.date()
 
@@ -405,9 +405,23 @@ def test_ks_creation_expiration_time(tmp_path):
         subkeys_expiration=True,
     )
     assert datetime.datetime.now().date() == newk.creationtime.date()
+    assert not newk.expirationtime
     for skeyid, subkey in newk.othervalues["subkeys"].items():
         assert subkey[1].date() == etime.date()
 
+    # Now verify both subkeys and primary can expire
+    etime = datetime.datetime(2030, 6, 5, 20, 53, 47)
+    newk = ks.create_key(
+        "redhat",
+        "Test key with subkey expiration",
+        expiration=etime,
+        subkeys_expiration=True,
+        can_primary_expire=True,
+    )
+    assert datetime.datetime.now().date() == newk.creationtime.date()
+    assert etime.date() == newk.expirationtime.date()
+    for skeyid, subkey in newk.othervalues["subkeys"].items():
+        assert subkey[1].date() == etime.date()
 
 def test_get_all_keys():
     ks = jce.KeyStore(BASE_TESTSDIR / "files/store")
