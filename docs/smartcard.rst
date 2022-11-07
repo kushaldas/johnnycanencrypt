@@ -18,6 +18,14 @@ The part of the code is written in Rust, so you will have to import the internal
 Smartcard API
 --------------
 
+.. class:: TouchMode
+
+   .. py:attribute:: Off
+   .. py:attribute:: On
+   .. py:attribute:: Fixed
+   .. py:attribute:: Cached
+   .. py:attribute:: CachedFixed
+
 .. function:: get_card_version() -> tuple[int, int, int]:
 
         Returns a tuple containing the Yubikey firmware version. Example: (5,2,7) or (4,3,1).

@@ -1,8 +1,17 @@
+import io
 from typing import List, Dict, Optional, Tuple, Any, BinaryIO
 from datetime import datetime
+from enum import IntEnum
 
 class CryptoError(BaseException): ...
 class SameKeyError(BaseException): ...
+
+class TouchMode(IntEnum):
+    Off: int
+    On: int
+    Fixed: int
+    Cached: int
+    CachedFixed: int
 
 def update_subkeys_expiry_in_cert(
     certdata: bytes, fingerprints: List[str], expirytime: int, password: str

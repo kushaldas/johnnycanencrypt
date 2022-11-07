@@ -3040,6 +3040,15 @@ pub fn get_card_version(py: Python) -> Result<PyObject> {
     Ok(result.into())
 }
 
+#[pyclass]
+enum TouchMode {
+    Off = 0x00,
+    On = 0x01,
+    Fixed = 0x02,
+    Cached = 0x03,
+    CachedFixed = 0x04,
+}
+
 /// A Python module implemented in Rust.
 #[pymodule]
 fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
@@ -3080,5 +3089,6 @@ fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add("CryptoError", _py.get_type::<CryptoError>())?;
     m.add("SameKeyError", _py.get_type::<SameKeyError>())?;
     m.add_class::<Johnny>()?;
+    m.add_class::<TouchMode>()?;
     Ok(())
 }
