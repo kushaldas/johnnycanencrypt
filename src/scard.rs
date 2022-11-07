@@ -36,6 +36,41 @@ pub fn chagne_admin_pin(pw3change: apdus::APDU) -> Result<bool, errors::TalktoSC
     Ok(true)
 }
 
+// To get the Yubikey card firmware version
+#[allow(unused)]
+pub fn internal_get_version() -> Result<Vec<u8>, errors::TalktoSCError> {
+    let card = talktosc::create_connection();
+    let card = match card {
+        Ok(card) => card,
+        Err(value) => return Err(value),
+    };
+
+    let select_openpgp = apdus::create_apdu_select_openpgp();
+    let resp = talktosc::send_and_parse(&card, select_openpgp);
+    let resp = match resp {
+        Ok(_) => resp.unwrap(),
+        Err(value) => return Err(value),
+    };
+    // Just make sure we can talk
+    if !resp.is_okay() {
+        return Err(errors::TalktoSCError::PinError);
+    }
+    // Now let us ask about version
+    //
+    let select_version = apdus::APDU::new(0x00, 0xF1, 0x00, 0x00, None);
+    let resp = talktosc::send_and_parse(&card, select_version);
+    let resp = match resp {
+        Ok(_) => resp.unwrap(),
+        Err(value) => {
+            talktosc::disconnect(card);
+            return Err(value);
+        }
+    };
+
+    talktosc::disconnect(card);
+    Ok(resp.get_data())
+}
+
 #[allow(unused)]
 pub fn is_smartcard_connected() -> Result<bool, errors::TalktoSCError> {
     let card = talktosc::create_connection();

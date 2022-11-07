@@ -3029,6 +3029,17 @@ pub fn is_smartcard_connected() -> PyResult<bool> {
     }
 }
 
+/// Returns a tuple with the firmware version.
+#[pyfunction]
+pub fn get_card_version(py: Python) -> Result<PyObject> {
+    let data = match scard::internal_get_version() {
+        Ok(value) => value,
+        Err(_) => return Err(JceError::new("Can not get Yubikey version".to_string())),
+    };
+    let result = PyTuple::new(py, data.iter());
+    Ok(result.into())
+}
+
 /// A Python module implemented in Rust.
 #[pymodule]
 fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
@@ -3065,6 +3076,7 @@ fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(certify_key))?;
     m.add_wrapped(wrap_pyfunction!(get_ssh_pubkey))?;
     m.add_wrapped(wrap_pyfunction!(get_signing_pubkey))?;
+    m.add_wrapped(wrap_pyfunction!(get_card_version))?;
     m.add("CryptoError", _py.get_type::<CryptoError>())?;
     m.add("SameKeyError", _py.get_type::<SameKeyError>())?;
     m.add_class::<Johnny>()?;
