@@ -3040,13 +3040,76 @@ pub fn get_card_version(py: Python) -> Result<PyObject> {
     Ok(result.into())
 }
 
+/// TouchMode for Yubikeys
 #[pyclass]
-enum TouchMode {
+#[derive(Clone, Debug)]
+pub enum TouchMode {
     Off = 0x00,
     On = 0x01,
     Fixed = 0x02,
     Cached = 0x03,
     CachedFixed = 0x04,
+}
+
+#[pyclass]
+#[derive(Clone, Debug)]
+pub enum KeySlot {
+    Signature = 0xD6,
+    Encryption = 0xD7,
+    Authentication = 0xD8,
+    Attestation = 0xD9,
+}
+
+#[pyfunction]
+pub fn get_keyslot_touch_policy(py: Python, slot: Py<KeySlot>) -> Result<Py<TouchMode>> {
+    let actual_slot = slot.extract(py)?;
+    let data = match scard::get_touch_policy(actual_slot) {
+        Ok(value) => value,
+        Err(e) => return Err(JceError::new(e.to_string())),
+    };
+    match data[0] {
+        0 => {
+            return Ok(Py::new(py, TouchMode::Off)?);
+        }
+        1 => {
+            return Ok(Py::new(py, TouchMode::On)?);
+        }
+        2 => {
+            return Ok(Py::new(py, TouchMode::Fixed)?);
+        }
+        3 => {
+            return Ok(Py::new(py, TouchMode::Cached)?);
+        }
+        4 => {
+            return Ok(Py::new(py, TouchMode::CachedFixed)?);
+        }
+        _ => {
+            return Err(JceError::new("Can not parse touch policy.".to_string()));
+        }
+    }
+}
+
+#[pyfunction]
+pub fn set_keyslot_touch_policy(
+    py: Python,
+    adminpin: Vec<u8>,
+    slot: Py<KeySlot>,
+    mode: Py<TouchMode>,
+) -> Result<bool> {
+    let actual_slot: KeySlot = slot.extract(py).unwrap();
+    let slot_value = actual_slot as u8;
+
+    let actual_mode: TouchMode = mode.extract(py).unwrap();
+    let mode_value = actual_mode as u8;
+
+    let pw3_apdu = talktosc::apdus::create_apdu_verify_pw3(adminpin);
+    // 0x20 is for the touch mode button
+    let touch_apdu = apdus::APDU::new(0x00, 0xDA, 0x00, slot_value, Some(vec![mode_value, 0x20]));
+
+    match scard::set_data(pw3_apdu, touch_apdu) {
+        Ok(value) => Ok(value),
+        Err(value) => Err(CardError::new_err(format!("Error {}", value)).into()),
+    }
 }
 
 /// A Python module implemented in Rust.
@@ -3086,9 +3149,12 @@ fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(get_ssh_pubkey))?;
     m.add_wrapped(wrap_pyfunction!(get_signing_pubkey))?;
     m.add_wrapped(wrap_pyfunction!(get_card_version))?;
+    m.add_wrapped(wrap_pyfunction!(get_keyslot_touch_policy))?;
+    m.add_wrapped(wrap_pyfunction!(set_keyslot_touch_policy))?;
     m.add("CryptoError", _py.get_type::<CryptoError>())?;
     m.add("SameKeyError", _py.get_type::<SameKeyError>())?;
     m.add_class::<Johnny>()?;
     m.add_class::<TouchMode>()?;
+    m.add_class::<KeySlot>()?;
     Ok(())
 }

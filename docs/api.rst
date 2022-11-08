@@ -284,4 +284,5 @@ For the rest of the documentation we assume that you imported the module as foll
 .. function:: get_card_touch_policies() -> List[TouchMode]
 
         Returns a list of Enum values from TouchMode. To be used to determine the touch capabilities of the smartcard.
+        Remember to verify this list before calling :func:`set_keyslot_touch_policy`.
 

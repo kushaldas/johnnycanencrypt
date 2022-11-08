@@ -13,6 +13,14 @@ class TouchMode(IntEnum):
     Cached: int
     CachedFixed: int
 
+class KeySlot(IntEnum):
+    Signature: int
+    Encryption: int
+    Authentication: int
+    Attestation: int
+
+def set_keyslot_touch_policy(adminpin: bytes, slot: KeySlot, mode: TouchMode) -> bool: ...
+def get_keyslot_touch_policy(slot: KeySlot) -> TouchMode: ...
 def update_subkeys_expiry_in_cert(
     certdata: bytes, fingerprints: List[str], expirytime: int, password: str
 ) -> bytes: ...

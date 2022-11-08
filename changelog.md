@@ -10,6 +10,10 @@
 - Adds `get_card_version` in rjce.
 - Adds `TouchMode` enum in rjce.
 - Adds `get_card_touch_policies` function to find available options.
+- Adds `KeySlot` enum in rjce
+- Adds `get_keyslot_touch_policy` function to set touch policy.
+- Adds `set_keyslot_touch_policy` function to set touch policy.
+- Updates pyo3 to `0.17.3`
 
 ## [0.10.0] - 2022-09-20
 

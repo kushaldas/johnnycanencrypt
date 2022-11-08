@@ -3,6 +3,7 @@
 
 use crate::openpgp::packet::key;
 use crate::openpgp::types::SymmetricAlgorithm;
+use crate::KeySlot;
 use openpgp::crypto;
 use openpgp::packet::prelude::*;
 use sequoia_openpgp as openpgp;
@@ -34,6 +35,42 @@ pub fn chagne_admin_pin(pw3change: apdus::APDU) -> Result<bool, errors::TalktoSC
         return Err(errors::TalktoSCError::PinError);
     }
     Ok(true)
+}
+
+// To get the touch policy of a given slot
+#[allow(unused)]
+pub fn get_touch_policy(slot: KeySlot) -> Result<Vec<u8>, errors::TalktoSCError> {
+    let card = talktosc::create_connection();
+    let card = match card {
+        Ok(card) => card,
+        Err(value) => return Err(value),
+    };
+
+    let select_openpgp = apdus::create_apdu_select_openpgp();
+    let resp = talktosc::send_and_parse(&card, select_openpgp);
+    let resp = match resp {
+        Ok(_) => resp.unwrap(),
+        Err(value) => return Err(value),
+    };
+    // Just make sure we can talk
+    if !resp.is_okay() {
+        return Err(errors::TalktoSCError::PinError);
+    }
+    // Now let us ask about the touch policy
+    //
+    let slot_value = slot as u8;
+    let select_touchpolicy = apdus::APDU::new(0x00, 0xCA, 0x00, slot_value, None);
+    let resp = talktosc::send_and_parse(&card, select_touchpolicy);
+    let resp = match resp {
+        Ok(_) => resp.unwrap(),
+        Err(value) => {
+            talktosc::disconnect(card);
+            return Err(value);
+        }
+    };
+
+    talktosc::disconnect(card);
+    Ok(resp.get_data())
 }
 
 // To get the Yubikey card firmware version
