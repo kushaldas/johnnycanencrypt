@@ -1,9 +1,26 @@
+import io
 from typing import List, Dict, Optional, Tuple, Any, BinaryIO
 from datetime import datetime
+from enum import IntEnum
 
 class CryptoError(BaseException): ...
 class SameKeyError(BaseException): ...
 
+class TouchMode(IntEnum):
+    Off: int
+    On: int
+    Fixed: int
+    Cached: int
+    CachedFixed: int
+
+class KeySlot(IntEnum):
+    Signature: int
+    Encryption: int
+    Authentication: int
+    Attestation: int
+
+def set_keyslot_touch_policy(adminpin: bytes, slot: KeySlot, mode: TouchMode) -> bool: ...
+def get_keyslot_touch_policy(slot: KeySlot) -> TouchMode: ...
 def update_subkeys_expiry_in_cert(
     certdata: bytes, fingerprints: List[str], expirytime: int, password: str
 ) -> bytes: ...
@@ -81,6 +98,7 @@ def encrypt_file_internal(
     publickeys: List[List[bytes]], filepath: bytes, output: bytes, armor: Optional[bool]
 ) -> bytes: ...
 def is_smartcard_connected() -> bool: ...
+def get_card_version() -> tuple[int, int, int]: ...
 
 class Johnny:
     def __init__(self, certdata: bytes) -> Johnny: ...

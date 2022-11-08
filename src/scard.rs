@@ -3,6 +3,7 @@
 
 use crate::openpgp::packet::key;
 use crate::openpgp::types::SymmetricAlgorithm;
+use crate::KeySlot;
 use openpgp::crypto;
 use openpgp::packet::prelude::*;
 use sequoia_openpgp as openpgp;
@@ -26,14 +27,94 @@ pub fn chagne_admin_pin(pw3change: apdus::APDU) -> Result<bool, errors::TalktoSC
     let resp = talktosc::send_and_parse(&card, pw3change);
     let resp = match resp {
         Ok(_) => resp.unwrap(),
-        Err(value) => return Err(value),
+        Err(value) => {
+            talktosc::disconnect(card);
+            return Err(value);
+        }
     };
 
     // Verify if the admin pin worked or not.
     if !resp.is_okay() {
+        talktosc::disconnect(card);
         return Err(errors::TalktoSCError::PinError);
     }
+    talktosc::disconnect(card);
     Ok(true)
+}
+
+// To get the touch policy of a given slot
+#[allow(unused)]
+pub fn get_touch_policy(slot: KeySlot) -> Result<Vec<u8>, errors::TalktoSCError> {
+    let card = talktosc::create_connection();
+    let card = match card {
+        Ok(card) => card,
+        Err(value) => return Err(value),
+    };
+
+    let select_openpgp = apdus::create_apdu_select_openpgp();
+    let resp = talktosc::send_and_parse(&card, select_openpgp);
+    let resp = match resp {
+        Ok(_) => resp.unwrap(),
+        Err(value) => return Err(value),
+    };
+    // Just make sure we can talk
+    if !resp.is_okay() {
+        return Err(errors::TalktoSCError::PinError);
+    }
+    // Now let us ask about the touch policy
+    //
+    let slot_value = slot as u8;
+    let select_touchpolicy = apdus::APDU::new(0x00, 0xCA, 0x00, slot_value, None);
+    let resp = talktosc::send_and_parse(&card, select_touchpolicy);
+    let resp = match resp {
+        Ok(_) => resp.unwrap(),
+        Err(value) => {
+            talktosc::disconnect(card);
+            return Err(value);
+        }
+    };
+
+    talktosc::disconnect(card);
+    Ok(resp.get_data())
+}
+
+// To get the Yubikey card firmware version
+#[allow(unused)]
+pub fn internal_get_version() -> Result<Vec<u8>, errors::TalktoSCError> {
+    let card = talktosc::create_connection();
+    let card = match card {
+        Ok(card) => card,
+        Err(value) => return Err(value),
+    };
+
+    let select_openpgp = apdus::create_apdu_select_openpgp();
+    let resp = talktosc::send_and_parse(&card, select_openpgp);
+    let resp = match resp {
+        Ok(_) => resp.unwrap(),
+        Err(value) => {
+            talktosc::disconnect(card);
+            return Err(value);
+        }
+    };
+    // Just make sure we can talk
+    if !resp.is_okay() {
+        talktosc::disconnect(card);
+        return Err(errors::TalktoSCError::PinError);
+    }
+    // Now let us ask about version
+    //
+    let select_version = apdus::APDU::new(0x00, 0xF1, 0x00, 0x00, None);
+    let resp = talktosc::send_and_parse(&card, select_version);
+    let resp = match resp {
+        Ok(_) => resp.unwrap(),
+        Err(value) => {
+            talktosc::disconnect(card);
+            return Err(value);
+        }
+    };
+
+    talktosc::disconnect(card);
+    Ok(resp.get_data())
 }
 
 #[allow(unused)]
@@ -48,10 +129,14 @@ pub fn is_smartcard_connected() -> Result<bool, errors::TalktoSCError> {
     let resp = talktosc::send_and_parse(&card, select_openpgp);
     let resp = match resp {
         Ok(_) => resp.unwrap(),
-        Err(value) => return Err(value),
+        Err(value) => {
+            talktosc::disconnect(card);
+            return Err(value);
+        }
     };
     // Verify if the admin pin worked or not.
     if !resp.is_okay() {
+        talktosc::disconnect(card);
         return Err(errors::TalktoSCError::PinError);
     }
 

@@ -26,6 +26,7 @@ from .johnnycanencrypt import (
     merge_keys,
     parse_cert_bytes,
     parse_cert_file,
+    TouchMode,
 )
 
 import johnnycanencrypt.johnnycanencrypt as rjce
@@ -276,7 +277,12 @@ class KeyStore:
             other_k = otherkey
 
         cert = rjce.certify_key(
-            k.keyvalue, other_k.keyvalue, sig_type.value, uids, password.encode("utf-8"), oncard
+            k.keyvalue,
+            other_k.keyvalue,
+            sig_type.value,
+            uids,
+            password.encode("utf-8"),
+            oncard,
         )
         # Now if the otherkey is secret, then merge this new public key into the secret key
         if other_k.keytype == KeyType.SECRET:
@@ -1020,7 +1026,13 @@ class KeyStore:
                 final_keys.append(k.keyvalue)
         return final_keys
 
-    def encrypt(self, keys: Union[List[Union[str, Key]], Union[str, Key]], data: Union[str, bytes], outputfile: Union[str, bytes]="", armor=True):
+    def encrypt(
+        self,
+        keys: Union[List[Union[str, Key]], Union[str, Key]],
+        data: Union[str, bytes],
+        outputfile: Union[str, bytes] = "",
+        armor=True,
+    ):
         """Encrypts the given data with the list of keys and returns the output.
 
         :param keys: List of fingerprints or Key objects
@@ -1120,7 +1132,9 @@ class KeyStore:
             encrypt_filehandler_to_file(final_key_paths, fh, encrypted_file, armor)
         return True
 
-    def decrypt_file(self, key: Union[str, Key], encrypted_path, outputfile, password=""):
+    def decrypt_file(
+        self, key: Union[str, Key], encrypted_path, outputfile, password=""
+    ):
         """Decryptes the given file to the output path.
 
         :param key: Fingerprint or secret Key object
@@ -1189,7 +1203,9 @@ class KeyStore:
         jp = Johnny(k.keyvalue)
         return jp.sign_bytes_detached(data, password)
 
-    def verify(self, key: Union[str, Key], data: Union[str, bytes], signature: Optional[str]) -> bool:
+    def verify(
+        self, key: Union[str, Key], data: Union[str, bytes], signature: Optional[str]
+    ) -> bool:
         """Verifies the given data and the signature
 
         :param key: Fingerprint or public Key object
@@ -1212,7 +1228,14 @@ class KeyStore:
         else:
             return jp.verify_bytes(data)
 
-    def sign_file(self, key: Union[str, Key], filepath: Union[str, bytes], outputpath: Union[str, bytes], password, cleartext=False) -> bool:
+    def sign_file(
+        self,
+        key: Union[str, Key],
+        filepath: Union[str, bytes],
+        outputpath: Union[str, bytes],
+        password,
+        cleartext=False,
+    ) -> bool:
         """Signs the given input file with key and saves in the outputpath.
 
         :param key: Fingerprint or secret Key object, public key in case card based operation.
@@ -1256,7 +1279,13 @@ class KeyStore:
 
         return result
 
-    def sign_file_detached(self, key: Union[str, Key], filepath: Union[str, bytes], password: str, write=False):
+    def sign_file_detached(
+        self,
+        key: Union[str, Key],
+        filepath: Union[str, bytes],
+        password: str,
+        write=False,
+    ):
         """Signs the given data with the key. It also writes filename.asc in the same directory of the file as the signature if write value is True.
 
         :param key: Fingerprint or secret Key object
@@ -1294,7 +1323,9 @@ class KeyStore:
 
         return signature
 
-    def verify_file_detached(self, key: Union[str, Key], filepath: Union[str, bytes], signature_path):
+    def verify_file_detached(
+        self, key: Union[str, Key], filepath: Union[str, bytes], signature_path
+    ):
         """Verifies the given filepath based on the signature file.
 
         :param key: Fingerprint or public Key object
@@ -1348,7 +1379,9 @@ class KeyStore:
         jp = Johnny(k.keyvalue)
         return jp.verify_file(input_filepath)
 
-    def verify_and_extract_bytes(self, key: Union[str, Key], data: Union[str, bytes]) -> bytes:
+    def verify_and_extract_bytes(
+        self, key: Union[str, Key], data: Union[str, bytes]
+    ) -> bytes:
         """Verifies the given data and returns the acutal data.
 
         :param key: Fingerprint or public Key object.
@@ -1367,7 +1400,9 @@ class KeyStore:
 
         return jp.verify_and_extract_bytes(data)
 
-    def verify_and_extract_file(self, key: Union[str, Key], filepath: Union[str, bytes], output: bytes) -> bool:
+    def verify_and_extract_file(
+        self, key: Union[str, Key], filepath: Union[str, bytes], output: bytes
+    ) -> bool:
         """Verifies the given signed file and saves the actual data in output.
 
         :param key: Fingerprint or public Key object.
@@ -1396,7 +1431,6 @@ class KeyStore:
         jp = Johnny(k.keyvalue)
 
         return jp.verify_and_extract_file(input_filepath, outputpath)
-
 
     def fetch_key_by_fingerprint(self, fingerprint: str):
         """Fetches key from keys.openpgp.org based on the fingerprint.
@@ -1502,3 +1536,23 @@ class KeyStore:
                 fingerprint = result["fingerprint"]
 
             return fingerprint
+
+
+def get_card_touch_policies() -> Union[List[TouchMode], None]:
+    "Get the supported touch policies of the smartcard"
+    result: List[TouchMode] = []
+    version = rjce.get_card_version()
+    if version < (4, 2, 0):
+        result = []
+    elif version < (5, 2, 1):
+        result = [TouchMode.On, TouchMode.Off, TouchMode.Fixed]
+    elif version >= (5, 2, 1):
+        result = [
+            TouchMode.On,
+            TouchMode.Off,
+            TouchMode.Fixed,
+            TouchMode.Cached,
+            TouchMode.CachedFixed,
+        ]
+    # Now return the result
+    return result

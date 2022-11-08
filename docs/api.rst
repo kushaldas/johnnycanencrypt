@@ -279,3 +279,10 @@ For the rest of the documentation we assume that you imported the module as foll
 
         Enum class to mark the kind of certification one can do on another key. Possible values are **SignatureType.GenericCertification**,
         **SignatureType.PersonaCertification**, **SignatureType.CasualCertification**, **SignatureType.PositiveCertification**.
+
+
+.. function:: get_card_touch_policies() -> List[TouchMode]
+
+        Returns a list of Enum values from TouchMode. To be used to determine the touch capabilities of the smartcard.
+        Remember to verify this list before calling :func:`set_keyslot_touch_policy`.
+
