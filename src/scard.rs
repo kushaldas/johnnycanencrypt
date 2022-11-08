@@ -27,13 +27,18 @@ pub fn chagne_admin_pin(pw3change: apdus::APDU) -> Result<bool, errors::TalktoSC
     let resp = talktosc::send_and_parse(&card, pw3change);
     let resp = match resp {
         Ok(_) => resp.unwrap(),
-        Err(value) => return Err(value),
+        Err(value) => {
+            talktosc::disconnect(card);
+            return Err(value);
+        }
     };
 
     // Verify if the admin pin worked or not.
     if !resp.is_okay() {
+        talktosc::disconnect(card);
         return Err(errors::TalktoSCError::PinError);
     }
+    talktosc::disconnect(card);
     Ok(true)
 }
 
@@ -86,10 +91,14 @@ pub fn internal_get_version() -> Result<Vec<u8>, errors::TalktoSCError> {
     let resp = talktosc::send_and_parse(&card, select_openpgp);
     let resp = match resp {
         Ok(_) => resp.unwrap(),
-        Err(value) => return Err(value),
+        Err(value) => {
+            talktosc::disconnect(card);
+            return Err(value);
+        }
     };
     // Just make sure we can talk
     if !resp.is_okay() {
+        talktosc::disconnect(card);
         return Err(errors::TalktoSCError::PinError);
     }
     // Now let us ask about version
@@ -120,10 +129,14 @@ pub fn is_smartcard_connected() -> Result<bool, errors::TalktoSCError> {
     let resp = talktosc::send_and_parse(&card, select_openpgp);
     let resp = match resp {
         Ok(_) => resp.unwrap(),
-        Err(value) => return Err(value),
+        Err(value) => {
+            talktosc::disconnect(card);
+            return Err(value);
+        }
     };
     // Verify if the admin pin worked or not.
     if !resp.is_okay() {
+        talktosc::disconnect(card);
         return Err(errors::TalktoSCError::PinError);
     }
 
