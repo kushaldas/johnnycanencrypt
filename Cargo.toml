@@ -1,6 +1,6 @@
 [package]
 name = "johnnycanencrypt"
-version = "0.10.0"
+version = "0.11.0"
 authors = ["Kushal Das <mail@kushaldas.in>"]
 edition = "2018"
 description = "Python module for OpenPGP."
@@ -32,27 +32,4 @@ sshkeys = "0.3.2"
  
 [dependencies.pyo3]
 version = "0.17.3"
-
-
-[package.metadata.maturin]
-classifier = [
-  "Development Status :: 4 - Beta",
-  "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
-  "Programming Language :: Rust",
-  "Programming Language :: Python",
-  "Programming Language :: Python :: 3 :: Only",
-  "Programming Language :: Python :: 3.7",
-  "Programming Language :: Python :: 3.8",
-  "Programming Language :: Python :: 3.9",
-  "Programming Language :: Python :: 3.10",
-  "Programming Language :: Python :: Implementation :: CPython",
-  "Topic :: Software Development :: Libraries",
-  "Topic :: Software Development :: Libraries :: Python Modules"
-]
-maintainer = "Kushal Das"
-maintainer-email = "mail@kushaldas.in"
-requires-python = ">=3.7"
-requires-dist = ["httpx"]
-[package.metadata.maturin.project-url]
-Github = "https://github.com/kushaldas/johnnycanencrypt"
 
