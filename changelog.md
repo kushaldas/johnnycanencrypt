@@ -2,6 +2,8 @@
 
 ## [unreleased]
 
+## [0.11.0] - 2022-11-09
+
 ### Added
 
 - Type annotation for the rust part of the codebase.
