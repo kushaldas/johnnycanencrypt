@@ -28,6 +28,7 @@ sudo apt install -y python3-dev libnettle8 nettle-dev libhogweed6 python3-pip py
 ```
 python3 -m venv .venv
 source .venv/bin/activate
+python3 -m pip install -U pip setuptools
 python3 -m pip install -r requirements-dev.txt
 python setup.py develop
 ```
