@@ -99,7 +99,7 @@ jobs:
 
   build-bullseye-3.11:
     docker:
-      - image: circleci/python:3.11-bullseye
+      - image: cimg/python:3.11.0
     steps:
       - checkout
       - *install_system_packages_bullseye
