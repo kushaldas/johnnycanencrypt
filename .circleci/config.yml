@@ -20,6 +20,11 @@ common-steps:
       name: Install system dependencies
       command: sudo apt update && sudo apt install -y python3-dev libnettle8 nettle-dev libhogweed6 python3-pip python3-venv clang libpcsclite-dev libpcsclite1 libclang-9-dev
 
+  - &install_system_packages_ubuntu22
+      run:
+        name: Install system dependencies
+        command: sudo apt update && sudo apt install -y python3-dev libnettle8 nettle-dev libhogweed6 python3-pip python3-venv clang libpcsclite-dev libpcsclite1 libclang-dev
+
 
 
   - &install_dependencies
@@ -102,7 +107,7 @@ jobs:
       - image: cimg/python:3.11.0
     steps:
       - checkout
-      - *install_system_packages_bullseye
+      - *install_system_packages_ubuntu22
       - *install_rustup
       - *install_dependencies
       - *build_jce
