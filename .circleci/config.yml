@@ -97,6 +97,19 @@ jobs:
       - *test_jce
       - *typelint_jce
 
+  build-bullseye-3.11:
+    docker:
+      - image: circleci/python:3.11-bullseye
+    steps:
+      - checkout
+      - *install_system_packages_bullseye
+      - *install_rustup
+      - *install_dependencies
+      - *build_jce
+      - *test_jce
+      - *typelint_jce
+
+
 
 
 workflows:
@@ -104,6 +117,7 @@ workflows:
   johnny_can_encrypt_ci:
     jobs:
     - build-bullseye-3.10
+    - build-bullseye-3.11
     - build-buster-3.9
     - build-buster-3.8
 
