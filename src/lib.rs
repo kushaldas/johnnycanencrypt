@@ -1009,14 +1009,13 @@ fn certify_key(
             cardkeys.push(pair);
         }
         if cardkeys.is_empty() {
-            return Err(JceError::new(format!(
-                "No key is available for certification in the public key."
-            )));
+            return Err(JceError::new(
+                "No key is available for certification in the public key.".to_string(),
+            ));
         }
         // Now we know for sure that there is a key
         let key = cardkeys
-            .iter()
-            .next()
+            .first()
             .expect("We must have a certification key by now");
 
         Some(key.clone())
@@ -1043,14 +1042,13 @@ fn certify_key(
             keys.push(key.into_keypair().unwrap());
         }
         if keys.is_empty() {
-            return Err(JceError::new(format!(
-                "No key is available for certification."
-            )));
+            return Err(JceError::new(
+                "No key is available for certification.".to_string(),
+            ));
         }
         // Now we know for sure that there is a key
         let key = keys
-            .iter()
-            .next()
+            .first()
             .expect("We must have a certification key by now");
 
         Some(key.clone())
@@ -1071,11 +1069,11 @@ fn certify_key(
                     let sig = match oncard {
                         true => {
                             let mut signer = card_signer.as_ref().unwrap().clone();
-                            u.certify(&mut signer, &othercert, stype.clone(), None, None)?
+                            u.certify(&mut signer, &othercert, stype, None, None)?
                         }
                         false => {
                             let mut signer = disk_signer.as_ref().unwrap().clone();
-                            u.certify(&mut signer, &othercert, stype.clone(), None, None)?
+                            u.certify(&mut signer, &othercert, stype, None, None)?
                         }
                     };
                     new_certificates.push(sig);
@@ -1575,7 +1573,7 @@ fn upload_primary_to_smartcard(
     let mut result = false;
 
     if (whichslot & 0x02) == 0x02 {
-        result = parse_and_move_a_key(cert.clone(), 2, pin.clone(), password.clone(), true)?;
+        result = parse_and_move_a_key(cert, 2, pin, password, true)?;
     } else if (whichslot & 0x04) == 0x04 {
         result = parse_and_move_a_key(cert, 3, pin, password, true)?;
     }
@@ -1627,25 +1625,25 @@ fn get_signing_pubkey(py: Python, certdata: Vec<u8>) -> Result<PyObject> {
     let cert = openpgp::Cert::from_bytes(&certdata)?;
 
     let policy = P::new();
-    let valid_ka = cert
+    let mut valid_ka = cert
         .keys()
         .with_policy(&policy, None)
         .alive()
         .revoked(false)
         .for_signing();
-    for ka in valid_ka {
+    if let Some(ka) = valid_ka.next() {
         // First let us get the value of e from the public key
         let public = ka.parts_as_public();
         match public.mpis().clone() {
             openpgp::crypto::mpi::PublicKey::RSA { ref e, ref n } => {
                 let mut result_n = String::new();
                 let internal = n.value().to_vec();
-                for v in internal.clone().iter() {
+                for v in internal.iter() {
                     write!(&mut result_n, "{:02X}", v)?;
                 }
                 let mut result_e = String::new();
                 let internal = e.value().to_vec();
-                for v in internal.clone().iter() {
+                for v in internal.iter() {
                     write!(&mut result_e, "{:02X}", v)?;
                 }
                 pd.set_item("key_type", "RSA")?;
@@ -1659,7 +1657,7 @@ fn get_signing_pubkey(py: Python, certdata: Vec<u8>) -> Result<PyObject> {
         };
     }
 
-    return Err(JceError::new("Could not find signing key.".to_string()));
+    Err(JceError::new("Could not find signing key.".to_string()))
 }
 
 #[pyfunction]
@@ -1668,14 +1666,14 @@ fn get_ssh_pubkey(_py: Python, certdata: Vec<u8>, comment: Option<String>) -> Re
     let cert = openpgp::Cert::from_bytes(&certdata)?;
 
     let policy = P::new();
-    let valid_ka = cert
+    let mut valid_ka = cert
         .keys()
         .subkeys()
         .with_policy(&policy, None)
         .alive()
         .revoked(false)
         .for_authentication();
-    for ka in valid_ka {
+    if let Some(ka) = valid_ka.next() {
         // First let us get the value of e from the public key
         let public = ka.parts_as_public();
         let (key_type, kind) = match public.mpis().clone() {
@@ -1729,7 +1727,7 @@ fn get_ssh_pubkey(_py: Python, certdata: Vec<u8>, comment: Option<String>) -> Re
         let public_key = sshkeys::PublicKey {
             key_type,
             kind,
-            comment: comment,
+            comment,
         };
         let mut keydata = vec![];
         public_key.write(&mut keydata)?;
@@ -1738,9 +1736,9 @@ fn get_ssh_pubkey(_py: Python, certdata: Vec<u8>, comment: Option<String>) -> Re
         return Ok(s);
     }
 
-    return Err(JceError::new(
+    Err(JceError::new(
         "Could not find authentication subkey for ssh.".to_string(),
-    ));
+    ))
 }
 
 #[allow(unused)]
@@ -1861,19 +1859,19 @@ fn parse_and_move_a_key(
                 main_n = Some(n.clone());
             }
             openpgp::crypto::mpi::PublicKey::ECDH { curve, q, .. } => {
-                main_curve = Some(curve.clone());
-                main_eq = Some(q.clone());
+                main_curve = Some(curve);
+                main_eq = Some(q);
             }
             openpgp::crypto::mpi::PublicKey::EdDSA { curve, q } => {
-                main_curve = Some(curve.clone());
-                main_eq = Some(q.clone());
+                main_curve = Some(curve);
+                main_eq = Some(q);
             }
             _ => (),
         }
         let key = ka
             .key()
             .clone()
-            .decrypt_secret(&openpgp::crypto::Password::from(password.clone()))?;
+            .decrypt_secret(&openpgp::crypto::Password::from(password))?;
         let ctime = key.creation_time();
         let dt: DateTime<Utc> = DateTime::from(ctime);
         ts = dt.timestamp() as u64;
@@ -3068,24 +3066,12 @@ pub fn get_keyslot_touch_policy(py: Python, slot: Py<KeySlot>) -> Result<Py<Touc
         Err(e) => return Err(JceError::new(e.to_string())),
     };
     match data[0] {
-        0 => {
-            return Ok(Py::new(py, TouchMode::Off)?);
-        }
-        1 => {
-            return Ok(Py::new(py, TouchMode::On)?);
-        }
-        2 => {
-            return Ok(Py::new(py, TouchMode::Fixed)?);
-        }
-        3 => {
-            return Ok(Py::new(py, TouchMode::Cached)?);
-        }
-        4 => {
-            return Ok(Py::new(py, TouchMode::CachedFixed)?);
-        }
-        _ => {
-            return Err(JceError::new("Can not parse touch policy.".to_string()));
-        }
+        0 => Ok(Py::new(py, TouchMode::Off)?),
+        1 => Ok(Py::new(py, TouchMode::On)?),
+        2 => Ok(Py::new(py, TouchMode::Fixed)?),
+        3 => Ok(Py::new(py, TouchMode::Cached)?),
+        4 => Ok(Py::new(py, TouchMode::CachedFixed)?),
+        _ => Err(JceError::new("Can not parse touch policy.".to_string())),
     }
 }
 
