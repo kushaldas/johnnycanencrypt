@@ -1,6 +1,12 @@
-# Changlelog
+# Changelog
 
 ## [unreleased]
+
+## [0.11.1] - 2022-12-05
+
+### Added
+
+- Trying to fix the wheels for Mac.
 
 ## [0.11.0] - 2022-11-09
 
