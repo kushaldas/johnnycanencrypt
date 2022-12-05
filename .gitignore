@@ -2,7 +2,6 @@
 .venv
 /target
 smartcardtests/jce.db
-Cargo.lock
 src/.lib.rs.rustfmt
 __pycache__
 /johnnycanencrypt/johnnycanencrypt*.so
