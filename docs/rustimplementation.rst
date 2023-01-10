@@ -25,6 +25,17 @@ In most cases you don't have to use these, but if you have a reason, feel free t
 
         This function takes a public key and optional comment and then provides a string representing the authentication subkey to be used inside of SSH.
 
+
+.. function:: enable_otp_usb() -> bool
+
+        This function enables OTP application in the Yubikey.
+
+.. function:: disable_otp_usb() -> bool
+
+        This function disables OTP application in the Yubikey.
+
+
+
 .. class:: Johnny(filepath)
 
         It creates an object of type `Johnny`, you can provide path to the either public key, or the private key based on the operation

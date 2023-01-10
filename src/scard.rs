@@ -9,6 +9,44 @@ use openpgp::packet::prelude::*;
 use sequoia_openpgp as openpgp;
 use talktosc::*;
 
+#[allow(unused)]
+pub fn change_otp(enable: bool) -> Result<bool, errors::TalktoSCError> {
+    let card = talktosc::create_connection();
+    let card = match card {
+        Ok(card) => card,
+        Err(value) => return Err(value),
+    };
+    let select_mgmt = apdus::create_apdu_management_selection();
+    let enable_apdu = apdus::create_usb_otp_enable();
+    let disable_apdu = apdus::create_usb_otp_disable();
+    let resp = talktosc::send_and_parse(&card, select_mgmt);
+    let resp = match resp {
+        Ok(_) => resp.unwrap(),
+        Err(value) => {
+            talktosc::disconnect(card);
+            return Err(value);
+        }
+    };
+
+    let send_apdu = if enable { enable_apdu } else { disable_apdu };
+    let resp = talktosc::send_and_parse(&card, send_apdu);
+    let resp = match resp {
+        Ok(_) => resp.unwrap(),
+        Err(value) => {
+            talktosc::disconnect(card);
+            return Err(value);
+        }
+    };
+
+    // Verify if the otp enable/disable worked or not
+    if !resp.is_okay() {
+        talktosc::disconnect(card);
+        return Err(errors::TalktoSCError::OtpError);
+    }
+    talktosc::disconnect(card);
+    Ok(true)
+}
+
 // To change the admin pin
 #[allow(unused)]
 pub fn chagne_admin_pin(pw3change: apdus::APDU) -> Result<bool, errors::TalktoSCError> {

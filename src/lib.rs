@@ -3098,6 +3098,22 @@ pub fn set_keyslot_touch_policy(
     }
 }
 
+#[pyfunction]
+pub fn enable_otp_usb() -> Result<bool> {
+    match scard::change_otp(true) {
+        Ok(value) => Ok(value),
+        Err(value) => Err(CardError::new_err(format!("Error {}", value)).into()),
+    }
+}
+
+#[pyfunction]
+pub fn disable_otp_usb() -> Result<bool> {
+    match scard::change_otp(false) {
+        Ok(value) => Ok(value),
+        Err(value) => Err(CardError::new_err(format!("Error {}", value)).into()),
+    }
+}
+
 /// A Python module implemented in Rust.
 #[pymodule]
 fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
@@ -3137,6 +3153,8 @@ fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(get_card_version))?;
     m.add_wrapped(wrap_pyfunction!(get_keyslot_touch_policy))?;
     m.add_wrapped(wrap_pyfunction!(set_keyslot_touch_policy))?;
+    m.add_wrapped(wrap_pyfunction!(enable_otp_usb))?;
+    m.add_wrapped(wrap_pyfunction!(disable_otp_usb))?;
     m.add("CryptoError", _py.get_type::<CryptoError>())?;
     m.add("SameKeyError", _py.get_type::<SameKeyError>())?;
     m.add_class::<Johnny>()?;
