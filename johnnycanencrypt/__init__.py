@@ -1,5 +1,5 @@
 # SPDX-FileCopyrightText: © 2020 Kushal Das <mail@kushaldas.in>
-# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-License-Identifier: LGPL-3.0-or-later
 
 import os
 import shutil

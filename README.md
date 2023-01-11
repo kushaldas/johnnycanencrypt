@@ -48,5 +48,5 @@ Please read the [Introduction](https://johnnycanencrypt.readthedocs.io/en/latest
 Please go through the [full API documentation](https://johnnycanencrypt.readthedocs.io/en/latest/api.html) for detailed
 descriptions.
 
-## LICENSE: GPL-3.0-or-later
+## LICENSE: LGPL-3.0-or-later
 

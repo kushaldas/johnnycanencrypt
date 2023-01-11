@@ -3,7 +3,7 @@ from setuptools_rust import Binding, RustExtension
 
 setup(
     name="johnnycanencrypt",
-    version="0.11.1",
+    version="0.12.0",
     rust_extensions=[
         RustExtension("johnnycanencrypt.johnnycanencrypt", binding=Binding.PyO3)
     ],
