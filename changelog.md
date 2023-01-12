@@ -2,6 +2,8 @@
 
 ## [unreleased]
 
+## [0.12.0] - 2023-01-12
+
 ### Added
 
 - Adds `enable_otp_usb` in rjce.
