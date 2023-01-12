@@ -28,8 +28,8 @@ sudo apt install -y python3-dev libnettle8 nettle-dev libhogweed6 python3-pip py
 ```
 python3 -m venv .venv
 source .venv/bin/activate
-python3 -m pip install -U pip setuptools
-python3 -m pip install -r requirements-dev.txt
+python -m pip install -U pip setuptools
+python -m pip install -r requirements-dev.txt
 python setup.py develop
 ```
 
@@ -48,5 +48,5 @@ Please read the [Introduction](https://johnnycanencrypt.readthedocs.io/en/latest
 Please go through the [full API documentation](https://johnnycanencrypt.readthedocs.io/en/latest/api.html) for detailed
 descriptions.
 
-## LICENSE: GPL-3.0-or-later
+## LICENSE: LGPL-3.0-or-later
 

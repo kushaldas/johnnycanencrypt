@@ -2,6 +2,14 @@
 
 ## [unreleased]
 
+## [0.12.0] - 2023-01-12
+
+### Added
+
+- Adds `enable_otp_usb` in rjce.
+- Adds `disable_otp_usb` in rjce.
+- Changed license to LGPL-3.0-or-later
+
 ## [0.11.1] - 2022-12-05
 
 ### Added
