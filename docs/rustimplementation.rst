@@ -1,7 +1,7 @@
 The internal johnnycanencrypt module written in Rust
 ====================================================
 
-You can import the low level functions or `Johnny` class by the following way:
+You can access the low level functions or `Johnny` class by the following way:
 
 ::
 

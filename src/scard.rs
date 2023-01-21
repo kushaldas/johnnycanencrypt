@@ -6,6 +6,7 @@ use crate::openpgp::types::SymmetricAlgorithm;
 use crate::KeySlot;
 use openpgp::crypto;
 use openpgp::packet::prelude::*;
+use regex::Regex;
 use sequoia_openpgp as openpgp;
 use talktosc::*;
 
@@ -28,7 +29,42 @@ pub fn change_otp(enable: bool) -> Result<bool, errors::TalktoSCError> {
         }
     };
 
-    let send_apdu = if enable { enable_apdu } else { disable_apdu };
+    // Let us try to find the major and minor number for firmware
+    let res = String::from_utf8(resp.data).unwrap();
+    let re = Regex::new(r"(\d+)\.(\d+)\.(\d+)").unwrap();
+    let caps = re.captures(&res);
+    let (major, minor) = match caps {
+        Some(caps) => {
+            let major = caps
+                .get(1)
+                .map_or(0, |m| i8::from_str_radix(m.as_str(), 10).unwrap());
+
+            let minor = caps
+                .get(2)
+                .map_or(0, |m| i8::from_str_radix(m.as_str(), 10).unwrap());
+            (major, minor)
+        }
+        None => {
+            talktosc::disconnect(card);
+            return Err(errors::TalktoSCError::OtpError);
+        }
+    };
+
+    // For Yubikey 4 we have to send in different data
+    let send_apdu = if (major < 5) {
+        // We assume these are the YubiKey 4
+        let inside = if enable {
+            apdus::APDU::new(0x00, 0x16, 0x11, 0x00, Some(vec![0x06, 0x00, 0x00, 0x00]))
+        } else {
+            apdus::APDU::new(0x00, 0x16, 0x11, 0x00, Some(vec![0x05, 0x00, 0x00, 0x00]))
+        };
+        inside
+    } else {
+        // We assume these are the YubiKey 5
+        let inside = if enable { enable_apdu } else { disable_apdu };
+        inside
+    };
+    // Send in the real APDU to the card
     let resp = talktosc::send_and_parse(&card, send_apdu);
     let resp = match resp {
         Ok(_) => resp.unwrap(),
