@@ -2,6 +2,9 @@
 
 ## [unreleased]
 
+
+## [0.13.0] - 2023-01-21
+
 ### Added
 
 - We can now disable OTP for both YubiKey4/5 #130.

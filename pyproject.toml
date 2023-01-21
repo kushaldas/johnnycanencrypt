@@ -3,7 +3,7 @@ requires = ["setuptools", "wheel", "setuptools-rust"]
 
 [project]
 name = "johnnycanencrypt"
-version = "0.12.0"
+version = "0.13.0"
 classifiers = [
   "Development Status :: 4 - Beta",
   "License :: OSI Approved :: GNU Lesser General Public License v3 or later (LGPLv3+)",
