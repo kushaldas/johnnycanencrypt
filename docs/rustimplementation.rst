@@ -1,7 +1,7 @@
 The internal johnnycanencrypt module written in Rust
 ====================================================
 
-You can import the low level functions or `Johnny` class by the following way:
+You can access the low level functions or `Johnny` class by the following way:
 
 ::
 
@@ -24,6 +24,17 @@ In most cases you don't have to use these, but if you have a reason, feel free t
 .. function:: get_ssh_pubkey(certdata, comment: Optional[str]) -> str:
 
         This function takes a public key and optional comment and then provides a string representing the authentication subkey to be used inside of SSH.
+
+
+.. function:: enable_otp_usb() -> bool
+
+        This function enables OTP application in the Yubikey.
+
+.. function:: disable_otp_usb() -> bool
+
+        This function disables OTP application in the Yubikey.
+
+
 
 .. class:: Johnny(filepath)
 

@@ -42,7 +42,7 @@ For the rest of the documentation we assume that you imported the module as foll
 
                 This method signs the given list of userid(s) in `otherkey` using the primary key of the `key`, by default it signs as *SignatureType.GenericCertification*, but you can do other types too. If the primary key is on a smartcard, then pass `oncard=True`, default value is `False`.
 
-        .. method:: create_key(password: str, uids: Optional[Union[List[str], str]] = [], ciphersuite: Cipher = Cipher.RSA4k, creation: Optional[datetime.datetime] = None, expiration: Optional[datetime.datetime] = None, subkeys_expiration= False, whichkeys = 7, can_primary_sign: bool = True) -> Key:
+        .. method:: create_key(password: str, uids: Optional[Union[List[str], str]] = [], ciphersuite: Cipher = Cipher.RSA4k, creation: Optional[datetime.datetime] = None, expiration: Optional[datetime.datetime] = None, subkeys_expiration= False, whichkeys = 7, can_primary_sign: bool = False, can_primary_expire=False) -> Key:
 
                 Returns the public part of the newly created `Key` in the store
                 directory. You can mention ciphersuite :class:`Cipher`  as
@@ -279,3 +279,10 @@ For the rest of the documentation we assume that you imported the module as foll
 
         Enum class to mark the kind of certification one can do on another key. Possible values are **SignatureType.GenericCertification**,
         **SignatureType.PersonaCertification**, **SignatureType.CasualCertification**, **SignatureType.PositiveCertification**.
+
+
+.. function:: get_card_touch_policies() -> List[TouchMode]
+
+        Returns a list of Enum values from TouchMode. To be used to determine the touch capabilities of the smartcard.
+        Remember to verify this list before calling :func:`set_keyslot_touch_policy`.
+

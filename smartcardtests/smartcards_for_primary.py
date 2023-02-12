@@ -83,7 +83,15 @@ k = ks.import_key(PUBLIC_KEY)
 ks.sync_smartcard()
 other = ks.import_key("tests/files/store/kushal_updated_key.asc")
 
-newother = ks.certify_key(k, other, ["Kushal Das <kushaldas@riseup.net>",], jce.SignatureType.PersonaCertification, password="123456".encode("utf-8"), oncard=True)
+newother = ks.certify_key(
+    k,
+    other,
+    [
+        "Kushal Das <kushaldas@riseup.net>",
+    ],
+    jce.SignatureType.PersonaCertification,
+    password="123456",
+    oncard=True,
+)
 with open("hello.public", "wb") as f:
     f.write(newother.keyvalue)
-

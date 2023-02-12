@@ -1,12 +1,87 @@
 // SPDX-FileCopyrightText: © 2020 Kushal Das <mail@kushaldas.in>
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 
 use crate::openpgp::packet::key;
 use crate::openpgp::types::SymmetricAlgorithm;
+use crate::KeySlot;
 use openpgp::crypto;
 use openpgp::packet::prelude::*;
+use regex::Regex;
 use sequoia_openpgp as openpgp;
 use talktosc::*;
+
+#[allow(unused)]
+pub fn change_otp(enable: bool) -> Result<bool, errors::TalktoSCError> {
+    let card = talktosc::create_connection();
+    let card = match card {
+        Ok(card) => card,
+        Err(value) => return Err(value),
+    };
+    let select_mgmt = apdus::create_apdu_management_selection();
+    let enable_apdu = apdus::create_usb_otp_enable();
+    let disable_apdu = apdus::create_usb_otp_disable();
+    let resp = talktosc::send_and_parse(&card, select_mgmt);
+    let resp = match resp {
+        Ok(_) => resp.unwrap(),
+        Err(value) => {
+            talktosc::disconnect(card);
+            return Err(value);
+        }
+    };
+
+    // Let us try to find the major and minor number for firmware
+    let res = String::from_utf8(resp.data).unwrap();
+    let re = Regex::new(r"(\d+)\.(\d+)\.(\d+)").unwrap();
+    let caps = re.captures(&res);
+    let (major, minor) = match caps {
+        Some(caps) => {
+            let major = caps
+                .get(1)
+                .map_or(0, |m| i8::from_str_radix(m.as_str(), 10).unwrap());
+
+            let minor = caps
+                .get(2)
+                .map_or(0, |m| i8::from_str_radix(m.as_str(), 10).unwrap());
+            (major, minor)
+        }
+        None => {
+            talktosc::disconnect(card);
+            return Err(errors::TalktoSCError::OtpError);
+        }
+    };
+
+    // For Yubikey 4 we have to send in different data
+    let send_apdu = if (major < 5) {
+        // We assume these are the YubiKey 4
+        let inside = if enable {
+            apdus::APDU::new(0x00, 0x16, 0x11, 0x00, Some(vec![0x06, 0x00, 0x00, 0x00]))
+        } else {
+            apdus::APDU::new(0x00, 0x16, 0x11, 0x00, Some(vec![0x05, 0x00, 0x00, 0x00]))
+        };
+        inside
+    } else {
+        // We assume these are the YubiKey 5
+        let inside = if enable { enable_apdu } else { disable_apdu };
+        inside
+    };
+    // Send in the real APDU to the card
+    let resp = talktosc::send_and_parse(&card, send_apdu);
+    let resp = match resp {
+        Ok(_) => resp.unwrap(),
+        Err(value) => {
+            talktosc::disconnect(card);
+            return Err(value);
+        }
+    };
+
+    // Verify if the otp enable/disable worked or not
+    if !resp.is_okay() {
+        talktosc::disconnect(card);
+        return Err(errors::TalktoSCError::OtpError);
+    }
+    talktosc::disconnect(card);
+    Ok(true)
+}
 
 // To change the admin pin
 #[allow(unused)]
@@ -26,14 +101,94 @@ pub fn chagne_admin_pin(pw3change: apdus::APDU) -> Result<bool, errors::TalktoSC
     let resp = talktosc::send_and_parse(&card, pw3change);
     let resp = match resp {
         Ok(_) => resp.unwrap(),
-        Err(value) => return Err(value),
+        Err(value) => {
+            talktosc::disconnect(card);
+            return Err(value);
+        }
     };
 
     // Verify if the admin pin worked or not.
     if !resp.is_okay() {
+        talktosc::disconnect(card);
         return Err(errors::TalktoSCError::PinError);
     }
+    talktosc::disconnect(card);
     Ok(true)
+}
+
+// To get the touch policy of a given slot
+#[allow(unused)]
+pub fn get_touch_policy(slot: KeySlot) -> Result<Vec<u8>, errors::TalktoSCError> {
+    let card = talktosc::create_connection();
+    let card = match card {
+        Ok(card) => card,
+        Err(value) => return Err(value),
+    };
+
+    let select_openpgp = apdus::create_apdu_select_openpgp();
+    let resp = talktosc::send_and_parse(&card, select_openpgp);
+    let resp = match resp {
+        Ok(_) => resp.unwrap(),
+        Err(value) => return Err(value),
+    };
+    // Just make sure we can talk
+    if !resp.is_okay() {
+        return Err(errors::TalktoSCError::PinError);
+    }
+    // Now let us ask about the touch policy
+    //
+    let slot_value = slot as u8;
+    let select_touchpolicy = apdus::APDU::new(0x00, 0xCA, 0x00, slot_value, None);
+    let resp = talktosc::send_and_parse(&card, select_touchpolicy);
+    let resp = match resp {
+        Ok(_) => resp.unwrap(),
+        Err(value) => {
+            talktosc::disconnect(card);
+            return Err(value);
+        }
+    };
+
+    talktosc::disconnect(card);
+    Ok(resp.get_data())
+}
+
+// To get the Yubikey card firmware version
+#[allow(unused)]
+pub fn internal_get_version() -> Result<Vec<u8>, errors::TalktoSCError> {
+    let card = talktosc::create_connection();
+    let card = match card {
+        Ok(card) => card,
+        Err(value) => return Err(value),
+    };
+
+    let select_openpgp = apdus::create_apdu_select_openpgp();
+    let resp = talktosc::send_and_parse(&card, select_openpgp);
+    let resp = match resp {
+        Ok(_) => resp.unwrap(),
+        Err(value) => {
+            talktosc::disconnect(card);
+            return Err(value);
+        }
+    };
+    // Just make sure we can talk
+    if !resp.is_okay() {
+        talktosc::disconnect(card);
+        return Err(errors::TalktoSCError::PinError);
+    }
+    // Now let us ask about version
+    //
+    let select_version = apdus::APDU::new(0x00, 0xF1, 0x00, 0x00, None);
+    let resp = talktosc::send_and_parse(&card, select_version);
+    let resp = match resp {
+        Ok(_) => resp.unwrap(),
+        Err(value) => {
+            talktosc::disconnect(card);
+            return Err(value);
+        }
+    };
+
+    talktosc::disconnect(card);
+    Ok(resp.get_data())
 }
 
 #[allow(unused)]
@@ -48,10 +203,14 @@ pub fn is_smartcard_connected() -> Result<bool, errors::TalktoSCError> {
     let resp = talktosc::send_and_parse(&card, select_openpgp);
     let resp = match resp {
         Ok(_) => resp.unwrap(),
-        Err(value) => return Err(value),
+        Err(value) => {
+            talktosc::disconnect(card);
+            return Err(value);
+        }
     };
     // Verify if the admin pin worked or not.
     if !resp.is_okay() {
+        talktosc::disconnect(card);
         return Err(errors::TalktoSCError::PinError);
     }
 

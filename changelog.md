@@ -1,7 +1,42 @@
-# Changlelog
+# Changelog
 
 ## [unreleased]
 
+
+## [0.13.0] - 2023-01-21
+
+### Added
+
+- We can now disable OTP for both YubiKey4/5 #130.
+
+## [0.12.0] - 2023-01-12
+
+### Added
+
+- Adds `enable_otp_usb` in rjce.
+- Adds `disable_otp_usb` in rjce.
+- Changed license to LGPL-3.0-or-later
+
+## [0.11.1] - 2022-12-05
+
+### Added
+
+- Trying to fix the wheels for Mac.
+
+## [0.11.0] - 2022-11-09
+
+### Added
+
+- Type annotation for the rust part of the codebase.
+- `can_primary_expire` new argument to `create_key` function call.
+- Updated `pyo3` dependency to `0.17.2`.
+- Adds `get_card_version` in rjce.
+- Adds `TouchMode` enum in rjce.
+- Adds `get_card_touch_policies` function to find available options.
+- Adds `KeySlot` enum in rjce
+- Adds `get_keyslot_touch_policy` function to set touch policy.
+- Adds `set_keyslot_touch_policy` function to set touch policy.
+- Updates pyo3 to `0.17.3`
 
 ## [0.10.0] - 2022-09-20
 

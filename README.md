@@ -20,7 +20,7 @@ sudo dnf install nettle clang clang-devel nettle-devel python3-devel pcsc-lite-d
 ### Build dependencies in Debian Bullseye
 
 ```
-sudo apt install -y python3-dev libnettle8 nettle-dev libhogweed6 python3-pip python3-venv clang libpcsclite-dev libpcsclite1 libclang-9-dev
+sudo apt install -y python3-dev libnettle8 nettle-dev libhogweed6 python3-pip python3-venv clang libpcsclite-dev libpcsclite1 libclang-9-dev pkg-config
 
 ```
 
@@ -28,7 +28,8 @@ sudo apt install -y python3-dev libnettle8 nettle-dev libhogweed6 python3-pip py
 ```
 python3 -m venv .venv
 source .venv/bin/activate
-python3 -m pip install -r requirements-dev.txt
+python -m pip install -U pip setuptools
+python -m pip install -r requirements-dev.txt
 python setup.py develop
 ```
 
@@ -47,5 +48,5 @@ Please read the [Introduction](https://johnnycanencrypt.readthedocs.io/en/latest
 Please go through the [full API documentation](https://johnnycanencrypt.readthedocs.io/en/latest/api.html) for detailed
 descriptions.
 
-## LICENSE: GPL-3.0-or-later
+## LICENSE: LGPL-3.0-or-later
 
