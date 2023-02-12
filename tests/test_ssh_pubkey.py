@@ -14,25 +14,25 @@ RSA_PUB = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQCqpNHfX9xOW41kl28wgeZHG/szYBldq
 EDDSA_PUB = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIUC2eRpGLdX6BBudVLfZReqHpsHjnsn5Swlh6TECs2QZFQ== little@laptop\n"
 
 def test_get_ssh_pubkey_nistp256():
-    "To test ssh pubkey"
+    """To test ssh pubkey"""
     nistp256_data = _get_cert_data(BASE_TESTSDIR / "files/nistp256.pub")
     pubkey = rjce.get_ssh_pubkey(nistp256_data, "123456")
     assert NISTP256_PUB == pubkey
 
 def test_get_ssh_pubkey_nistp384():
-    "To test ssh pubkey"
+    """To test ssh pubkey"""
     nistp256_data = _get_cert_data(BASE_TESTSDIR / "files/nistp384.pub")
     pubkey = rjce.get_ssh_pubkey(nistp256_data, "123456")
     assert NISTP384_PUB == pubkey
 
 def test_get_ssh_pubkey_nistp521():
-    "To test ssh pubkey"
+    """To test ssh pubkey"""
     nistp256_data = _get_cert_data(BASE_TESTSDIR / "files/nistp521.pub")
     pubkey = rjce.get_ssh_pubkey(nistp256_data, "desk@phone")
     assert NISTP521_PUB == pubkey
 
 def test_get_ssh_pubkey_nistp521_no_comment():
-    "To test ssh pubkey"
+    """To test ssh pubkey"""
     nistp256_data = _get_cert_data(BASE_TESTSDIR / "files/nistp521.pub")
     pubkey = rjce.get_ssh_pubkey(nistp256_data, None)
     assert NISTP521_PUB_NO_COMMENT == pubkey

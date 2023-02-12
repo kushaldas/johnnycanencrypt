@@ -17,7 +17,7 @@ def test_sign_detached():
 
 
 def test_sign_verify_bytes():
-    "This will test a signed PGP message creation"
+    """This will test a signed PGP message creation"""
     j = jce.Johnny(_get_cert_data(BASE_TESTSDIR / "files/secret.asc"))
     signed_data = j.sign_bytes(DATA.encode("utf-8"), "redhat", False).decode("utf-8")
     assert signed_data.endswith("-----END PGP MESSAGE-----\n")
@@ -27,7 +27,7 @@ def test_sign_verify_bytes():
 
 
 def test_sign_cleartext():
-    "This will test a signed cleartext message creation"
+    """This will test a signed cleartext message creation"""
     j = jce.Johnny(_get_cert_data(BASE_TESTSDIR / "files/secret.asc"))
     signed_data = j.sign_bytes(DATA.encode("utf-8"), "redhat", True).decode("utf-8")
     assert signed_data.startswith("-----BEGIN PGP SIGNED MESSAGE-----")
@@ -38,7 +38,7 @@ def test_sign_cleartext():
 
 
 def test_sign_verify_file_cleartext(tmp_path):
-    "This will sign a file in cleartext"
+    """This will sign a file in cleartext"""
     j = jce.Johnny(_get_cert_data(BASE_TESTSDIR / "files/secret.asc"))
     output = (tmp_path / "sign.asc").as_posix()
     j.sign_file(
@@ -58,7 +58,7 @@ def test_sign_verify_file_cleartext(tmp_path):
 
 
 def test_sign_verify_file(tmp_path):
-    "This will sign a file as a PGP message"
+    """This will sign a file as a PGP message"""
     j = jce.Johnny(_get_cert_data(BASE_TESTSDIR / "files/secret.asc"))
     output = (tmp_path / "sign.asc").as_posix()
     j.sign_file(
@@ -78,7 +78,7 @@ def test_sign_verify_file(tmp_path):
 
 
 def test_sign_from_gpg_verify_file():
-    "This will verify a signed message fro gpg"
+    """This will verify a signed message fro gpg"""
     jp = jce.Johnny(
         _get_cert_data(BASE_TESTSDIR / "files/store/kushal_updated_key.asc")
     )
@@ -86,7 +86,7 @@ def test_sign_from_gpg_verify_file():
 
 
 def test_verify_signed_file(tmp_path):
-    "This will verify a signed message from gpg and extract"
+    """This will verify a signed message from gpg and extract"""
     jp = jce.Johnny(
         _get_cert_data(BASE_TESTSDIR / "files/store/kushal_updated_key.asc")
     )
@@ -102,7 +102,7 @@ def test_verify_signed_file(tmp_path):
 
 
 def test_verify_bytes_from_signed_message():
-    "This will verify a signed message fro gpg"
+    """This will verify a signed message fro gpg"""
     jp = jce.Johnny(
         _get_cert_data(BASE_TESTSDIR / "files/store/kushal_updated_key.asc")
     )
@@ -112,7 +112,7 @@ def test_verify_bytes_from_signed_message():
 
 
 def test_sign_from_different_key_file():
-    "This will verify a signed message fro gpg"
+    """This will verify a signed message fro gpg"""
     jp = jce.Johnny(_get_cert_data(BASE_TESTSDIR / "files/public.asc"))
     with pytest.raises(jce.CryptoError):
         jp.verify_file(str(BASE_TESTSDIR / "files/msg.txt.asc").encode("utf-8"))

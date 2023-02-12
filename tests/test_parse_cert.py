@@ -99,7 +99,7 @@ def test_no_primary_sign():
 
 
 def test_uid_certs():
-    "To test certifications on user ids"
+    """To test certifications on user ids"""
     keypath = (BASE_TESTSDIR / "files/store/kushal_updated_key.asc").as_posix()
     (
         uids,

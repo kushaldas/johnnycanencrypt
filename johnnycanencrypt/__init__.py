@@ -2,12 +2,10 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
 import os
-import shutil
 import sqlite3
 import urllib.parse
 from datetime import datetime
 from enum import Enum
-from pprint import pprint
 from typing import Dict, List, Optional, Union, Tuple, Any
 
 import httpx
@@ -61,7 +59,7 @@ class SignatureType(Enum):
 
 
 class Key:
-    "Returns a Key object."
+    """Returns a Key object."""
 
     def __init__(
         self,
@@ -101,11 +99,11 @@ class Key:
         return self.fingerprint == value.fingerprint and self.keytype == value.keytype
 
     def get_pub_key(self) -> str:
-        "Returns the public key part as string"
+        """Returns the public key part as string"""
         return get_pub_key(self.keyvalue)
 
     def available_subkeys(self) -> Tuple[bool, bool, bool]:
-        "Returns bool tuple (enc, signing, auth)"
+        """Returns bool tuple (enc, signing, auth)"""
         subkeys_sorted = self.othervalues["subkeys_sorted"]
         got_enc = False
         got_sign = False
@@ -159,7 +157,7 @@ class KeyStore:
         return f"<KeyStore dbpath={self.dbpath}>"
 
     def upgrade_if_required(self):
-        "Upgrades the database schema if required"
+        """Upgrades the database schema if required"""
         SHOULD_WE = False
         existing_records = []
         con = sqlite3.connect(self.dbpath)
@@ -320,7 +318,7 @@ class KeyStore:
         creationtime=None,
         subkeys=[],
     ):
-        "Populates the internal database of the store from a keyfile"
+        """Populates the internal database of the store from a keyfile"""
         with open(fullpath, "rb") as fobj:
             cert = fobj.read()
         self._save_key_info_to_db(
@@ -337,7 +335,7 @@ class KeyStore:
         creationtime,
         othervalues,
     ):
-        "Saves all information given to the SQLite3 database"
+        """Saves all information given to the SQLite3 database"""
         etime = str(expirationtime.timestamp()) if expirationtime else ""
         ctime = str(creationtime.timestamp()) if creationtime else ""
         con = sqlite3.connect(self.dbpath)
@@ -521,7 +519,7 @@ class KeyStore:
         """Adds a new user id to the given key, saves on the database. Then returns the modified key object
 
         :param key: The secret key object
-        :param uid: The string value to add the keybobject
+        :param userid: The string value to add the keybobject
         :param password: The password for the secret key
 
         :returns: Key object
@@ -642,7 +640,7 @@ class KeyStore:
     def import_key(self, keypath: str, onplace=False) -> Key:
         """Imports a given key from the given file path.
 
-        :param path: Path to the pgp key file.
+        :param keypath: Path to the pgp key file.
         :param onplace: Default value is False, if True means the keyfile is in the right directory
         """
         (
@@ -666,7 +664,7 @@ class KeyStore:
         return self.get_key(fingerprint)
 
     def details(self):
-        "Returns tuple of (number_of_public, number_of_secret_keys)"
+        """Returns tuple of (number_of_public, number_of_secret_keys)"""
         public = 0
         secret = 0
         con = sqlite3.connect(self.dbpath)
@@ -737,7 +735,7 @@ class KeyStore:
             return result
 
     def _internal_build_key_list(self, rows, cursor):
-        "Internal method to create a list of keys from db result rows"
+        """Internal method to create a list of keys from db result rows"""
         finalresult = []
         sql_for_certs = "SELECT value, datatype FROM uidcertlist WHERE cert_id=?"
         for result in rows:
@@ -860,7 +858,7 @@ class KeyStore:
         raise KeyNotFoundError(f"The key(s) not found in the keystore.")
 
     def _get_one_row_from_table(self, cursor, tablename, value_id):
-        "Internal function to select different uid items"
+        """Internal function to select different uid items"""
         sql = f"SELECT value FROM {tablename} where value_id={value_id}"
         cursor.execute(sql)
         result = cursor.fetchone()
@@ -870,7 +868,7 @@ class KeyStore:
             return ""
 
     def get_all_keys(self) -> List[Key]:
-        "Returns a list of keys"
+        """Returns a list of keys"""
         return self._internal_get_key(allkeys=True)
 
     def get_keys(self, qvalue: str, qtype: str = "email") -> List[Key]:
@@ -1016,7 +1014,7 @@ class KeyStore:
             cursor.execute("DELETE FROM keys where fingerprint=?", (fingerprint,))
 
     def _find_keys(self, keys: List[Union[str, Key]]):
-        "To find all the key paths"
+        """To find all the key paths"""
         final_keys = []
         for k in keys:
             if isinstance(k, str):  # Means fingerprint
