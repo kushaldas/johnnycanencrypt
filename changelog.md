@@ -2,6 +2,10 @@
 
 ## [unreleased]
 
+### Fixed
+
+- Fixed #132 available_subkeys() method.
+
 
 ## [0.13.0] - 2023-01-21
 

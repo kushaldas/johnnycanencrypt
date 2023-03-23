@@ -254,7 +254,9 @@ def test_ks_encrypt_decrypt_file(tmp_path):
     public_key = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
     assert ks.encrypt_file(public_key, inputfile.as_posix(), output.as_posix())
     secret_key = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
-    ks.decrypt_file(secret_key, output.as_posix(), decrypted_output.as_posix(), password="redhat")
+    ks.decrypt_file(
+        secret_key, output.as_posix(), decrypted_output.as_posix(), password="redhat"
+    )
     verify_files(inputfile, decrypted_output)
 
 
@@ -270,7 +272,9 @@ def test_ks_encrypt_decrypt_filehandler(tmp_path):
         assert ks.encrypt_file(public_key, fobj, output.as_posix())
     secret_key = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
     with open(output, "rb") as fobj:
-        ks.decrypt_file(secret_key, fobj, decrypted_output.as_posix(), password="redhat")
+        ks.decrypt_file(
+            secret_key, fobj, decrypted_output.as_posix(), password="redhat"
+        )
     verify_files(inputfile, decrypted_output)
 
 
@@ -285,10 +289,14 @@ def test_ks_encrypt_decrypt_file_multiple_recipients(tmp_path):
     key2 = ks.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
     encrypted = ks.encrypt_file([key1, key2], inputfile.as_posix(), output.as_posix())
     secret_key1 = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
-    ks.decrypt_file(secret_key1, output.as_posix(), decrypted_output.as_posix(), password="redhat")
+    ks.decrypt_file(
+        secret_key1, output.as_posix(), decrypted_output.as_posix(), password="redhat"
+    )
     verify_files(inputfile, decrypted_output)
     secret_key2 = ks.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
-    ks.decrypt_file(secret_key2, output.as_posix(), decrypted_output.as_posix(), password="redhat")
+    ks.decrypt_file(
+        secret_key2, output.as_posix(), decrypted_output.as_posix(), password="redhat"
+    )
     verify_files(inputfile, decrypted_output)
 
 
@@ -314,9 +322,13 @@ def test_ks_sign_verify_file_detached(tmp_path):
     ks = jce.KeyStore(BASE_TESTSDIR / "files/store")
     key = "F51C310E02DC1B7771E176D8A1C5C364EB5B9A20"
     file_to_be_signed = tmp_path / "text.txt"
-    signed = ks.sign_file_detached(key, file_to_be_signed.as_posix(), "redhat", write=True)
+    signed = ks.sign_file_detached(
+        key, file_to_be_signed.as_posix(), "redhat", write=True
+    )
     assert signed.startswith("-----BEGIN PGP SIGNATURE-----\n")
-    assert ks.verify_file_detached(key, file_to_be_signed.as_posix(), file_to_be_signed.as_posix() + ".asc")
+    assert ks.verify_file_detached(
+        key, file_to_be_signed.as_posix(), file_to_be_signed.as_posix() + ".asc"
+    )
 
 
 def test_ks_userid_signing(tmp_path):
@@ -378,7 +390,13 @@ def test_ks_creation_expiration_time(tmp_path):
     # Now both creation and expirationtime for primary key
     ctime = datetime.datetime(2008, 10, 10, 20, 53, 47)
     etime = datetime.datetime(2025, 12, 15, 20, 53, 47)
-    newk = ks.create_key("redhat", "Another test key", creation=ctime, expiration=etime, can_primary_expire=True)
+    newk = ks.create_key(
+        "redhat",
+        "Another test key",
+        creation=ctime,
+        expiration=etime,
+        can_primary_expire=True,
+    )
     assert ctime.date() == newk.creationtime.date()
     assert etime.date() == newk.expirationtime.date()
 
@@ -422,6 +440,7 @@ def test_ks_creation_expiration_time(tmp_path):
     assert etime.date() == newk.expirationtime.date()
     for skeyid, subkey in newk.othervalues["subkeys"].items():
         assert subkey[1].date() == etime.date()
+
 
 def test_get_all_keys():
     ks = jce.KeyStore(BASE_TESTSDIR / "files/store")
@@ -546,7 +565,7 @@ def test_key_with_multiple_uids(tmp_path):
 
 def test_ks_upgrade(tmp_path):
     "tests db upgrade from an old db"
-    shutil.copy(BASE_TESTSDIR / "files/store/oldjce.db",  tmp_path / "jce.db")
+    shutil.copy(BASE_TESTSDIR / "files/store/oldjce.db", tmp_path / "jce.db")
 
     ks = jce.KeyStore(tmp_path.as_posix())
     con = sqlite3.connect(ks.dbpath)
@@ -564,9 +583,7 @@ def test_ks_upgrade(tmp_path):
 def test_ks_upgrade_failure(tmp_path):
     "tests db upgrade failure from an old db because of existing file"
     shutil.copy(BASE_TESTSDIR / "files/store/oldjce.db", tmp_path / "jce.db")
-    shutil.copy(
-        BASE_TESTSDIR / "files/store/oldjce.db", tmp_path / "jce_upgrade.db"
-    )
+    shutil.copy(BASE_TESTSDIR / "files/store/oldjce.db", tmp_path / "jce_upgrade.db")
     with pytest.raises(RuntimeError):
         ks = jce.KeyStore(tmp_path.as_posix())
 
@@ -574,7 +591,8 @@ def test_ks_upgrade_failure(tmp_path):
 def test_get_encrypted_for():
     ks = jce.KeyStore(BASE_TESTSDIR / "files/store/")
     keyids = rjce.file_encrypted_for(
-        (BASE_TESTSDIR / "files/double_recipient.asc").as_posix())
+        (BASE_TESTSDIR / "files/double_recipient.asc").as_posix()
+    )
     assert keyids == ["1CF980B8E69E112A", "5A7A1560D46ED4F6"]
     with open(BASE_TESTSDIR / "files/double_recipient.asc", "rb") as fobj:
         data = fobj.read()
@@ -582,8 +600,31 @@ def test_get_encrypted_for():
     assert keyids == ["1CF980B8E69E112A", "5A7A1560D46ED4F6"]
 
 
+def test_available_subkeys_for_no_expiration():
+    """Verifies that we export only the public key part from any key"""
+    ks = jce.KeyStore(BASE_TESTSDIR / "files/store")
+    fingerprint = "F51C310E02DC1B7771E176D8A1C5C364EB5B9A20"
+    key = ks.get_key(fingerprint)
+    e, s, a = key.available_subkeys()
+    assert e == True
+    assert s == True
+    assert a == False
+
+
+def test_available_subkeys_for_expired(tmp_path):
+    """Verifies that we export only the public key part from any key"""
+    ks = jce.KeyStore(tmp_path.as_posix())
+    ks.import_key((BASE_TESTSDIR / "files/store/pgp_keys.asc").as_posix())
+    key = ks.get_key("A85FF376759C994A8A1168D8D8219C8C43F6C5E1")
+    e, s, a = key.available_subkeys()
+    assert e == False
+    assert s == False
+    assert a == False
+
+
 @vcr.use_cassette(
-    (BASE_TESTSDIR / "files/test_fetch_key_by_fingerprint.yml").as_posix())
+    (BASE_TESTSDIR / "files/test_fetch_key_by_fingerprint.yml").as_posix()
+)
 def test_fetch_key_by_fingerprint(tmp_path):
     ks = jce.KeyStore(tmp_path.as_posix())
     key = ks.fetch_key_by_fingerprint("EF6E286DDA85EA2A4BA7DE684E2C6E8793298290")
@@ -594,7 +635,8 @@ def test_fetch_key_by_fingerprint(tmp_path):
 
 
 @vcr.use_cassette(
-    (BASE_TESTSDIR / "files/test_fetch_nonexistingkey_by_fingerprint.yml").as_posix())
+    (BASE_TESTSDIR / "files/test_fetch_nonexistingkey_by_fingerprint.yml").as_posix()
+)
 def test_fetch_nonexistingkey_by_fingerprint(tmp_path):
     ks = jce.KeyStore(tmp_path.as_posix())
     with pytest.raises(jce.KeyNotFoundError):
@@ -612,7 +654,8 @@ def test_fetch_key_by_email(tmp_path):
 
 
 @vcr.use_cassette(
-    (BASE_TESTSDIR / "files/test_fetch_nonexistingkey_by_email.yml").as_posix())
+    (BASE_TESTSDIR / "files/test_fetch_nonexistingkey_by_email.yml").as_posix()
+)
 def test_fetch_nonexistingkey_by_email(tmp_path):
     ks = jce.KeyStore(tmp_path.as_posix())
     with pytest.raises(jce.KeyNotFoundError):
