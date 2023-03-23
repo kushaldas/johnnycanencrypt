@@ -114,6 +114,18 @@ class Key:
         for subkey in subkeys_sorted:
             if subkey["revoked"]:
                 continue
+            # When we don't have an expiration date/time.
+            if not subkey["expiration"]:
+                if subkey["keytype"] == "encryption":
+                    got_enc = True
+                    continue
+                if subkey["keytype"] == "signing":
+                    got_sign = True
+                    continue
+                if subkey["keytype"] == "authentication":
+                    got_auth = True
+                    continue
+            # When we have an expiration date/time.
             if (
                 subkey["expiration"] is not None
                 and subkey["expiration"].date() > datetime.now().date()
