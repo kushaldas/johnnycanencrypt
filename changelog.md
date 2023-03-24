@@ -2,10 +2,15 @@
 
 ## [unreleased]
 
+## [0.13.1] - 2023-03-24
+
 ### Fixed
 
 - Fixed #132 available_subkeys() method.
 
+### Added
+
+- Updated PyO3 dependency to 0.18.1.
 
 ## [0.13.0] - 2023-01-21
 

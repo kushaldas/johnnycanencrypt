@@ -498,7 +498,10 @@ pub fn decrypt_filehandler_on_card(
     let p = P::new();
 
     let filedata = fh.call_method(_py, "read", (), None)?;
-    let pbytes: &PyBytes = filedata.cast_as(_py).expect("Excepted bytes");
+    let pbytes: &PyBytes = filedata
+        .as_ref(_py)
+        .downcast::<PyBytes>()
+        .expect("Excepted bytes");
     let data: Vec<u8> = Vec::from(pbytes.as_bytes());
 
     let reader = std::io::BufReader::new(&data[..]);
@@ -2472,7 +2475,10 @@ fn encrypt_filehandler_to_file(
     armor: Option<bool>,
 ) -> Result<bool> {
     let data = fh.call_method(_py, "read", (), None)?;
-    let pbytes: &PyBytes = data.cast_as(_py).expect("Excepted bytes");
+    let pbytes: &PyBytes = data
+        .as_ref(_py)
+        .downcast::<PyBytes>()
+        .expect("Excepted bytes");
     let filedata: Vec<u8> = Vec::from(pbytes.as_bytes());
     encrypt_bytes_to_file(publickeys, filedata, output, armor)
 }
@@ -2891,7 +2897,10 @@ impl Johnny {
         let p = P::new();
 
         let filedata = fh.call_method(_py, "read", (), None)?;
-        let pbytes: &PyBytes = filedata.cast_as(_py).expect("Excepted bytes");
+        let pbytes: &PyBytes = filedata
+            .as_ref(_py)
+            .downcast::<PyBytes>()
+            .expect("Excepted bytes");
         let data: Vec<u8> = Vec::from(pbytes.as_bytes());
 
         let reader = std::io::BufReader::new(&data[..]);
