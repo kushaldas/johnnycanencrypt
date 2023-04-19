@@ -2,6 +2,9 @@
 
 ## [unreleased]
 
+
+- Fixes #135, adds `get_key_cipher_details` in rjce.
+
 ## [0.13.1] - 2023-03-24
 
 ### Fixed

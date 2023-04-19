@@ -45,6 +45,13 @@ def test_create_primary_key_with_encryption(tmp_path):
     )
     assert newkey.can_primary_sign == True
 
+def test_key_cipher_details():
+    saved = [('F4F388BBB194925AE301F844C52B42177857DD79', 'EdDSA', 256), ('102EBD23BD5D2D340FBBDE0ADFD1C55926648D2F', 'EdDSA', 256), ('85B67F139D835FA56BA703DB5A7A1560D46ED4F6', 'ECDH', 256)]
+    ks = jce.KeyStore(BASE_TESTSDIR / "files/store")
+    key = ks.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
+    result = rjce.get_key_cipher_details(key.keyvalue)
+    assert saved == result
+
 
 def test_keystore_lifecycle(tmp_path):
     # Now create a fresh db

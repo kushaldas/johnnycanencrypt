@@ -34,6 +34,15 @@ In most cases you don't have to use these, but if you have a reason, feel free t
 
         This function disables OTP application in the Yubikey.
 
+.. function:: get_key_cipher_details(certdata: bytes) -> List[tuple[str, str, int]]
+
+        This function takes the key data as bytes, and returns a list of tuples containing (fingerprint, public key algorithm, bits size).
+
+        ::
+
+            >>> rjce.get_key_cipher_details(key.keyvalue)
+            [('F4F388BBB194925AE301F844C52B42177857DD79', 'EdDSA', 256), ('102EBD23BD5D2D340FBBDE0ADFD1C55926648D2F', 'EdDSA', 256), ('85B67F139D835FA56BA703DB5A7A1560D46ED4F6', 'ECDH', 256)]
+
 
 
 .. class:: Johnny(filepath)
