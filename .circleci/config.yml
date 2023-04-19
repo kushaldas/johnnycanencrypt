@@ -38,7 +38,7 @@ common-steps:
       name: Install Rustup nightly
       command: |
         curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > install.sh
-        sh install.sh -y --default-toolchain nightly --component cargo
+        sh install.sh -y --default-toolchain stable --component cargo
 
   - &build_jce
     run:
