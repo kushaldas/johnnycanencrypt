@@ -10,6 +10,7 @@ use pyo3::types::PyBytes;
 use pyo3::types::PyTuple;
 use pyo3::types::{PyDateTime, PyDict, PyList};
 use pyo3::wrap_pyfunction;
+use pyo3::PyDowncastError;
 
 use std::collections::HashMap;
 use std::fmt;
@@ -131,6 +132,39 @@ impl JceError {
     fn new(msg: String) -> Self {
         JceError { msg }
     }
+}
+
+/// Finds all keys in a cert and creates a list of fingerprint, algo, bitsize
+#[pyfunction]
+#[pyo3(text_signature = "(certdata)")]
+pub fn get_key_cipher_details(py: Python, certdata: Vec<u8>) -> Result<PyObject> {
+    let cert = openpgp::Cert::from_bytes(&certdata)?;
+    let list = PyList::empty(py);
+
+    let p = &P::new();
+    for key in cert.with_policy(p, None)?.keys() {
+        let fp = key.fingerprint().to_hex();
+        let key_algo = key.pk_algo();
+        let bits = key.mpis().bits();
+        let algo = key_algo.to_string().clone();
+        let key_tuple = (fp.clone(), algo, bits.clone()).to_object(py);
+
+        let key_tuple: std::result::Result<&PyTuple, PyDowncastError> =
+            key_tuple.downcast::<PyTuple>(py);
+
+        let kt = match key_tuple {
+            Ok(value) => value,
+            Err(msg) => {
+                return Err(JceError::new(format!(
+                    "Can not parse subkey for cipher details {}",
+                    msg
+                )))
+            }
+        };
+        list.append(kt.clone())?;
+    }
+
+    Ok(list.into())
 }
 
 /// Returns updated key with new expiration time for subkeys
@@ -3164,6 +3198,7 @@ fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(set_keyslot_touch_policy))?;
     m.add_wrapped(wrap_pyfunction!(enable_otp_usb))?;
     m.add_wrapped(wrap_pyfunction!(disable_otp_usb))?;
+    m.add_wrapped(wrap_pyfunction!(get_key_cipher_details))?;
     m.add("CryptoError", _py.get_type::<CryptoError>())?;
     m.add("SameKeyError", _py.get_type::<SameKeyError>())?;
     m.add_class::<Johnny>()?;

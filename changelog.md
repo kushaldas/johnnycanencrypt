@@ -2,6 +2,13 @@
 
 ## [unreleased]
 
+
+## [0.14.0] - 2023-04-19
+
+- Fixes #135, adds `get_key_cipher_details` in rjce.
+- Updates Rust dependencies.
+- CI uses stable Rust toolchain.
+
 ## [0.13.1] - 2023-03-24
 
 ### Fixed
