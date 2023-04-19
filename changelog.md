@@ -4,6 +4,7 @@
 
 
 - Fixes #135, adds `get_key_cipher_details` in rjce.
+- Updates Rust dependencies.
 
 ## [0.13.1] - 2023-03-24
 
