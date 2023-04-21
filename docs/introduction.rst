@@ -79,21 +79,28 @@ In this example we will download the Tor Browser 10.0, and the signature and the
 
 ::
 
-        wget https://www.torproject.org/dist/torbrowser/10.0/tor-browser-linux64-10.0_en-US.tar.xz
-        wget https://www.torproject.org/dist/torbrowser/10.0/tor-browser-linux64-10.0_en-US.tar.xz.asc
+        curl -s -O https://dist.torproject.org/torbrowser/12.0.5/tor-browser-linux64-12.0.5_ALL.tar.xz
+        curl -s -O https://dist.torproject.org/torbrowser/12.0.5/tor-browser-linux64-12.0.5_ALL.tar.xz.asc
         KEYURL=https://openpgpkey.torproject.org/.well-known/openpgpkey/torproject.org/hu/kounek7zrdx745qydx6p59t9mqjpuhdf
-        wget $KEYURL -O kounek7zrdx745qydx6p59t9mqjpuhdf.pub
+        curl -s -o kounek7zrdx745qydx6p59t9mqjpuhdf.pub $KEYURL
 
 
 Now let us import the key and verify.
 
 ::
 
-        >>> torkey = ks.import_key("./kounek7zrdx745qydx6p59t9mqjpuhdf.pub")
-        >>> torkey
-        <Key fingerprint=EF6E286DDA85EA2A4BA7DE684E2C6E8793298290 type=PUBLIC>
-        >>> filepath="./tor-browser-linux64-10.0_en-US.tar.xz"
-        >>> signaturepath="./tor-browser-linux64-10.0_en-US.tar.xz.asc"
-        >>> ks.verify_file_detached(torkey, filepath, signaturepath)
-        True
+    import tempfile
+    import johnnycanencrypt as jce
+
+
+    filename = "tor-browser-linux64-12.0.5_ALL.tar.xz"
+    signame = "tor-browser-linux64-12.0.5_ALL.tar.xz.asc"
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        ks = jce.KeyStore(tmpdir)
+        torkey = ks.import_key("kounek7zrdx745qydx6p59t9mqjpuhdf.pub")
+        if ks.verify_file_detached(torkey, filename, signame):
+            print("Verified.")
+        else:
+            print("Verification failed.")
 
