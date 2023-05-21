@@ -1,6 +1,6 @@
 [package]
 name = "johnnycanencrypt"
-version = "0.14.0"
+version = "0.14.1"
 authors = ["Kushal Das <mail@kushaldas.in>"]
 edition = "2018"
 description = "Python module for OpenPGP."

@@ -55,9 +55,9 @@ checksum = "3441f0f7b02788e948e47f457ca01f1d7e6d92c693bc132c22b087d3141c03ff"
 
 [[package]]
 name = "base64"
-version = "0.13.1"
+version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e1b586273c5702936fe7b7d6896644d8be71e6314cfe09d3167c95f712589e8"
+checksum = "a4a4ddaa51a5bc52a6948f74c06d20aaaddb71924eab79b8c97a8c556e942d6a"
 
 [[package]]
 name = "bindgen"
@@ -123,9 +123,9 @@ dependencies = [
 
 [[package]]
 name = "buffered-reader"
-version = "1.1.4"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0dd286184b392a1ce6b3deecd073f0330df194bf935b87f852147d50d0d2d18"
+checksum = "66d3bea5bcc3ecc38fe5388e6bc35e6fe7bd665eb3ae9a44283e15b91ad3867d"
 dependencies = [
  "bzip2",
  "flate2",
@@ -568,7 +568,7 @@ dependencies = [
 
 [[package]]
 name = "johnnycanencrypt"
-version = "0.13.1"
+version = "0.14.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1078,12 +1078,12 @@ checksum = "1792db035ce95be60c3f8853017b3999209281c24e2ba5bc8e59bf97a0c590c1"
 
 [[package]]
 name = "sequoia-openpgp"
-version = "1.14.0"
+version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5f5aa2f8ea2ab9690c2839a16f7bf335f404fa97fad627c8e828b302b1a5c18"
+checksum = "30efff3f9930e85b4284e76bbdad741f36412dfb1e370efd0de5866ae1a11dfc"
 dependencies = [
  "anyhow",
- "base64 0.13.1",
+ "base64 0.21.0",
  "buffered-reader",
  "bzip2",
  "chrono",
@@ -1113,7 +1113,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c66558a774ef5044cb4a834db5f5c7f95e139d2341d7f502fe6034afa7082461"
 dependencies = [
  "digest 0.9.0",
- "generic-array 0.14.7",
+ "generic-array 0.12.4",
 ]
 
 [[package]]
