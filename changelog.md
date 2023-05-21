@@ -2,6 +2,10 @@
 
 ## [unreleased]
 
+## [0.14.1] - 2023-05-21
+
+- Updates sequoia-openpgp to 1.16.0
+- Updates buffered-reader to 1.2.0
 
 ## [0.14.0] - 2023-04-19
 
