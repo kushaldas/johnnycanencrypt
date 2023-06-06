@@ -32,5 +32,5 @@ sshkeys = "0.3.2"
 regex = "1"
  
 [dependencies.pyo3]
-version = "0.18.1"
+version = "0.19.0"
 
