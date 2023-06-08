@@ -30,6 +30,7 @@ tempfile = "3.0.0"
 talktosc = "0.2"
 sshkeys = "0.3.2"
 regex = "1"
+time = "0.2"
  
 [dependencies.pyo3]
 version = "0.19.0"
