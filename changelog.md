@@ -2,6 +2,10 @@
 
 ## [unreleased]
 
+### Fixed
+
+- Fixes #140, updates dependencies.
+
 ## [0.14.1] - 2023-05-21
 
 - Updates sequoia-openpgp to 1.16.0
