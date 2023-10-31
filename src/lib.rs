@@ -42,7 +42,7 @@ use crate::openpgp::packet::signature::SignatureBuilder;
 use crate::openpgp::parse::{PacketParser, PacketParserResult, Parse};
 use crate::openpgp::policy::Policy;
 use crate::openpgp::policy::StandardPolicy as P;
-use crate::openpgp::serialize::stream::{Armorer, Encryptor, LiteralWriter, Message, Signer};
+use crate::openpgp::serialize::stream::{Armorer, Encryptor2, LiteralWriter, Message, Signer};
 use crate::openpgp::serialize::Marshal;
 use crate::openpgp::serialize::MarshalInto;
 use crate::openpgp::types::KeyFlags;
@@ -2206,22 +2206,22 @@ fn internal_parse_cert(
         //println!("  {}", String::from_utf8_lossy(ua.value()));
         pd.set_item("value", String::from_utf8_lossy(ua.value()))?;
         // If we have a name part in the UID
-        if let Ok(Some(name)) = ua.name() {
+        if let Ok(Some(name)) = ua.name2() {
             pd.set_item("name", name)?;
         }
 
         // If we have a comment part in the UID
-        if let Ok(Some(comment)) = ua.comment() {
+        if let Ok(Some(comment)) = ua.comment2() {
             pd.set_item("comment", comment)?;
         }
 
         // If we have a email part in the UID
-        if let Ok(Some(email)) = ua.email() {
+        if let Ok(Some(email)) = ua.email2() {
             pd.set_item("email", email)?;
         }
 
         // If we have a URI part in the UID
-        if let Ok(Some(uri)) = ua.uri() {
+        if let Ok(Some(uri)) = ua.uri2() {
             pd.set_item("uri", uri)?;
         }
         let mut revoked = false;
@@ -2551,7 +2551,7 @@ fn encrypt_bytes_to_file(
             let message = Message::new(&mut sink);
 
             // We want to encrypt a literal data packet.
-            let encryptor = match Encryptor::for_recipients(message, recipients).build() {
+            let encryptor = match Encryptor2::for_recipients(message, recipients).build() {
                 Ok(value) => value,
                 Err(_) => {
                     return Err(JceError::new("Can not encrypt.".to_string()));
@@ -2576,7 +2576,7 @@ fn encrypt_bytes_to_file(
             let message = Message::new(&mut outfile);
 
             // We want to encrypt a literal data packet.
-            let encryptor = Encryptor::for_recipients(message, recipients)
+            let encryptor = Encryptor2::for_recipients(message, recipients)
                 .build()
                 .expect("Failed to create encryptor");
 
@@ -2633,7 +2633,7 @@ fn encrypt_file_internal(
             let message = Message::new(&mut sink);
 
             // We want to encrypt a literal data packet.
-            let encryptor = Encryptor::for_recipients(message, recipients)
+            let encryptor = Encryptor2::for_recipients(message, recipients)
                 .build()
                 .expect("Failed to create encryptor");
 
@@ -2656,7 +2656,7 @@ fn encrypt_file_internal(
             let message = Message::new(&mut outfile);
 
             // We want to encrypt a literal data packet.
-            let encryptor = Encryptor::for_recipients(message, recipients)
+            let encryptor = Encryptor2::for_recipients(message, recipients)
                 .build()
                 .expect("Failed to create encryptor");
 
@@ -2712,7 +2712,7 @@ fn encrypt_bytes_to_bytes(
         _ => Message::new(&mut result),
     };
     // We want to encrypt a literal data packet.
-    let encryptor = Encryptor::for_recipients(message, recipients)
+    let encryptor = Encryptor2::for_recipients(message, recipients)
         .build()
         .expect("Failed to create encryptor");
 
@@ -2781,7 +2781,7 @@ impl Johnny {
             _ => Message::new(&mut result),
         };
         // We want to encrypt a literal data packet.
-        let encryptor = Encryptor::for_recipients(message, recipients)
+        let encryptor = Encryptor2::for_recipients(message, recipients)
             .build()
             .expect("Failed to create encryptor");
 
@@ -2857,7 +2857,7 @@ impl Johnny {
                 let message = Message::new(&mut sink);
 
                 // We want to encrypt a literal data packet.
-                let encryptor = Encryptor::for_recipients(message, recipients)
+                let encryptor = Encryptor2::for_recipients(message, recipients)
                     .build()
                     .expect("Failed to create encryptor");
 
@@ -2880,7 +2880,7 @@ impl Johnny {
                 let message = Message::new(&mut outfile);
 
                 // We want to encrypt a literal data packet.
-                let encryptor = Encryptor::for_recipients(message, recipients)
+                let encryptor = Encryptor2::for_recipients(message, recipients)
                     .build()
                     .expect("Failed to create encryptor");
 

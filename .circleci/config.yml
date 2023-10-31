@@ -114,6 +114,18 @@ jobs:
       - *test_jce
       - *typelint_jce
 
+  build-bullseye-3.12:
+    docker:
+      - image: cimg/python:3.12.0
+    steps:
+      - checkout
+      - *install_system_packages_ubuntu22
+      - *install_rustup
+      - *install_dependencies
+      - *build_jce
+      - *test_jce
+      - *typelint_jce
+
 
 
 
@@ -123,6 +135,7 @@ workflows:
     jobs:
     - build-bullseye-3.10
     - build-bullseye-3.11
+    - build-bullseye-3.12
     - build-buster-3.9
     - build-buster-3.8
 

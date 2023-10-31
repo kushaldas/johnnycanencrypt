@@ -451,7 +451,7 @@ impl<'a> crypto::Decryptor for KeyPair<'a> {
     fn decrypt(
         &mut self,
         ciphertext: &crypto::mpi::Ciphertext,
-        _plaintext_len: Option<usize>,
+        plaintext_len: Option<usize>,
     ) -> openpgp::Result<crypto::SessionKey> {
         match (ciphertext, self.public.mpis().clone()) {
             (
@@ -499,10 +499,11 @@ impl<'a> crypto::Decryptor for KeyPair<'a> {
                 // Send this for decryption on the card
                 let dec = decrypt_the_secret_in_card(c, self.pin.clone())?;
                 let S: openpgp::crypto::mem::Protected = dec.into();
-                Ok(openpgp::crypto::ecdh::decrypt_unwrap(
+                Ok(openpgp::crypto::ecdh::decrypt_unwrap2(
                     self.public,
                     &S,
                     ciphertext,
+                    plaintext_len,
                 )?)
             }
 
