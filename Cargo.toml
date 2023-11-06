@@ -31,7 +31,10 @@ talktosc = "0.2"
 sshkeys = "0.3.2"
 regex = "1"
 time = "0.2"
- 
+
 [dependencies.pyo3]
 version = "0.20.0"
 
+
+[target.'cfg(windows)'.dependencies]
+sequoia-openpgp = { default-features = false, features = ["crypto-cng"] }
