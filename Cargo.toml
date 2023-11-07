@@ -22,7 +22,6 @@ default = ["pyo3/extension-module"]
 
 
 [dependencies]
-sequoia-openpgp = { version = "1.0.0", default-features = false }
 anyhow = "1.0.62"
 chrono = "0.4.22"
 tempfile = "3.0.0"
@@ -33,11 +32,11 @@ regex = "1"
 time = "0.2"
 
 [target.'cfg(not(target_os = "windows"))'.dependencies]
-sequoia-openpgp = { default-features = false, features = ["crypto-nettle", "__implicit-crypto-backend-for-tests", "compression"] }
+sequoia-openpgp = { default-features = false, features = ["crypto-nettle", "compression"] }
 
 
 [target.'cfg(target_os = "windows")'.dependencies]
-sequoia-openpgp = { default-features = false, features = ["crypto-cng", "__implicit-crypto-backend-for-tests", "compression"] }
+sequoia-openpgp = { default-features = false, features = ["crypto-cng", "compression"] }
 
 
 

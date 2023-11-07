@@ -31,9 +31,6 @@ jobs:
                 python -m pip install -U pip setuptools
                 python -m pip install -r requirements-dev.txt
 
-            - name: Cargo tree check
-              run: cargo tree
-
             - name: Build wheel
               shell: bash
               env:
