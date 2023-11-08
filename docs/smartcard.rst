@@ -18,6 +18,42 @@ The part of the code is written in Rust, so you will have to import the internal
 Smartcard API
 --------------
 
+.. class:: KeySlot
+
+    These are the available KeySlots in a card.
+
+   .. py:attribute:: Signature
+   .. py:attribute:: Encryption
+   .. py:attribute:: Authentication
+   .. py:attribute:: Attestation
+
+
+
+.. class:: TouchMode
+
+    The different touch mode for a key.
+
+   .. py:attribute:: Off
+   .. py:attribute:: On
+   .. py:attribute:: Fixed
+   .. py:attribute:: Cached
+   .. py:attribute:: CachedFixed
+
+
+
+.. function:: set_keyslot_touch_policy(adminpin: bytes, slot: KeySlot, mode: TouchMode) -> bool:
+
+        Sets the given `TouchMode` to the slot. Returns False if it is already set as Fixed.
+
+.. important:: Remember to verify the available touch modes via :func:`get_card_touch_policies` first.
+
+.. function:: get_keyslot_touch_policy(slot: KeySlot) -> TouchMode:
+
+        Returns the available `TouchMode` of the given slot in the smartcard.
+
+.. function:: get_card_version() -> tuple[int, int, int]:
+
+        Returns a tuple containing the Yubikey firmware version. Example: (5,2,7) or (4,3,1).
 
 .. function:: reset_yubikey() -> bool:
 

@@ -20,6 +20,11 @@ common-steps:
       name: Install system dependencies
       command: sudo apt update && sudo apt install -y python3-dev libnettle8 nettle-dev libhogweed6 python3-pip python3-venv clang libpcsclite-dev libpcsclite1 libclang-9-dev
 
+  - &install_system_packages_ubuntu22
+      run:
+        name: Install system dependencies
+        command: sudo apt update && sudo apt install -y python3-dev libnettle8 nettle-dev libhogweed6 python3-pip python3-venv clang libpcsclite-dev libpcsclite1 libclang-dev
+
 
 
   - &install_dependencies
@@ -33,7 +38,7 @@ common-steps:
       name: Install Rustup nightly
       command: |
         curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > install.sh
-        sh install.sh -y --default-toolchain nightly --component cargo
+        sh install.sh -y --default-toolchain stable --component cargo
 
   - &build_jce
     run:
@@ -97,6 +102,31 @@ jobs:
       - *test_jce
       - *typelint_jce
 
+  build-bullseye-3.11:
+    docker:
+      - image: cimg/python:3.11.0
+    steps:
+      - checkout
+      - *install_system_packages_ubuntu22
+      - *install_rustup
+      - *install_dependencies
+      - *build_jce
+      - *test_jce
+      - *typelint_jce
+
+  build-bullseye-3.12:
+    docker:
+      - image: cimg/python:3.12.0
+    steps:
+      - checkout
+      - *install_system_packages_ubuntu22
+      - *install_rustup
+      - *install_dependencies
+      - *build_jce
+      - *test_jce
+      - *typelint_jce
+
+
 
 
 workflows:
@@ -104,6 +134,8 @@ workflows:
   johnny_can_encrypt_ci:
     jobs:
     - build-bullseye-3.10
+    - build-bullseye-3.11
+    - build-bullseye-3.12
     - build-buster-3.9
     - build-buster-3.8
 

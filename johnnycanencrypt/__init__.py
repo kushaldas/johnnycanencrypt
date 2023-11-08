@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: © 2020 Kushal Das <mail@kushaldas.in>
+# SPDX-License-Identifier: LGPL-3.0-or-later
+
 import os
 import shutil
 import sqlite3
@@ -23,6 +26,7 @@ from .johnnycanencrypt import (
     merge_keys,
     parse_cert_bytes,
     parse_cert_file,
+    TouchMode,
 )
 
 import johnnycanencrypt.johnnycanencrypt as rjce
@@ -110,6 +114,18 @@ class Key:
         for subkey in subkeys_sorted:
             if subkey["revoked"]:
                 continue
+            # When we don't have an expiration date/time.
+            if not subkey["expiration"]:
+                if subkey["keytype"] == "encryption":
+                    got_enc = True
+                    continue
+                if subkey["keytype"] == "signing":
+                    got_sign = True
+                    continue
+                if subkey["keytype"] == "authentication":
+                    got_auth = True
+                    continue
+            # When we have an expiration date/time.
             if (
                 subkey["expiration"] is not None
                 and subkey["expiration"].date() > datetime.now().date()
@@ -150,6 +166,9 @@ class KeyStore:
             # Now we have db already
             # verify if it has the same database schema
             self.upgrade_if_required()
+
+    def __str__(self) -> str:
+        return f"<KeyStore dbpath={self.dbpath}>"
 
     def upgrade_if_required(self):
         "Upgrades the database schema if required"
@@ -267,10 +286,15 @@ class KeyStore:
         if isinstance(otherkey, str):  # Means we have a fingerprint
             other_k = self.get_key(otherkey)
         else:
-            other_k  = otherkey
+            other_k = otherkey
 
         cert = rjce.certify_key(
-            k.keyvalue, other_k.keyvalue, sig_type.value, uids, password, oncard
+            k.keyvalue,
+            other_k.keyvalue,
+            sig_type.value,
+            uids,
+            password.encode("utf-8"),
+            oncard,
         )
         # Now if the otherkey is secret, then merge this new public key into the secret key
         if other_k.keytype == KeyType.SECRET:
@@ -279,7 +303,7 @@ class KeyStore:
         self.delete_key(otherkey)
         # Now add back the new updated key
         (
-            uids,
+            nuids,
             fingerprint,
             keytype,
             expirationtime,
@@ -289,7 +313,7 @@ class KeyStore:
 
         self._save_key_info_to_db(
             cert,
-            uids,
+            nuids,
             fingerprint,
             keytype,
             expirationtime,
@@ -436,12 +460,10 @@ class KeyStore:
         :param other: Either fingerprint as str or `Key` object.
         :returns: boolean result
         """
-        fingerprint = ""
-        if type(other) == str:
-            assert isinstance(other, str)
+        fingerprint: str = ""
+        if isinstance(other, str):
             fingerprint = other
-        elif type(other) == Key:
-            assert isinstance(other, Key)
+        elif isinstance(other, Key):
             fingerprint = other.fingerprint
         try:
             if self.get_key(fingerprint):
@@ -933,6 +955,7 @@ class KeyStore:
         subkeys_expiration=False,
         whichkeys=7,
         can_primary_sign=False,
+        can_primary_expire=False,
     ) -> Key:
         """Returns a public `Key` object after creating a new key in the store
 
@@ -941,9 +964,10 @@ class KeyStore:
         :param ciphersuite: Default Cipher.RSA4k, other values are Cipher.RSA2k, Cipher.Cv25519
         :param creation: datetime.datetime, default datetime.now() (via rust)
         :param expiration: datetime.datetime, default 0 (Never)
-        :param subkeys_expiration: Bool (default False), pass True if you want to set the expiry date to the subkeys instead of master key.
+        :param subkeys_expiration: Bool (default False), pass True if you want to set the expiry date to the subkeys.
         :param whichkeys: Decides which all subkeys to generate, 1 (for encryption), 2 for signing, 4 for authentication. Add the numbers for mixed result.
         :param can_primary_sign: Boolean to indicate if the primary key can do signing
+        :param can_primary_expire: Boolean to indicate if the primary key can expire, default False.
         """
         if creation:
             ctime = creation.timestamp()
@@ -970,6 +994,7 @@ class KeyStore:
             subkeys_expiration,
             whichkeys,
             can_primary_sign,
+            can_primary_expire,
         )
         # Now save the secret key
         key_filename = os.path.join(self.path, f"{fingerprint}.sec")
@@ -986,14 +1011,12 @@ class KeyStore:
 
         :param key: Either str representation of the fingerprint or a Key object
         """
-        if type(key) == str:
-            assert isinstance(key, str)
+        if isinstance(key, str):
             fingerprint = key
-        elif type(key) == Key:
-            assert isinstance(key, Key)
+        elif isinstance(key, Key):
             fingerprint = key.fingerprint
         else:
-            raise TypeError(f"Wrong datatype for {key}")
+            raise TypeError(f"Wrong datatype for {str(key)}")
 
         if not fingerprint in self:
             raise KeyNotFoundError(
@@ -1004,18 +1027,24 @@ class KeyStore:
             cursor = con.cursor()
             cursor.execute("DELETE FROM keys where fingerprint=?", (fingerprint,))
 
-    def _find_keys(self, keys):
+    def _find_keys(self, keys: List[Union[str, Key]]):
         "To find all the key paths"
         final_keys = []
         for k in keys:
-            if type(k) == str:  # Means fingerprint
+            if isinstance(k, str):  # Means fingerprint
                 key = self.get_key(k)
                 final_keys.append(key.keyvalue)
             else:
                 final_keys.append(k.keyvalue)
         return final_keys
 
-    def encrypt(self, keys, data, outputfile="", armor=True):
+    def encrypt(
+        self,
+        keys: Union[List[Union[str, Key]], Union[str, Key]],
+        data: Union[str, bytes],
+        outputfile: Union[str, bytes] = "",
+        armor=True,
+    ):
         """Encrypts the given data with the list of keys and returns the output.
 
         :param keys: List of fingerprints or Key objects
@@ -1023,7 +1052,7 @@ class KeyStore:
         :param outputfile: If provided the output will be wriiten in the location.
         :param armor: Default is True, for armored output.
         """
-        if type(keys) != list:
+        if not isinstance(keys, list):
             finalkeys = [
                 keys,
             ]
@@ -1031,7 +1060,7 @@ class KeyStore:
             finalkeys = keys
         final_key_paths = self._find_keys(finalkeys)
         # Check if we return data
-        if type(data) == str:
+        if isinstance(data, str):
             finaldata = data.encode("utf-8")
         else:
             finaldata = data
@@ -1039,7 +1068,7 @@ class KeyStore:
             return encrypt_bytes_to_bytes(final_key_paths, finaldata, armor)
 
         # For encryption to a file
-        if type(outputfile) == str:
+        if isinstance(outputfile, str):
             encrypted_file = outputfile.encode("utf-8")
         else:
             encrypted_file = outputfile
@@ -1047,14 +1076,14 @@ class KeyStore:
         encrypt_bytes_to_file(final_key_paths, finaldata, encrypted_file, armor)
         return True
 
-    def decrypt(self, key, data, password=""):
+    def decrypt(self, key: Union[str, Key], data, password=""):
         """Decrypts the given bytes and returns plain text bytes.
 
         :param key: Fingerprint or secret Key object
         :param data: Encrypted data in bytes.
         :param password: Password for the secret key
         """
-        if type(key) == str:  # Means we have a fingerprint
+        if isinstance(key, str):  # Means we have a fingerprint
             k = self.get_key(key)
         else:
             k = key
@@ -1095,7 +1124,7 @@ class KeyStore:
             if not os.path.exists(inputfilepath):
                 raise FileNotFoundError(f"{inputfilepath} can not be found.")
 
-        if type(keys) != list:
+        if not isinstance(keys, list):
             finalkeys = [
                 keys,
             ]
@@ -1104,7 +1133,7 @@ class KeyStore:
         final_key_paths = self._find_keys(finalkeys)
 
         # For encryption to a file
-        if type(outputfilepath) == str:
+        if isinstance(outputfilepath, str):
             encrypted_file = outputfilepath.encode("utf-8")
         else:
             encrypted_file = outputfilepath
@@ -1115,7 +1144,9 @@ class KeyStore:
             encrypt_filehandler_to_file(final_key_paths, fh, encrypted_file, armor)
         return True
 
-    def decrypt_file(self, key, encrypted_path, outputfile, password=""):
+    def decrypt_file(
+        self, key: Union[str, Key], encrypted_path, outputfile, password=""
+    ):
         """Decryptes the given file to the output path.
 
         :param key: Fingerprint or secret Key object
@@ -1124,12 +1155,12 @@ class KeyStore:
         :param password: Password for the secret key
         """
         use_filehandler = False
-        if type(key) == str:  # Means we have a fingerprint
+        if isinstance(key, str):  # Means we have a fingerprint
             k = self.get_key(key)
         else:
             k = key
 
-        if type(encrypted_path) == str:
+        if isinstance(encrypted_path, str):
             inputfile = encrypted_path.encode("utf-8")
         elif isinstance(encrypted_path, bytes):
             inputfile = encrypted_path
@@ -1137,7 +1168,7 @@ class KeyStore:
             fh = encrypted_path
             use_filehandler = True
 
-        if type(outputfile) == str:
+        if isinstance(outputfile, str):
             outputpath = outputfile.encode("utf-8")
         else:
             outputpath = outputfile
@@ -1159,7 +1190,7 @@ class KeyStore:
         else:
             return jp.decrypt_filehandler(fh, outputpath, password)
 
-    def sign_detached(self, key, data, password):
+    def sign_detached(self, key: Union[str, Key], data: Union[str, bytes], password):
         """Signs the given data with the key.
 
         :param key: Fingerprint or secret Key object
@@ -1168,12 +1199,12 @@ class KeyStore:
 
         :returns: The signature as string
         """
-        if type(key) == str:  # Means we have a fingerprint
+        if isinstance(key, str):  # Means we have a fingerprint
             k = self.get_key(key)
         else:
             k = key
 
-        if type(data) == str:
+        if isinstance(data, str):
             data = data.encode("utf-8")
 
         if k.keytype == KeyType.PUBLIC and k.oncard is not None:
@@ -1184,7 +1215,9 @@ class KeyStore:
         jp = Johnny(k.keyvalue)
         return jp.sign_bytes_detached(data, password)
 
-    def verify(self, key, data, signature: Optional[str]) -> bool:
+    def verify(
+        self, key: Union[str, Key], data: Union[str, bytes], signature: Optional[str]
+    ) -> bool:
         """Verifies the given data and the signature
 
         :param key: Fingerprint or public Key object
@@ -1193,12 +1226,12 @@ class KeyStore:
 
         :returns: Boolean
         """
-        if type(key) == str:  # Means we have a fingerprint
+        if isinstance(key, str):  # Means we have a fingerprint
             k = self.get_key(key)
         else:
             k = key
 
-        if type(data) == str:
+        if isinstance(data, str):
             data = data.encode("utf-8")
         jp = Johnny(k.keyvalue)
 
@@ -1207,7 +1240,14 @@ class KeyStore:
         else:
             return jp.verify_bytes(data)
 
-    def sign_file(self, key, filepath, outputpath, password, cleartext=False) -> bool:
+    def sign_file(
+        self,
+        key: Union[str, Key],
+        filepath: Union[str, bytes],
+        outputpath: Union[str, bytes],
+        password,
+        cleartext=False,
+    ) -> bool:
         """Signs the given input file with key and saves in the outputpath.
 
         :param key: Fingerprint or secret Key object, public key in case card based operation.
@@ -1219,17 +1259,17 @@ class KeyStore:
         :returns: Boolean result of the signing operation.
         """
         signature = ""
-        if type(key) == str:  # Means we have a fingerprint
+        if isinstance(key, str):  # Means we have a fingerprint
             k = self.get_key(key)
         else:
             k = key
 
-        if type(filepath) == str:
+        if isinstance(filepath, str):
             filepath_in_bytes = filepath.encode("utf-8")
         else:
             filepath_in_bytes = filepath
 
-        if type(outputpath) == str:
+        if isinstance(outputpath, str):
             outputpath_in_bytes = outputpath.encode("utf-8")
         else:
             outputpath_in_bytes = outputpath
@@ -1251,23 +1291,29 @@ class KeyStore:
 
         return result
 
-    def sign_file_detached(self, key, filepath, password, write=False):
+    def sign_file_detached(
+        self,
+        key: Union[str, Key],
+        filepath: Union[str, bytes],
+        password: str,
+        write=False,
+    ):
         """Signs the given data with the key. It also writes filename.asc in the same directory of the file as the signature if write value is True.
 
         :param key: Fingerprint or secret Key object
         :param filepath: str value of the path to the file.
-        :param password: Password of the secret key file.
+        :param password: Password of the secret key file as str.
         :param write: boolean value (default False), determines if we should write the signature to a file.
 
         :returns: The signature as string
         """
         signature = ""
-        if type(key) == str:  # Means we have a fingerprint
+        if isinstance(key, str):  # Means we have a fingerprint
             k = self.get_key(key)
         else:
             k = key
 
-        if type(filepath) == str:
+        if isinstance(filepath, str):
             filepath_in_bytes = filepath.encode("utf-8")
         else:
             filepath_in_bytes = filepath
@@ -1283,13 +1329,15 @@ class KeyStore:
 
         # Now check if we have to write the file on disk
         if write:
-            sig_file_name = filepath + ".asc"
+            sig_file_name = f'{filepath_in_bytes.decode("utf-8")}.asc'
             with open(sig_file_name, "w") as fobj:
                 fobj.write(signature)
 
         return signature
 
-    def verify_file_detached(self, key, filepath, signature_path):
+    def verify_file_detached(
+        self, key: Union[str, Key], filepath: Union[str, bytes], signature_path
+    ):
         """Verifies the given filepath based on the signature file.
 
         :param key: Fingerprint or public Key object
@@ -1298,7 +1346,7 @@ class KeyStore:
 
         :returns: Boolean
         """
-        if type(key) == str:  # Means we have a fingerprint
+        if isinstance(key, str):  # Means we have a fingerprint
             k = self.get_key(key)
         else:
             k = key
@@ -1308,18 +1356,18 @@ class KeyStore:
                 f"The signature file at {signature_path} is missing."
             )
         if not os.path.exists(filepath):
-            raise FileNotFoundError(f"The file at {filepath} is missing.")
+            raise FileNotFoundError(f"The file at {str(filepath)} is missing.")
 
         # Let us read the signature
         with open(signature_path, "rb") as fobj:
             signature_in_bytes = fobj.read()
 
-        if type(filepath) == str:
+        if isinstance(filepath, str):
             filepath = filepath.encode("utf-8")
         jp = Johnny(k.keyvalue)
         return jp.verify_file_detached(filepath, signature_in_bytes)
 
-    def verify_file(self, key, filepath):
+    def verify_file(self, key: Union[str, Key], filepath):
         """Verifies the given filepath.
 
         :param key: Fingerprint or public Key object
@@ -1327,18 +1375,74 @@ class KeyStore:
 
         :returns: Boolean
         """
-        if type(key) == str:  # Means we have a fingerprint
+        if isinstance(key, str):  # Means we have a fingerprint
             k = self.get_key(key)
         else:
             k = key
 
         if not os.path.exists(filepath):
-            raise FileNotFoundError(f"The file at {filepath} is missing.")
+            raise FileNotFoundError(f"The file at {str(filepath)} is missing.")
 
-        if type(filepath) == str:
-            filepath = filepath.encode("utf-8")
+        if isinstance(filepath, str):
+            input_filepath = filepath.encode("utf-8")
+        else:
+            input_filepath = filepath
+
         jp = Johnny(k.keyvalue)
-        return jp.verify_file(filepath)
+        return jp.verify_file(input_filepath)
+
+    def verify_and_extract_bytes(
+        self, key: Union[str, Key], data: Union[str, bytes]
+    ) -> bytes:
+        """Verifies the given data and returns the acutal data.
+
+        :param key: Fingerprint or public Key object.
+        :param data: Data to be signed.
+
+        :returns: bytes
+        """
+        if isinstance(key, str):  # Means we have a fingerprint
+            k = self.get_key(key)
+        else:
+            k = key
+
+        if isinstance(data, str):
+            data = data.encode("utf-8")
+        jp = Johnny(k.keyvalue)
+
+        return jp.verify_and_extract_bytes(data)
+
+    def verify_and_extract_file(
+        self, key: Union[str, Key], filepath: Union[str, bytes], output: bytes
+    ) -> bool:
+        """Verifies the given signed file and saves the actual data in output.
+
+        :param key: Fingerprint or public Key object.
+        :param filepath: Signed file as bytes.
+        :param output: Output path for the original content.
+
+        :returns: bool
+        """
+        if isinstance(key, str):  # Means we have a fingerprint
+            k = self.get_key(key)
+        else:
+            k = key
+
+        if not os.path.exists(filepath):
+            raise FileNotFoundError(f"The file at {str(filepath)} is missing.")
+
+        if isinstance(filepath, str):
+            input_filepath = filepath.encode("utf-8")
+        else:
+            input_filepath = filepath
+
+        if isinstance(output, str):
+            outputpath = output.encode("utf-8")
+        else:
+            outputpath = output
+        jp = Johnny(k.keyvalue)
+
+        return jp.verify_and_extract_file(input_filepath, outputpath)
 
     def fetch_key_by_fingerprint(self, fingerprint: str):
         """Fetches key from keys.openpgp.org based on the fingerprint.
@@ -1444,3 +1548,23 @@ class KeyStore:
                 fingerprint = result["fingerprint"]
 
             return fingerprint
+
+
+def get_card_touch_policies() -> Union[List[TouchMode], None]:
+    "Get the supported touch policies of the smartcard"
+    result: List[TouchMode] = []
+    version = rjce.get_card_version()
+    if version < (4, 2, 0):
+        result = []
+    elif version < (5, 2, 1):
+        result = [TouchMode.On, TouchMode.Off, TouchMode.Fixed]
+    elif version >= (5, 2, 1):
+        result = [
+            TouchMode.On,
+            TouchMode.Off,
+            TouchMode.Fixed,
+            TouchMode.Cached,
+            TouchMode.CachedFixed,
+        ]
+    # Now return the result
+    return result

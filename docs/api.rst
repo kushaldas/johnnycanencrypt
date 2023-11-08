@@ -42,7 +42,7 @@ For the rest of the documentation we assume that you imported the module as foll
 
                 This method signs the given list of userid(s) in `otherkey` using the primary key of the `key`, by default it signs as *SignatureType.GenericCertification*, but you can do other types too. If the primary key is on a smartcard, then pass `oncard=True`, default value is `False`.
 
-        .. method:: create_key(password: str, uids: Optional[Union[List[str], str]] = [], ciphersuite: Cipher = Cipher.RSA4k, creation: Optional[datetime.datetime] = None, expiration: Optional[datetime.datetime] = None, subkeys_expiration= False, whichkeys = 7, can_primary_sign: bool = True) -> Key:
+        .. method:: create_key(password: str, uids: Optional[Union[List[str], str]] = [], ciphersuite: Cipher = Cipher.RSA4k, creation: Optional[datetime.datetime] = None, expiration: Optional[datetime.datetime] = None, subkeys_expiration= False, whichkeys = 7, can_primary_sign: bool = False, can_primary_expire=False) -> Key:
 
                 Returns the public part of the newly created `Key` in the store
                 directory. You can mention ciphersuite :class:`Cipher`  as
@@ -188,13 +188,25 @@ For the rest of the documentation we assume that you imported the module as foll
                 Returns the armored signature of the *filepath* argument using the secret key (either fingerprint or secret `Key` object).
                 If you pass *write=True*, it will also write the armored signature to a file named as *filepath.asc* 
 
-        .. method:: verify_bytes_detached(key, data, signature) -> bool:
+        .. method:: verify(key, data: Union[str, bytes], signature:Optional[str]) -> bool:
 
-                Verifies the given *data* using the public key, and signature string, returns **True** or **False** as result. 
+                Verifies the given *data* using the public key, and signature string if given, returns **True** or **False** as result.
 
-        .. method:: verify_file_detached(key, filepath, signature_path) -> bool:
+        .. method:: verify_file_detached(key: Union[str, Key], filepath: Union[str, bytes], signature_path) -> bool:
 
-                Verifies the given filepath using the public key, and signature string, returns **True** or **False** as result. 
+                Verifies the given *filepath* using the public key, and signature string, returns **True** or **False** as result.
+
+        .. method:: verify_file(key, filepath) -> bool:
+
+                Verifies the given signed *filepath* using the public key, returns **True** or **False** as result.
+
+        .. method:: verify_and_extract_bytes(key: Union[str, Key], data: Union[str, bytes]) -> bytes:
+
+                Verifies the given signed *data* using the public key,  returns the actual data as bytes.
+
+        .. method:: verify_and_extract_file(self, key: Union[str, Key], filepath: Union[str, bytes], output: Union[str, bytes]) -> bool::
+
+                Verifies the given signed *filepath* and writes the actual data in *output*.
 
 
 .. class:: Cipher() -> Cipher:
@@ -267,3 +279,10 @@ For the rest of the documentation we assume that you imported the module as foll
 
         Enum class to mark the kind of certification one can do on another key. Possible values are **SignatureType.GenericCertification**,
         **SignatureType.PersonaCertification**, **SignatureType.CasualCertification**, **SignatureType.PositiveCertification**.
+
+
+.. function:: get_card_touch_policies() -> List[TouchMode]
+
+        Returns a list of Enum values from TouchMode. To be used to determine the touch capabilities of the smartcard.
+        Remember to verify this list before calling :func:`set_keyslot_touch_policy`.
+

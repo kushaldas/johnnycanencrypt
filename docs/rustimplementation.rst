@@ -1,7 +1,7 @@
 The internal johnnycanencrypt module written in Rust
 ====================================================
 
-You can import the low level functions or `Johnny` class by the following way:
+You can access the low level functions or `Johnny` class by the following way:
 
 ::
 
@@ -20,6 +20,30 @@ In most cases you don't have to use these, but if you have a reason, feel free t
 
 
         .. note:: Use this function if you have to encrypt for multiple recipents.
+
+.. function:: get_ssh_pubkey(certdata, comment: Optional[str]) -> str:
+
+        This function takes a public key and optional comment and then provides a string representing the authentication subkey to be used inside of SSH.
+
+
+.. function:: enable_otp_usb() -> bool
+
+        This function enables OTP application in the Yubikey.
+
+.. function:: disable_otp_usb() -> bool
+
+        This function disables OTP application in the Yubikey.
+
+.. function:: get_key_cipher_details(certdata: bytes) -> List[tuple[str, str, int]]
+
+        This function takes the key data as bytes, and returns a list of tuples containing (fingerprint, public key algorithm, bits size).
+
+        ::
+
+            >>> rjce.get_key_cipher_details(key.keyvalue)
+            [('F4F388BBB194925AE301F844C52B42177857DD79', 'EdDSA', 256), ('102EBD23BD5D2D340FBBDE0ADFD1C55926648D2F', 'EdDSA', 256), ('85B67F139D835FA56BA703DB5A7A1560D46ED4F6', 'ECDH', 256)]
+
+
 
 .. class:: Johnny(filepath)
 
@@ -80,11 +104,53 @@ In most cases you don't have to use these, but if you have a reason, feel free t
 
                 .. note:: Remember to save the signature somewhere on disk.
 
-        .. method:: verify_bytes(data: bytes, signature: bytes)
+        .. method:: verify_bytes(data: bytes)
+
+                Verifies if the signature is correct for the given signed data (as bytes). Returns `True` or `False`.
+
+                ::
+
+                        >>> j = jce.Johnny("tests/files/public.asc")
+                        >>> j.verify_bytes(encrypted_bytes)
+
+        .. method:: verify_and_extract_bytes(data: bytes)
+
+                Verifies if the signature is correct for the given signed data (as bytes). Returns the actual message in Bytes.
+
+                ::
+
+                        >>> j = jce.Johnny("tests/files/public.asc")
+                        >>> j.verify_and_extract_bytes(encrypted_bytes)
+
+
+        .. method:: verify_bytes_detached(data: bytes, signature: bytes)
 
                 Verifies if the signature is correct for the given data (as bytes). Returns `True` or `False`.
 
                 ::
 
-                        >>> j = jce.Johnny("tests/files/secret.asc")
+                        >>> j = jce.Johnny("tests/files/public.asc")
                         >>> j.verify_bytes(encrypted_bytes, signature)
+
+        .. method:: verify_file(filepath: bytes)
+
+                Verifies if the signature is correct for the given signed file (path as bytes). Returns `True` or `False`.
+
+                ::
+
+                        >>> j = jce.Johnny("tests/files/public.asc")
+                        >>> j.verify_file(encrypted_bytes, signature)
+
+        .. method:: verify_and_extract_file(filepath: bytes, output: bytes)
+
+                Verifies and extracts the message from the signed file, return `True` in case of a success.
+
+
+        .. method:: verify_file_detached(filepath: bytes, signature: bytes)
+
+                Verifies if the signature is correct for the given signed file (path as bytes). Returns `True` or `False`.
+
+                ::
+
+                        >>> j = jce.Johnny("tests/files/public.asc")
+                        >>> j.verify_file_detached(encrypted_bytes, signature)

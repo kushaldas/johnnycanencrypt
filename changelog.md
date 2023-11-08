@@ -1,6 +1,79 @@
-# Changlelog
+# Changelog
 
 ## [unreleased]
+
+### Fixed
+
+- Fixes #140, updates dependencies.
+
+## [0.14.1] - 2023-05-21
+
+- Updates sequoia-openpgp to 1.16.0
+- Updates buffered-reader to 1.2.0
+
+## [0.14.0] - 2023-04-19
+
+- Fixes #135, adds `get_key_cipher_details` in rjce.
+- Updates Rust dependencies.
+- CI uses stable Rust toolchain.
+
+## [0.13.1] - 2023-03-24
+
+### Fixed
+
+- Fixed #132 available_subkeys() method.
+
+### Added
+
+- Updated PyO3 dependency to 0.18.1.
+
+## [0.13.0] - 2023-01-21
+
+### Added
+
+- We can now disable OTP for both YubiKey4/5 #130.
+
+## [0.12.0] - 2023-01-12
+
+### Added
+
+- Adds `enable_otp_usb` in rjce.
+- Adds `disable_otp_usb` in rjce.
+- Changed license to LGPL-3.0-or-later
+
+## [0.11.1] - 2022-12-05
+
+### Added
+
+- Trying to fix the wheels for Mac.
+
+## [0.11.0] - 2022-11-09
+
+### Added
+
+- Type annotation for the rust part of the codebase.
+- `can_primary_expire` new argument to `create_key` function call.
+- Updated `pyo3` dependency to `0.17.2`.
+- Adds `get_card_version` in rjce.
+- Adds `TouchMode` enum in rjce.
+- Adds `get_card_touch_policies` function to find available options.
+- Adds `KeySlot` enum in rjce
+- Adds `get_keyslot_touch_policy` function to set touch policy.
+- Adds `set_keyslot_touch_policy` function to set touch policy.
+- Updates pyo3 to `0.17.3`
+
+## [0.10.0] - 2022-09-20
+
+### Fixed
+
+- Fixes #111 to verify compressed signed message.
+
+### Added
+
+- `verify_and_extract_bytes` function to extract the verified bytes.
+- `verify_and_extract_file` function to extract the verified file.
+- `get_ssh_pubkey` to get ssh style key for authentication subkey in rjce #114.
+- Adds https://docs.rs/sshkeys/0.3.2/sshkeys/index.html as dependency.
 
 ## [0.9.0] - 2022-08-30
 

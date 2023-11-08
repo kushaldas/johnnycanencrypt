@@ -19,7 +19,7 @@ Then you can just use `pip` module to install in your virtualenvironment.
 
 ::
 
-        python3 -m pip install johnnycanencrypt
+        python -m pip install johnnycanencrypt
 
 
 Building Johnny Can Encrypt for development
@@ -67,7 +67,7 @@ All of these tests are right now kept as a Python script, and requires Yubikey s
 
 ::
 
-        python3 smartcardtests/smartcards.py
+        python smartcardtests/smartcards.py
 
 When asked, please make sure that only the test smartcard is conneccted to the system, and then type "Yes", without quotes.
 

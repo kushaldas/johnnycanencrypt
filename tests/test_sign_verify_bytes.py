@@ -1,5 +1,4 @@
 import os
-import tempfile
 
 import pytest
 
@@ -38,11 +37,10 @@ def test_sign_cleartext():
     assert jp.verify_bytes(signed_data.encode("utf-8"))
 
 
-def test_sign_verify_file_cleartext():
+def test_sign_verify_file_cleartext(tmp_path):
     "This will sign a file in cleartext"
     j = jce.Johnny(_get_cert_data(BASE_TESTSDIR / "files/secret.asc"))
-    tempdir = tempfile.TemporaryDirectory()
-    output = os.path.join(tempdir.name, "sign.asc")
+    output = (tmp_path / "sign.asc").as_posix()
     j.sign_file(
         (BASE_TESTSDIR / "files/text.txt").as_posix().encode(),
         output.encode("utf-8"),
@@ -59,12 +57,10 @@ def test_sign_verify_file_cleartext():
     assert jp.verify_file(output.encode("utf-8"))
 
 
-def test_sign_verify_file():
+def test_sign_verify_file(tmp_path):
     "This will sign a file as a PGP message"
     j = jce.Johnny(_get_cert_data(BASE_TESTSDIR / "files/secret.asc"))
-    tempdir = tempfile.TemporaryDirectory()
-    # output = os.path.join(tempdir.name, "sign.asc")
-    output = "/tmp/sign.asc"
+    output = (tmp_path / "sign.asc").as_posix()
     j.sign_file(
         (BASE_TESTSDIR / "files/text.txt").as_posix().encode(),
         output.encode("utf-8"),
@@ -79,6 +75,47 @@ def test_sign_verify_file():
     assert data.endswith("-----END PGP MESSAGE-----\n")
     jp = jce.Johnny(_get_cert_data(BASE_TESTSDIR / "files/public.asc"))
     assert jp.verify_file(output.encode("utf-8"))
+
+
+def test_sign_from_gpg_verify_file():
+    "This will verify a signed message fro gpg"
+    jp = jce.Johnny(
+        _get_cert_data(BASE_TESTSDIR / "files/store/kushal_updated_key.asc")
+    )
+    assert jp.verify_file(str(BASE_TESTSDIR / "files/msg.txt.asc").encode("utf-8"))
+
+
+def test_verify_signed_file(tmp_path):
+    "This will verify a signed message from gpg and extract"
+    jp = jce.Johnny(
+        _get_cert_data(BASE_TESTSDIR / "files/store/kushal_updated_key.asc")
+    )
+    output = (tmp_path / "result.txt").as_posix()
+    assert jp.verify_and_extract_file(
+        str(BASE_TESTSDIR / "files/msg.txt.asc").encode("utf-8"), output.encode("utf-8")
+    )
+
+    # Now verify the text inside
+    with open(output, "rb") as fobj:
+        data = fobj.read()
+    assert b"I \xe2\x9d\xa4\xef\xb8\x8f Anwesha.\n" == data
+
+
+def test_verify_bytes_from_signed_message():
+    "This will verify a signed message fro gpg"
+    jp = jce.Johnny(
+        _get_cert_data(BASE_TESTSDIR / "files/store/kushal_updated_key.asc")
+    )
+    with open(BASE_TESTSDIR / "files/msg.txt.asc", "rb") as fobj:
+        data = fobj.read()
+    assert b"I \xe2\x9d\xa4\xef\xb8\x8f Anwesha.\n" == jp.verify_and_extract_bytes(data)
+
+
+def test_sign_from_different_key_file():
+    "This will verify a signed message fro gpg"
+    jp = jce.Johnny(_get_cert_data(BASE_TESTSDIR / "files/public.asc"))
+    with pytest.raises(jce.CryptoError):
+        jp.verify_file(str(BASE_TESTSDIR / "files/msg.txt.asc").encode("utf-8"))
 
 
 def test_verify_bytes_detached():
