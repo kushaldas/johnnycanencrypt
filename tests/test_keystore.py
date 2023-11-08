@@ -38,6 +38,9 @@ def test_no_such_key():
     with pytest.raises(jce.KeyNotFoundError):
         ks = jce.KeyStore(BASE_TESTSDIR / "files/store")
         key = ks.get_key("A4F388BBB194925AE301F844C52B42177857DD79")
+    with pytest.raises(jce.KeyNotFoundError):
+        ks = jce.KeyStore(BASE_TESTSDIR / "files/store")
+        key = ks.get_key(None)
 
 
 def test_create_primary_key_with_encryption():
