@@ -711,7 +711,7 @@ class KeyStore:
             elif key_id:
                 sql = "SELECT * FROM keys WHERE id=?"
                 cursor.execute(sql, (key_id,))
-            else:  # means get all keys
+            elif allkeys:  # means get all keys
                 sql = "SELECT * FROM keys"
                 cursor.execute(sql)
             rows = cursor.fetchall()
