@@ -663,12 +663,16 @@ class KeyStore:
         # Regnerate the key object and return it
         return self.get_key(fingerprint)
 
-    def import_key(self, keypath: str, onplace=False) -> Key:
+    def import_key(self, keypath: Union[str, Path], onplace=False) -> Key:
         """Imports a given key from the given file path.
 
-        :param path: Path to the pgp key file.
-        :param onplace: Default value is False, if True means the keyfile is in the right directory
+        :param keypath: Path to the pgp key file, either string or Path object.
+        :param onplace: Default value is False, if True means the keyfile is in the right directory.
         """
+        if isinstance(keypath, Path):
+            path = str(keypath)
+        else:
+            path = str(keypath)
         (
             uids,
             fingerprint,
@@ -676,7 +680,7 @@ class KeyStore:
             expirationtime,
             creationtime,
             othervalues,
-        ) = parse_cert_file(keypath)
+        ) = parse_cert_file(path)
 
         self.add_key_file_to_db(
             keypath,

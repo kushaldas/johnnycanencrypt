@@ -25,7 +25,8 @@ def test_nonexisting_keystore_path():
 
 def test_str(tmp_path):
     ks = jce.KeyStore(tmp_path)
-    assert str(ks) == f"<KeyStore dbpath={tmp_path.as_posix()}/jce.db>"
+    dbpath = tmp_path / "jce.db" 
+    assert str(ks) == f"<KeyStore dbpath={dbpath}>"
 
 
 def test_no_such_key():
@@ -38,7 +39,7 @@ def test_no_such_key():
 
 
 def test_create_primary_key_with_encryption(tmp_path):
-    ks = jce.KeyStore(tmp_path.as_posix())
+    ks = jce.KeyStore(tmp_path)
     newkey = ks.create_key(
         "redhat",
         "test key42 <42@example.com>",
@@ -50,7 +51,7 @@ def test_create_primary_key_with_encryption(tmp_path):
 
 def test_key_cipher_details():
     saved = [('F4F388BBB194925AE301F844C52B42177857DD79', 'EdDSA', 256), ('102EBD23BD5D2D340FBBDE0ADFD1C55926648D2F', 'EdDSA', 256), ('85B67F139D835FA56BA703DB5A7A1560D46ED4F6', 'ECDH', 256)]
-    ks = jce.KeyStore(BASE_TESTSDIR / "files/store")
+    ks = jce.KeyStore(BASE_TESTSDIR / "files" / "store")
     key = ks.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
     result = rjce.get_key_cipher_details(key.keyvalue)
     assert saved == result
@@ -63,10 +64,10 @@ def test_keystore_lifecycle(tmp_path):
     # the default key must be of secret
     assert newkey.keytype == jce.KeyType.SECRET
 
-    ks.import_key((BASE_TESTSDIR / "files/store/public.asc").as_posix())
-    ks.import_key((BASE_TESTSDIR / "files/store/pgp_keys.asc").as_posix())
-    ks.import_key((BASE_TESTSDIR / "files/store/hellopublic.asc").as_posix())
-    ks.import_key((BASE_TESTSDIR / "files/store/secret.asc").as_posix())
+    ks.import_key((BASE_TESTSDIR / "files" / "store" / "public.asc").as_posix())
+    ks.import_key((BASE_TESTSDIR / "files" / "store" / "pgp_keys.asc").as_posix())
+    ks.import_key((BASE_TESTSDIR / "files"/"store" / "hellopublic.asc").as_posix())
+    ks.import_key((BASE_TESTSDIR / "files"/"store"/"secret.asc").as_posix())
     # Now check the numbers of keys in the store
     assert (2, 2) == ks.details()
 
@@ -93,11 +94,11 @@ def test_keystore_lifecycle(tmp_path):
 
 def test_keystore_contains_key(tmp_path):
     "verifies __contains__ method for keystore"
-    ks = jce.KeyStore(tmp_path.as_posix())
-    keypath = BASE_TESTSDIR / "files/store/secret.asc"
-    k = ks.import_key(keypath.as_posix())
+    ks = jce.KeyStore(tmp_path)
+    keypath = BASE_TESTSDIR / "files"/"store"/"secret.asc"
+    k = ks.import_key(keypath)
     _, fingerprint, keytype, exp, ctime, othervalues = jce.parse_cert_file(
-        keypath.as_posix()
+        str(keypath)
     )
 
     # First only the fingerprint
