@@ -2,12 +2,10 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
 import os
-import shutil
 import sqlite3
 import urllib.parse
 from datetime import datetime
 from enum import Enum
-from pprint import pprint
 from typing import Dict, List, Optional, Union, Tuple, Any
 from pathlib import Path
 
@@ -17,7 +15,7 @@ from .exceptions import FetchingError, KeyNotFoundError
 from .johnnycanencrypt import (
     CryptoError,
     Johnny,
-    SameKeyError,
+    SameKeyError,  # noqa: F401
     create_key,
     encrypt_bytes_to_bytes,
     encrypt_bytes_to_file,
@@ -33,7 +31,7 @@ from .johnnycanencrypt import (
 import johnnycanencrypt.johnnycanencrypt as rjce
 
 from .utils import (
-    _get_cert_data,
+    _get_cert_data,  # noqa: F401
     createdb,
     convert_fingerprint,
     to_sort_by_expiry,
@@ -42,6 +40,7 @@ from .utils import (
 
 # To use for type checking
 StrOrBytesPath = Union[str, bytes, os.PathLike]
+
 
 class KeyType(Enum):
     PUBLIC = 0
@@ -155,7 +154,7 @@ class KeyStore:
         elif isinstance(path, bytes):
             try:
                 fullpath = Path(path.decode("utf-8")).absolute()
-            except:
+            except:  # noqa: E722
                 raise TypeError("Path must be a string or bytes or Path object.")
         else:
             fullpath = Path(path).absolute()
@@ -171,7 +170,7 @@ class KeyStore:
                 cursor.executescript(createdb)
                 # we have to insert the date when this database schema was generated
                 cursor.execute(
-                    f"INSERT INTO dbupgrade (upgradedate) values (?)",
+                    "INSERT INTO dbupgrade (upgradedate) values (?)",
                     (DB_UPGRADE_DATE,),
                 )
         else:
@@ -221,7 +220,7 @@ class KeyStore:
             cursor.executescript(createdb)
             # we have to insert the date when this database schema was generated
             cursor.execute(
-                f"INSERT INTO dbupgrade (upgradedate) values (?)", (DB_UPGRADE_DATE,)
+                "INSERT INTO dbupgrade (upgradedate) values (?)", (DB_UPGRADE_DATE,)
             )
         # now let us insert our existing data
         for row in existing_records:
@@ -430,7 +429,7 @@ class KeyStore:
                 # First we will insert the value
                 if "value" in uid and uid["value"]:
                     revoked = 1 if uid["revoked"] else 0
-                    sql = f"INSERT INTO uidvalues (value, revoked, key_id) values (?, ?, ?)"
+                    sql = "INSERT INTO uidvalues (value, revoked, key_id) values (?, ?, ?)"
                     cursor.execute(sql, (uid["value"], revoked, key_id))
                     value_id = cursor.lastrowid
                     # After we added the value, we should check for certification
@@ -441,7 +440,7 @@ class KeyStore:
                                 if ucert["creationtime"]
                                 else ""
                             )
-                            sql = f"INSERT INTO uidcerts (ctype, creation, key_id, value_id) values (?, ?, ?, ?)"
+                            sql = "INSERT INTO uidcerts (ctype, creation, key_id, value_id) values (?, ?, ?, ?)"
                             cursor.execute(
                                 sql,
                                 (ucert["certification_type"], ctime, key_id, value_id),
@@ -451,7 +450,7 @@ class KeyStore:
                             # Now time to loop over the details and add them
                             for citem in ucert["certification_list"]:
                                 # citem is like [('fingerprint', 'F7FC698FAAE2D2EFBECDE98ED1B3ADC0E0238CA6'), ('keyid', 'D1B3ADC0E0238CA6')]
-                                sql = f"INSERT INTO uidcertlist (value, datatype, key_id, value_id, cert_id) values (?, ?, ?, ?, ?)"
+                                sql = "INSERT INTO uidcertlist (value, datatype, key_id, value_id, cert_id) values (?, ?, ?, ?, ?)"
                                 cursor.execute(
                                     sql,
                                     (citem[1], citem[0], key_id, value_id, ucert_id),
@@ -528,7 +527,7 @@ class KeyStore:
                 "SELECT id from keys where fingerprint=?", (key.fingerprint,)
             )
             fromdb = cursor.fetchone()
-            key_id = fromdb[0]
+            _key_id = fromdb[0]
             # Now let us add the subkey and keyid details
             sql = "UPDATE subkeys set expiration=? where fingerprint=?"
             for subkey in newsubkeys:
@@ -568,7 +567,7 @@ class KeyStore:
             othervalues,
         ) = parse_cert_bytes(newcert)
         # To make sure we actually have a secret key
-        assert keytype == True
+        assert keytype is True
         # Let us write the new keydata to the disk
         key_filename = os.path.join(self.path, f"{fingerprint}.sec")
         with open(key_filename, "wb") as fobj:
@@ -594,7 +593,7 @@ class KeyStore:
                     # Ok, now we have a new user id, we can start adding this value to the database
                     # this next line does not make sense for a new user id :)
                     revoked = 1 if uid["revoked"] else 0
-                    sql = f"INSERT INTO uidvalues (value, revoked, key_id) values (?, ?, ?)"
+                    sql = "INSERT INTO uidvalues (value, revoked, key_id) values (?, ?, ?)"
                     cursor.execute(sql, (uid["value"], revoked, key_id))
                     value_id = cursor.lastrowid
                 else:
@@ -637,7 +636,7 @@ class KeyStore:
             othervalues,
         ) = parse_cert_bytes(newcert)
         # To make sure we actually have a secret key
-        assert keytype == True
+        assert keytype is True
         # Let us write the new keydata to the disk
         key_filename = os.path.join(self.path, f"{fingerprint}.sec")
         with open(key_filename, "wb") as fobj:
@@ -885,7 +884,7 @@ class KeyStore:
                 )
         if finalresult:
             return finalresult
-        raise KeyNotFoundError(f"The key(s) not found in the keystore.")
+        raise KeyNotFoundError("The key(s) not found in the keystore.")
 
     def _get_one_row_from_table(self, cursor, tablename, value_id):
         "Internal function to select different uid items"
@@ -909,7 +908,7 @@ class KeyStore:
 
         :returns: A list of keys or empty list.
         """
-        if not qtype in ["email", "value", "uri", "name"]:
+        if qtype not in ["email", "value", "uri", "name"]:
             raise CryptoError("We need at least one of the email/name/value/uri.")
 
         results = []
@@ -926,7 +925,7 @@ class KeyStore:
                 for row in rows:
                     key_id = row["key_id"]
                     key = self._internal_get_key(key_id=key_id)[0]
-                    if not key.fingerprint in unique_fingerprints:
+                    if key.fingerprint not in unique_fingerprints:
                         unique_fingerprints[key.fingerprint] = True
                         results.append(key)
             elif qtype == "email":
@@ -936,7 +935,7 @@ class KeyStore:
                 for row in rows:
                     key_id = row["key_id"]
                     key = self._internal_get_key(key_id=key_id)[0]
-                    if not key.fingerprint in unique_fingerprints:
+                    if key.fingerprint not in unique_fingerprints:
                         unique_fingerprints[key.fingerprint] = True
                         results.append(key)
             elif qtype == "name":
@@ -946,7 +945,7 @@ class KeyStore:
                 for row in rows:
                     key_id = row["key_id"]
                     key = self._internal_get_key(key_id=key_id)[0]
-                    if not key.fingerprint in unique_fingerprints:
+                    if key.fingerprint not in unique_fingerprints:
                         unique_fingerprints[key.fingerprint] = True
                         results.append(key)
             elif qtype == "uri":
@@ -956,7 +955,7 @@ class KeyStore:
                 for row in rows:
                     key_id = row["key_id"]
                     key = self._internal_get_key(key_id=key_id)[0]
-                    if not key.fingerprint in unique_fingerprints:
+                    if key.fingerprint not in unique_fingerprints:
                         unique_fingerprints[key.fingerprint] = True
                         results.append(key)
         return results
@@ -1034,7 +1033,7 @@ class KeyStore:
         else:
             raise TypeError(f"Wrong datatype for {str(key)}")
 
-        if not fingerprint in self:
+        if fingerprint not in self:
             raise KeyNotFoundError(
                 "The key for the given fingerprint={fingerprint} is not found in the keystore"
             )
@@ -1274,7 +1273,6 @@ class KeyStore:
 
         :returns: Boolean result of the signing operation.
         """
-        signature = ""
         if isinstance(key, str):  # Means we have a fingerprint
             k = self.get_key(key)
         else:
