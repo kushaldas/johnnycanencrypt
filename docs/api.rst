@@ -11,7 +11,7 @@ For the rest of the documentation we assume that you imported the module as foll
 
 
 
-.. class:: KeyStore(path: str) -> None:
+.. class:: KeyStore(path: StrOrBytesPath) -> None:
 
         Returns a KeyStore object. This is the primary class of the module, and
         all high level usage is available via methods of this class. It takes a
@@ -25,7 +25,7 @@ For the rest of the documentation we assume that you imported the module as foll
         continue with the steps. This is one time operation when we do a new
         release.
 
-        You can check for existance of any fingerprint (str) or `Key` object in the via `in` opertor.
+        You can check for existence of any fingerprint (str) or `Key` object in the via `in` operator.
 
         ::
 
