@@ -9,6 +9,7 @@ from datetime import datetime
 from enum import Enum
 from pprint import pprint
 from typing import Dict, List, Optional, Union, Tuple, Any
+from pathlib import Path
 
 import httpx
 
@@ -39,6 +40,8 @@ from .utils import (
     DB_UPGRADE_DATE,
 )
 
+# To use for type checking
+StrOrBytesPath = Union[str, bytes, os.PathLike]
 
 class KeyType(Enum):
     PUBLIC = 0
@@ -146,13 +149,22 @@ class Key:
 class KeyStore:
     """Returns `KeyStore` class object, takes the directory path as string."""
 
-    def __init__(self, path: str) -> None:
-        fullpath = os.path.abspath(path)
-        if not os.path.exists(fullpath):
+    def __init__(self, path: StrOrBytesPath) -> None:
+        if isinstance(path, str):
+            fullpath = Path(path).absolute()
+        elif isinstance(path, bytes):
+            try:
+                fullpath = Path(path.decode("utf-8")).absolute()
+            except:
+                raise TypeError("Path must be a string or bytes or Path object.")
+        else:
+            fullpath = Path(path).absolute()
+
+        if not fullpath.exists():
             raise OSError(f"The {fullpath} does not exist.")
-        self.dbpath = os.path.join(fullpath, "jce.db")
+        self.dbpath: Path = fullpath / "jce.db"
         self.path = fullpath
-        if not os.path.exists(self.dbpath):
+        if not self.dbpath.exists():
             con = sqlite3.connect(self.dbpath)
             with con:
                 cursor = con.cursor()
@@ -196,8 +208,8 @@ class KeyStore:
                 return
         # Temporay db setup
         oldpath = self.dbpath
-        self.dbpath = os.path.join(self.path, "jce_upgrade.db")
-        if os.path.exists(self.dbpath):  # Means the upgrade db already exist.
+        self.dbpath = self.path / "jce_upgrade.db"
+        if self.dbpath.exists():  # Means the upgrade db already exist.
             # Unrecoverable error
             raise RuntimeError(
                 f"{self.dbpath} already exists, please remove and then try again."
