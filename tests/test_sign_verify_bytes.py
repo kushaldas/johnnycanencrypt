@@ -51,11 +51,11 @@ def test_sign_verify_file_cleartext(tmp_path):
         True,
     )
     assert os.path.exists(output)
-    with open(output) as fobj:
+    with open(output, "rb") as fobj:
         data = fobj.read()
-    assert data.startswith("-----BEGIN PGP SIGNED MESSAGE-----")
-    assert "🦄🦄🦄" in data
-    assert data.endswith("-----END PGP SIGNATURE-----\n")
+    assert data.startswith(b"-----BEGIN PGP SIGNED MESSAGE-----")
+    assert "🦄🦄🦄".encode("utf-8") in data
+    assert data.endswith(b"-----END PGP SIGNATURE-----\n")
     jp = jce.Johnny(_get_cert_data(PUBLIC_PATH))
     assert jp.verify_file(output.encode("utf-8"))
 

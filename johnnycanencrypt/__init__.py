@@ -4,6 +4,7 @@
 import os
 import sqlite3
 import urllib.parse
+import shutil
 from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional, Union, Tuple, Any
@@ -183,6 +184,17 @@ class KeyStore:
 
     def upgrade_if_required(self):
         "Upgrades the database schema if required"
+        oldpath = self._upgrade_if_required()
+        if oldpath is None:
+            return
+        os.unlink(oldpath)
+        # Now let us rename the file
+        shutil.copy(self.dbpath, oldpath)
+        os.unlink(self.dbpath)
+        self.dbpath = oldpath
+
+    def _upgrade_if_required(self):
+        "Internal: Upgrades the database schema if required"
         SHOULD_WE = False
         existing_records = []
         con = sqlite3.connect(self.dbpath)
@@ -205,6 +217,7 @@ class KeyStore:
                 existing_records = cursor.fetchall()
             else:
                 return
+        con.close()
         # Temporay db setup
         oldpath = self.dbpath
         self.dbpath = self.path / "jce_upgrade.db"
@@ -222,6 +235,7 @@ class KeyStore:
             cursor.execute(
                 "INSERT INTO dbupgrade (upgradedate) values (?)", (DB_UPGRADE_DATE,)
             )
+        con.close()
         # now let us insert our existing data
         for row in existing_records:
             (
@@ -255,9 +269,8 @@ class KeyStore:
                 fingerprint = row["fingerprint"]
                 sql = "UPDATE keys set oncard=?, primary_on_card=? where fingerprint=?"
                 cursor.execute(sql, (oncard, primary_on_card, fingerprint))
-        # Now let us rename the file
-        os.rename(self.dbpath, oldpath)
-        self.dbpath = oldpath
+        con.close()
+        return oldpath
 
     def update_password(self, key: Key, password: str, newpassword: str) -> Key:
         """Updates the password of the given key and saves to the database"""
@@ -464,6 +477,7 @@ class KeyStore:
                         value = uid[uid_keyname]
                         sql = f"INSERT INTO {tablename} (value, key_id, value_id) values (?, ?, ?)"
                         cursor.execute(sql, (value, key_id, value_id))
+        con.close()
 
     def __contains__(self, other: Union[str, Key]) -> bool:
         """Checks if a Key object of fingerprint str exists in the keystore or not.
@@ -536,7 +550,7 @@ class KeyStore:
                     sql,
                     (etime_str, subkey[1]),
                 )
-
+        con.close()
         # Regnerate the key object and return it
         return self.get_key(fingerprint)
 
@@ -605,7 +619,7 @@ class KeyStore:
                         value = uid[uid_keyname]
                         sql = f"INSERT INTO {tablename} (value, key_id, value_id) values (?, ?, ?)"
                         cursor.execute(sql, (value, key_id, value_id))
-
+        con.close()
         # Regnerate the key object and return it
         return self.get_key(fingerprint)
 
@@ -658,7 +672,7 @@ class KeyStore:
             revoked = 1
             sql = "UPDATE uidvalues set revoked=? where id=?"
             cursor.execute(sql, (revoked, value_id))
-
+        con.close()
         # Regnerate the key object and return it
         return self.get_key(fingerprint)
 
