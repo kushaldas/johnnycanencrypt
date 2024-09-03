@@ -53,16 +53,18 @@ pub fn change_otp(enable: bool) -> Result<bool, errors::TalktoSCError> {
     // For Yubikey 4 we have to send in different data
     let send_apdu = if (major < 5) {
         // We assume these are the YubiKey 4
-        let inside = if enable {
+        if enable {
             apdus::APDU::new(0x00, 0x16, 0x11, 0x00, Some(vec![0x06, 0x00, 0x00, 0x00]))
         } else {
             apdus::APDU::new(0x00, 0x16, 0x11, 0x00, Some(vec![0x05, 0x00, 0x00, 0x00]))
-        };
-        inside
+        }
     } else {
         // We assume these are the YubiKey 5
-        let inside = if enable { enable_apdu } else { disable_apdu };
-        inside
+        if enable {
+            enable_apdu
+        } else {
+            disable_apdu
+        }
     };
     // Send in the real APDU to the card
     let resp = talktosc::send_and_parse(&card, send_apdu);
