@@ -20,7 +20,6 @@ use std::io::Write;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
 use std::str;
-use std::time;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 extern crate anyhow;
 extern crate sequoia_openpgp as openpgp;
@@ -3172,7 +3171,7 @@ pub fn update_primary_expiry_on_card(
     let pk = cert.primary_key().key();
     // We will use the primary key to sign.
     let mut signer = scard::KeyPair::new(pin, pk)?;
-    // Make the primary key expire in a week.
+    // New expiry time.
     let t = SystemTime::now() + Duration::new(expirytime, 0);
     // Here we do the real sign.
     let sigs = vc.primary_key().set_expiration_time(&mut signer, Some(t))?;
@@ -3188,6 +3187,57 @@ pub fn update_primary_expiry_on_card(
     writer.finalize()?;
 
     // Let us return the cert data as bytes which can be saved in the database
+    let res = PyBytes::new(py, &buf);
+    Ok(res.into())
+}
+
+/// Returns updated key with new expiration time for subkeys
+/// Takes the public key, a list of subkey fingerprints as str,
+/// expirytime as the duration to be added as integer, and the pin for the card.
+#[pyfunction]
+#[pyo3(text_signature = "(certdata, fingerprints, expirytime, pin)")]
+pub fn update_subkeys_expiry_on_card(
+    py: Python,
+    certdata: Vec<u8>,
+    fingerprints: Vec<String>,
+    expirytime: u64,
+    pin: Vec<u8>,
+) -> Result<PyObject> {
+    let cert = openpgp::Cert::from_bytes(&certdata)?;
+
+    let p = &P::new();
+    let pk = cert.primary_key().key();
+    let mut signer = scard::KeyPair::new(pin, pk)?;
+    // Create the binding signatures.
+    let mut sigs = Vec::new();
+
+    // New expiry time.
+    let t = SystemTime::now() + Duration::new(expirytime, 0);
+    for key in cert.with_policy(p, None)?.keys().subkeys() {
+        let fp = key.fingerprint().to_hex();
+        if !fingerprints.contains(&fp) {
+            continue;
+        }
+        // This reuses any existing backsignature.
+        let sig =
+            openpgp::packet::signature::SignatureBuilder::from(key.binding_signature().clone())
+                .set_key_expiration_time(&key, t)?
+                .sign_subkey_binding(&mut signer, pk, &key)?;
+        sigs.push(sig);
+    }
+
+    let cert = cert.insert_packets(sigs)?;
+
+    // Get ready to write the updated cert as public key.
+    let mut buf = Vec::new();
+    let mut buffer = Vec::new();
+
+    let mut writer = Writer::new(&mut buf, Kind::PublicKey)?;
+    cert.as_tsk().serialize(&mut buffer)?;
+    writer.write_all(&buffer)?;
+    writer.finalize()?;
+
+    // Let us return the cert data which can be saved in the database
     let res = PyBytes::new(py, &buf);
     Ok(res.into())
 }
@@ -3225,6 +3275,7 @@ fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(add_uid_in_cert))?;
     m.add_wrapped(wrap_pyfunction!(revoke_uid_in_cert))?;
     m.add_wrapped(wrap_pyfunction!(update_subkeys_expiry_in_cert))?;
+    m.add_wrapped(wrap_pyfunction!(update_subkeys_expiry_on_card))?;
     m.add_wrapped(wrap_pyfunction!(update_primary_expiry_on_card))?;
     m.add_wrapped(wrap_pyfunction!(certify_key))?;
     m.add_wrapped(wrap_pyfunction!(get_ssh_pubkey))?;

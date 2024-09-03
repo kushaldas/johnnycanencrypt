@@ -5,7 +5,7 @@ You can access the low level functions or `Johnny` class by the following way:
 
 ::
 
-        >>> from johnnycanencrypt import johnnycanencrypt as jce
+        >>> from johnnycanencrypt import johnnycanencrypt as rjce
 
 In most cases you don't have to use these, but if you have a reason, feel free to use them.
 
@@ -16,7 +16,7 @@ In most cases you don't have to use these, but if you have a reason, feel free t
 
         ::
 
-                    >>> jce.encrypt_bytes_to_file(["tests/files/public.asc", "tests/files/hellopublic.asc"], b"Hello clear text", b"/tmp/encrypted_text.asc", armor=True)
+                >>> rjce.encrypt_bytes_to_file(["tests/files/public.asc", "tests/files/hellopublic.asc"], b"Hello clear text", b"/tmp/encrypted_text.asc", armor=True)
 
 
         .. note:: Use this function if you have to encrypt for multiple recipents.
@@ -43,7 +43,17 @@ In most cases you don't have to use these, but if you have a reason, feel free t
             >>> rjce.get_key_cipher_details(key.keyvalue)
             [('F4F388BBB194925AE301F844C52B42177857DD79', 'EdDSA', 256), ('102EBD23BD5D2D340FBBDE0ADFD1C55926648D2F', 'EdDSA', 256), ('85B67F139D835FA56BA703DB5A7A1560D46ED4F6', 'ECDH', 256)]
 
+.. function:: update_primary_expiry_on_card(certdata: bytes, expiry: int, pin: bytes) -> bytes:
 
+        This function updates the expiry date using the Yubikey and public key as `certdata`. You will have to pass the expiry as `int` number of seconds (after which the key will expire).
+
+        .. versionadded:: 0.15.0
+
+.. function:: update_subkeys_expiry_on_card(certdata: bytes, fingerprints: List[str], expiry: int, pin: bytes) -> bytes:
+
+        This function updates the expiry date of the given subkeys using Yubikey (the primary key must be on the Yubikey). You will have to pass the expiry as `int` number of seconds (after which the key will expire).
+
+        .. versionadded:: 0.15.0
 
 .. class:: Johnny(filepath)
 

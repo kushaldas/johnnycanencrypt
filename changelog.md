@@ -13,7 +13,8 @@
 - Adds Windows CI support #144.
 - Updates pyo3 to `0.20.0`.
 - Updates time to `0.3.30`.
-- Adds API for changing primary key expiry date #151.
+- Adds API for changing primary key expiry date via rjce #151.
+- Adds API for changing subkeys expiry date via rjce #152.
 
 
 ## [0.14.1] - 2023-05-21
