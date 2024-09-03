@@ -20,6 +20,7 @@ use std::io::Write;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
 use std::str;
+use std::time;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 extern crate anyhow;
 extern crate sequoia_openpgp as openpgp;
@@ -147,7 +148,7 @@ pub fn get_key_cipher_details(py: Python, certdata: Vec<u8>) -> Result<PyObject>
         let key_algo = key.pk_algo();
         let bits = key.mpis().bits();
         let algo = key_algo.to_string().clone();
-        let key_tuple = (fp.clone(), algo, bits.clone()).to_object(py);
+        let key_tuple = (fp.clone(), algo, bits).to_object(py);
 
         let key_tuple: std::result::Result<&PyTuple, PyDowncastError> =
             key_tuple.downcast::<PyTuple>(py);
@@ -161,9 +162,8 @@ pub fn get_key_cipher_details(py: Python, certdata: Vec<u8>) -> Result<PyObject>
                 )))
             }
         };
-        list.append(kt.clone())?;
+        list.append(<&PyTuple>::clone(&kt))?;
     }
-
     Ok(list.into())
 }
 
@@ -3157,6 +3157,41 @@ pub fn disable_otp_usb() -> Result<bool> {
     }
 }
 
+#[pyfunction]
+#[pyo3(text_signature = "(certdata, expirytime, pin)")]
+pub fn update_primary_expiry_on_card(
+    py: Python,
+    certdata: Vec<u8>,
+    expirytime: u64,
+    pin: Vec<u8>,
+) -> Result<PyObject> {
+    let cert = openpgp::Cert::from_bytes(&certdata)?;
+
+    let p = &P::new();
+    let vc = cert.with_policy(p, None)?;
+    let pk = cert.primary_key().key();
+    // We will use the primary key to sign.
+    let mut signer = scard::KeyPair::new(pin, pk)?;
+    // Make the primary key expire in a week.
+    let t = SystemTime::now() + Duration::new(expirytime, 0);
+    // Here we do the real sign.
+    let sigs = vc.primary_key().set_expiration_time(&mut signer, Some(t))?;
+    let cert = cert.insert_packets(sigs)?;
+    // Now let us return the secret key as Python Bytes
+    let mut buf = Vec::new();
+    let mut buffer = Vec::new();
+
+    // For the keys on card, we are writing (on memory) only the public key.
+    let mut writer = Writer::new(&mut buf, Kind::PublicKey)?;
+    cert.as_tsk().serialize(&mut buffer)?;
+    writer.write_all(&buffer)?;
+    writer.finalize()?;
+
+    // Let us return the cert data as bytes which can be saved in the database
+    let res = PyBytes::new(py, &buf);
+    Ok(res.into())
+}
+
 /// A Python module implemented in Rust.
 #[pymodule]
 fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
@@ -3190,6 +3225,7 @@ fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(add_uid_in_cert))?;
     m.add_wrapped(wrap_pyfunction!(revoke_uid_in_cert))?;
     m.add_wrapped(wrap_pyfunction!(update_subkeys_expiry_in_cert))?;
+    m.add_wrapped(wrap_pyfunction!(update_primary_expiry_on_card))?;
     m.add_wrapped(wrap_pyfunction!(certify_key))?;
     m.add_wrapped(wrap_pyfunction!(get_ssh_pubkey))?;
     m.add_wrapped(wrap_pyfunction!(get_signing_pubkey))?;
