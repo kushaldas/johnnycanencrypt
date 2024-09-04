@@ -10,7 +10,7 @@ use pyo3::types::PyBytes;
 use pyo3::types::PyTuple;
 use pyo3::types::{PyDateTime, PyDict, PyList};
 use pyo3::wrap_pyfunction;
-use pyo3::PyDowncastError;
+use pyo3::DowncastError;
 
 use std::collections::HashMap;
 use std::fmt;
@@ -136,10 +136,10 @@ impl JceError {
 
 /// Finds all keys in a cert and creates a list of fingerprint, algo, bitsize
 #[pyfunction]
-#[pyo3(text_signature = "(certdata)")]
-pub fn get_key_cipher_details(py: Python, certdata: Vec<u8>) -> Result<PyObject> {
+#[pyo3(signature = (certdata))]
+pub fn get_key_cipher_details<'py>(py: Python, certdata: Vec<u8>) -> Result<PyObject> {
     let cert = openpgp::Cert::from_bytes(&certdata)?;
-    let list = PyList::empty(py);
+    let list = PyList::empty_bound(py);
 
     let p = &P::new();
     for key in cert.with_policy(p, None)?.keys() {
@@ -147,10 +147,13 @@ pub fn get_key_cipher_details(py: Python, certdata: Vec<u8>) -> Result<PyObject>
         let key_algo = key.pk_algo();
         let bits = key.mpis().bits();
         let algo = key_algo.to_string().clone();
-        let key_tuple = (fp.clone(), algo, bits).to_object(py);
+        let key_tuple: Py<PyAny> = (fp.clone(), algo, bits).to_object(py);
 
-        let key_tuple: std::result::Result<&PyTuple, PyDowncastError> =
-            key_tuple.downcast::<PyTuple>(py);
+        // let key_tuple: std::result::Result<&PyTuple, PyDowncastError> =
+        //     key_tuple.downcast::<PyTuple>(py);
+
+        let key_tuple: std::result::Result<&Bound<'_, PyTuple>, DowncastError> =
+            key_tuple.downcast_bound::<PyTuple>(py);
 
         let kt = match key_tuple {
             Ok(value) => value,
@@ -161,7 +164,8 @@ pub fn get_key_cipher_details(py: Python, certdata: Vec<u8>) -> Result<PyObject>
                 )))
             }
         };
-        list.append(<&PyTuple>::clone(&kt))?;
+        // list.append(<&PyTuple>::clone(&kt))?;
+        list.append(kt.clone())?;
     }
     Ok(list.into())
 }
@@ -215,7 +219,7 @@ pub fn update_subkeys_expiry_in_cert(
     writer.finalize()?;
 
     // Let us return the cert data which can be saved in the database
-    let res = PyBytes::new(py, &buf);
+    let res = PyBytes::new_bound(py, &buf);
     Ok(res.into())
 }
 
@@ -280,7 +284,7 @@ pub fn revoke_uid_in_cert(
     writer.finalize()?;
 
     // Let us return the cert data which can be saved in the database
-    let res = PyBytes::new(py, &buf);
+    let res = PyBytes::new_bound(py, &buf);
     Ok(res.into())
 }
 
@@ -338,7 +342,7 @@ pub fn add_uid_in_cert(
     writer.finalize()?;
 
     // Let us return the cert data which can be saved in the database
-    let res = PyBytes::new(py, &buf);
+    let res = PyBytes::new_bound(py, &buf);
     Ok(res.into())
 }
 
@@ -392,7 +396,7 @@ pub fn update_password(
     writer.write_all(&buffer)?;
     writer.finalize()?;
     // Let us return the cert data which can be saved in the database
-    let res = PyBytes::new(py, &buf);
+    let res = PyBytes::new_bound(py, &buf);
     Ok(res.into())
 }
 
@@ -492,7 +496,7 @@ fn decrypt_bytes_on_card(
         Err(msg) => return Err(JceError::new(format!("Failed to decrypt: {}", msg))),
     };
     std::io::copy(&mut decryptor, &mut result)?;
-    let res = PyBytes::new(_py, &result);
+    let res = PyBytes::new_bound(_py, &result);
     Ok(res.into())
 }
 
@@ -522,7 +526,7 @@ pub fn decrypt_file_on_card(
 #[pyfunction]
 #[pyo3(text_signature = "(certdata, fh, output, pin)")]
 pub fn decrypt_filehandler_on_card(
-    _py: Python,
+    py: Python,
     certdata: Vec<u8>,
     fh: PyObject,
     output: Vec<u8>,
@@ -530,10 +534,9 @@ pub fn decrypt_filehandler_on_card(
 ) -> Result<bool> {
     let p = P::new();
 
-    let filedata = fh.call_method(_py, "read", (), None)?;
-    let pbytes: &PyBytes = filedata
-        .as_ref(_py)
-        .downcast::<PyBytes>()
+    let filedata = fh.call_method_bound(py, "read", (), None)?;
+    let pbytes: &Bound<'_, PyBytes> = filedata
+        .downcast_bound::<PyBytes>(py)
         .expect("Excepted bytes");
     let data: Vec<u8> = Vec::from(pbytes.as_bytes());
 
@@ -643,7 +646,7 @@ fn get_card_details(py: Python) -> PyResult<PyObject> {
         Err(value) => return Err(CardError::new_err(format!("{}", value))),
     };
 
-    let pd = PyDict::new(py);
+    let pd = PyDict::new_bound(py);
     pd.set_item("serial_number", tlvs::parse_card_serial(resp.get_data()))?;
     // Now the name of the card holder
     let resp = talktosc::send_and_parse(&card, apdus::create_apdu_personal_information());
@@ -1130,7 +1133,7 @@ fn certify_key(
     writer.finalize()?;
 
     // Let us return the cert data which can be saved in the database
-    let res = PyBytes::new(py, &buf);
+    let res = PyBytes::new_bound(py, &buf);
     Ok(res.into())
 }
 
@@ -1470,7 +1473,7 @@ fn sign_bytes_internal(
     sink.finalize()?;
 
     // Let us return the cert data which can be saved in the database
-    let res = PyBytes::new(py, &result);
+    let res = PyBytes::new_bound(py, &result);
     Ok(res.into())
 }
 
@@ -1533,7 +1536,7 @@ fn merge_keys(
     // Remember, the opposite is a security risk.
     let mergred_cert = cert.merge_public_and_secret(newcert)?;
     let cert_packets = mergred_cert.armored().to_vec()?;
-    let res = PyBytes::new(_py, &cert_packets);
+    let res = PyBytes::new_bound(_py, &cert_packets);
     Ok(res.into())
 }
 
@@ -1544,7 +1547,7 @@ fn merge_keys(
 #[pyo3(text_signature = "(filepath)")]
 fn file_encrypted_for(_py: Python, filepath: String) -> Result<PyObject> {
     let mut ppr = PacketParser::from_file(filepath)?;
-    let plist = PyList::empty(_py);
+    let plist = PyList::empty_bound(_py);
     while let PacketParserResult::Some(pp) = ppr {
         // Get the packet out of the parser and start parsing the next
         // packet, recursing.
@@ -1566,7 +1569,7 @@ fn file_encrypted_for(_py: Python, filepath: String) -> Result<PyObject> {
 #[pyo3(text_signature = "(messagedata)")]
 fn bytes_encrypted_for(_py: Python, messagedata: Vec<u8>) -> Result<PyObject> {
     let mut ppr = PacketParser::from_bytes(&messagedata[..])?;
-    let plist = PyList::empty(_py);
+    let plist = PyList::empty_bound(_py);
     while let PacketParserResult::Some(pp) = ppr {
         // Get the packet out of the parser and start parsing the next
         // packet, recursing.
@@ -1657,7 +1660,7 @@ fn upload_to_smartcard(
 fn get_signing_pubkey(py: Python, certdata: Vec<u8>) -> Result<PyObject> {
     // Note: For now we will return the first signing key (maybe the primary key).
     use std::fmt::Write;
-    let pd = PyDict::new(py);
+    let pd = PyDict::new_bound(py);
     let cert = openpgp::Cert::from_bytes(&certdata)?;
 
     let policy = P::new();
@@ -1697,7 +1700,7 @@ fn get_signing_pubkey(py: Python, certdata: Vec<u8>) -> Result<PyObject> {
 }
 
 #[pyfunction]
-#[pyo3(text_signature = "(certdata, comment)")]
+#[pyo3(signature = (certdata, comment=None))]
 fn get_ssh_pubkey(_py: Python, certdata: Vec<u8>, comment: Option<String>) -> Result<String> {
     let cert = openpgp::Cert::from_bytes(&certdata)?;
 
@@ -2177,7 +2180,11 @@ fn internal_parse_cert(
         Ok(value) => {
             let ctime = value.creation_time();
             let dt: DateTime<Utc> = DateTime::from(ctime);
-            Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None)?)
+            Some(PyDateTime::from_timestamp_bound(
+                py,
+                dt.timestamp() as f64,
+                None,
+            )?)
         }
         _ => None,
     };
@@ -2186,7 +2193,11 @@ fn internal_parse_cert(
         Ok(value) => match value.key_expiration_time() {
             Some(etime) => {
                 let dt: DateTime<Utc> = DateTime::from(etime);
-                Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None)?)
+                Some(PyDateTime::from_timestamp_bound(
+                    py,
+                    dt.timestamp() as f64,
+                    None,
+                )?)
             }
             _ => None,
         },
@@ -2199,9 +2210,9 @@ fn internal_parse_cert(
             return Err(JceError::new(err_msg.join(", ")));
         }
     };
-    let plist = PyList::empty(py);
+    let plist = PyList::empty_bound(py);
     for ua in cert.userids() {
-        let pd = PyDict::new(py);
+        let pd = PyDict::new_bound(py);
         //println!("  {}", String::from_utf8_lossy(ua.value()));
         pd.set_item("value", String::from_utf8_lossy(ua.value()))?;
         // If we have a name part in the UID
@@ -2231,7 +2242,7 @@ fn internal_parse_cert(
         pd.set_item("revoked", revoked)?;
 
         // This list contains a list of dictionary
-        let certification_list = PyList::empty(py);
+        let certification_list = PyList::empty_bound(py);
         // Now we will deal with the certifications, that is if anyone else signed this UID.
         for c in ua.certifications() {
             // This is the type of certification
@@ -2248,7 +2259,11 @@ fn internal_parse_cert(
                 match sct {
                     Some(sct_value) => {
                         let dt: DateTime<Utc> = DateTime::from(sct_value);
-                        Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None)?)
+                        Some(PyDateTime::from_timestamp_bound(
+                            py,
+                            dt.timestamp() as f64,
+                            None,
+                        )?)
                     }
                     None => None,
                 }
@@ -2256,21 +2271,21 @@ fn internal_parse_cert(
 
             // Now we need a list of issuers for this certification
             //
-            let issuer_list = PyList::empty(py);
+            let issuer_list = PyList::empty_bound(py);
             for issuer in c.get_issuers() {
                 //let fp_keyid = PyTuple::new(py, &[issuer.])
                 match issuer {
-                    KeyHandle::Fingerprint(finger) => issuer_list.append(PyTuple::new(
+                    KeyHandle::Fingerprint(finger) => issuer_list.append(PyTuple::new_bound(
                         py,
                         &["fingerprint".to_string(), finger.to_hex()],
                     ))?,
                     KeyHandle::KeyID(kid) => issuer_list
-                        .append(PyTuple::new(py, &["keyid".to_string(), kid.to_hex()]))?,
+                        .append(PyTuple::new_bound(py, &["keyid".to_string(), kid.to_hex()]))?,
                 }
             }
 
             // Now add this one certification
-            let ud_dict = PyDict::new(py);
+            let ud_dict = PyDict::new_bound(py);
             ud_dict.set_item("certification_type", c_type)?;
             ud_dict.set_item("certification_list", issuer_list)?;
             ud_dict.set_item("creationtime", creationtime)?;
@@ -2284,19 +2299,27 @@ fn internal_parse_cert(
         plist.append(pd)?;
     }
 
-    let subkeys = PyList::empty(py);
+    let subkeys = PyList::empty_bound(py);
     for ka in cert.keys().with_policy(&p, None).subkeys() {
         let expirationtime = match ka.key_expiration_time() {
             Some(etime) => {
                 let dt: DateTime<Utc> = DateTime::from(etime);
-                Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None)?)
+                Some(PyDateTime::from_timestamp_bound(
+                    py,
+                    dt.timestamp() as f64,
+                    None,
+                )?)
             }
             _ => None,
         };
 
         let creationtime = {
             let dt: DateTime<Utc> = DateTime::from(ka.creation_time());
-            Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None)?)
+            Some(PyDateTime::from_timestamp_bound(
+                py,
+                dt.timestamp() as f64,
+                None,
+            )?)
         };
 
         // To find what kind of subkey is this.
@@ -2334,7 +2357,7 @@ fn internal_parse_cert(
         _ => false,
     };
 
-    let othervalues = PyDict::new(py);
+    let othervalues = PyDict::new_bound(py);
     othervalues.set_item("keyid", cert.primary_key().keyid().to_hex())?;
     othervalues.set_item("subkeys", subkeys)?;
     othervalues.set_item("can_primary_sign", can_primary_sign)?;
@@ -2499,19 +2522,16 @@ fn create_key(
 /// Always remember to open the file in the Python side in "rb" mode, so that the `read()` call can
 /// return bytes.
 #[pyfunction]
-#[pyo3(text_signature = "(publickeys, fh, output, armor=False)")]
+#[pyo3(signature = (publickeys, fh, output, armor=false))]
 fn encrypt_filehandler_to_file(
-    _py: Python,
+    py: Python,
     publickeys: Vec<Vec<u8>>,
     fh: PyObject,
     output: Vec<u8>,
     armor: Option<bool>,
 ) -> Result<bool> {
-    let data = fh.call_method(_py, "read", (), None)?;
-    let pbytes: &PyBytes = data
-        .as_ref(_py)
-        .downcast::<PyBytes>()
-        .expect("Excepted bytes");
+    let data = fh.call_method_bound(py, "read", (), None)?;
+    let pbytes: &Bound<'_, PyBytes> = data.downcast_bound::<PyBytes>(py).expect("Excepted bytes");
     let filedata: Vec<u8> = Vec::from(pbytes.as_bytes());
     encrypt_bytes_to_file(publickeys, filedata, output, armor)
 }
@@ -2519,7 +2539,7 @@ fn encrypt_filehandler_to_file(
 /// This function takes a list of public key paths, and encrypts the given data in bytes to an output
 /// file. You can also pass boolen flag armor for armored output.
 #[pyfunction]
-#[pyo3(text_signature = "(publickeys, data, output, armor=False)")]
+#[pyo3(signature = (publickeys, data, output, armor=false))]
 fn encrypt_bytes_to_file(
     publickeys: Vec<Vec<u8>>,
     data: Vec<u8>,
@@ -2598,7 +2618,7 @@ fn encrypt_bytes_to_file(
 /// This function takes a list of public key paths, and encrypts the given filepath to an output
 /// file. You can also pass boolen flag armor for armored output.
 #[pyfunction]
-#[pyo3(text_signature = "(publickeys, filepath, output, armor=False)")]
+#[pyo3(signature = (publickeys, filepath, output, armor=false))]
 fn encrypt_file_internal(
     publickeys: Vec<Vec<u8>>,
     filepath: Vec<u8>,
@@ -2679,7 +2699,7 @@ fn encrypt_file_internal(
 /// This function takes a list of public key paths, and encrypts the given data in bytes and returns it.
 /// You can also pass boolen flag armor for armored output.
 #[pyfunction]
-#[pyo3(text_signature = "(publickeys, data, armor=False)")]
+#[pyo3(signature = (publickeys, data, armor=false))]
 fn encrypt_bytes_to_bytes(
     py: Python,
     publickeys: Vec<Vec<u8>>,
@@ -2731,11 +2751,11 @@ fn encrypt_bytes_to_bytes(
         Some(true) => {
             // Finalize the armor writer.
             sink.finalize().expect("Failed to write data");
-            let res = PyBytes::new(py, &result2);
+            let res = PyBytes::new_bound(py, &result2);
             Ok(res.into())
         }
         _ => {
-            let res = PyBytes::new(py, &result);
+            let res = PyBytes::new_bound(py, &result);
             Ok(res.into())
         }
     }
@@ -2755,6 +2775,7 @@ impl Johnny {
         Ok(Johnny { cert })
     }
 
+    #[pyo3(signature = (data, armor=false))]
     pub fn encrypt_bytes(
         &self,
         py: Python,
@@ -2800,11 +2821,11 @@ impl Johnny {
             Some(true) => {
                 // Finalize the armor writer.
                 sink.finalize().expect("Failed to write data");
-                let res = PyBytes::new(py, &result2);
+                let res = PyBytes::new_bound(py, &result2);
                 Ok(res.into())
             }
             _ => {
-                let res = PyBytes::new(py, &result);
+                let res = PyBytes::new_bound(py, &result);
                 Ok(res.into())
             }
         }
@@ -2827,9 +2848,10 @@ impl Johnny {
             Err(msg) => return Err(JceError::new(format!("Failed to decrypt: {}", msg))),
         };
         std::io::copy(&mut decryptor, &mut result)?;
-        let res = PyBytes::new(py, &result);
+        let res = PyBytes::new_bound(py, &result);
         Ok(res.into())
     }
+    #[pyo3(signature = (filepath, output, armor=false))]
     pub fn encrypt_file(
         &self,
         filepath: Vec<u8>,
@@ -2922,17 +2944,16 @@ impl Johnny {
 
     pub fn decrypt_filehandler(
         &self,
-        _py: Python,
+        py: Python,
         fh: PyObject,
         output: Vec<u8>,
         password: String,
     ) -> Result<bool> {
         let p = P::new();
 
-        let filedata = fh.call_method(_py, "read", (), None)?;
-        let pbytes: &PyBytes = filedata
-            .as_ref(_py)
-            .downcast::<PyBytes>()
+        let filedata = fh.call_method_bound(py, "read", (), None)?;
+        let pbytes: &Bound<'_, PyBytes> = filedata
+            .downcast_bound::<PyBytes>(py)
             .expect("Excepted bytes");
         let data: Vec<u8> = Vec::from(pbytes.as_bytes());
 
@@ -3036,7 +3057,7 @@ impl Johnny {
         tmp.seek(SeekFrom::Start(0))?;
         let mut inside: Vec<u8> = Vec::new();
         let _ = tmp.read_to_end(&mut inside)?;
-        let output = PyBytes::new(py, &inside);
+        let output = PyBytes::new_bound(py, &inside);
         Ok(output.into())
     }
 
@@ -3076,13 +3097,13 @@ pub fn get_card_version(py: Python) -> Result<PyObject> {
         Ok(value) => value,
         Err(_) => return Err(JceError::new("Can not get Yubikey version".to_string())),
     };
-    let result = PyTuple::new(py, data.iter());
+    let result = PyTuple::new_bound(py, data.iter());
     Ok(result.into())
 }
 
 /// TouchMode for Yubikeys
-#[pyclass]
-#[derive(Clone, Debug)]
+#[pyclass(eq, eq_int)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum TouchMode {
     Off = 0x00,
     On = 0x01,
@@ -3091,8 +3112,8 @@ pub enum TouchMode {
     CachedFixed = 0x04,
 }
 
-#[pyclass]
-#[derive(Clone, Debug)]
+#[pyclass(eq, eq_int)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum KeySlot {
     Signature = 0xD6,
     Encryption = 0xD7,
@@ -3187,7 +3208,7 @@ pub fn update_primary_expiry_on_card(
     writer.finalize()?;
 
     // Let us return the cert data as bytes which can be saved in the database
-    let res = PyBytes::new(py, &buf);
+    let res = PyBytes::new_bound(py, &buf);
     Ok(res.into())
 }
 
@@ -3238,13 +3259,13 @@ pub fn update_subkeys_expiry_on_card(
     writer.finalize()?;
 
     // Let us return the cert data which can be saved in the database
-    let res = PyBytes::new(py, &buf);
+    let res = PyBytes::new_bound(py, &buf);
     Ok(res.into())
 }
 
 /// A Python module implemented in Rust.
 #[pymodule]
-fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
+fn johnnycanencrypt(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(is_smartcard_connected))?;
     m.add_wrapped(wrap_pyfunction!(reset_yubikey))?;
     m.add_wrapped(wrap_pyfunction!(change_admin_pin))?;
@@ -3286,8 +3307,8 @@ fn johnnycanencrypt(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(enable_otp_usb))?;
     m.add_wrapped(wrap_pyfunction!(disable_otp_usb))?;
     m.add_wrapped(wrap_pyfunction!(get_key_cipher_details))?;
-    m.add("CryptoError", _py.get_type::<CryptoError>())?;
-    m.add("SameKeyError", _py.get_type::<SameKeyError>())?;
+    m.add("CryptoError", py.get_type_bound::<CryptoError>())?;
+    m.add("SameKeyError", py.get_type_bound::<SameKeyError>())?;
     m.add_class::<Johnny>()?;
     m.add_class::<TouchMode>()?;
     m.add_class::<KeySlot>()?;
