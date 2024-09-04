@@ -11,8 +11,12 @@
 
 - Adds `pathlib.Path` support to `KeyStore` #148.
 - Adds Windows CI support #144.
-- Updates pyo3 to `0.20.0`
-- Updates time to `0.3.30`
+- Updates pyo3 to `0.20.0`.
+- Updates time to `0.3.30`.
+- Adds API for changing primary key expiry date via rjce #151.
+- Adds API for changing subkeys expiry date via rjce #152.
+- Updates sequoia dependency to 1.21.2.
+- Updates pyo3 dependency to 0.22.2.
 
 
 ## [0.14.1] - 2023-05-21
