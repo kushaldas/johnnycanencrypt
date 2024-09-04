@@ -2417,11 +2417,10 @@ fn create_key(
     let crtbuilder = match creation {
         0 => crtbuilder,
         _ => {
-            cdt = Some(DateTime::<Utc>::from_utc(
-                NaiveDateTime::from_timestamp_opt(creation, 0).unwrap(),
-                Utc,
-            ));
-            crtbuilder.set_creation_time(SystemTime::from(cdt.unwrap()))
+            let internal_t = DateTime::from_timestamp(creation, 0).unwrap();
+            cdt = Some(internal_t.clone());
+            // cdt = Some(TimeZone::from_utc_datetime(&internal_t));
+            crtbuilder.set_creation_time(SystemTime::from(internal_t))
         }
     };
 
