@@ -130,6 +130,19 @@ Smartcard API
 
         Signs the given filepath and writes to output. Also requires the the public in `certdata` argument. For things like email, you would want to sign them in clear text.
 
+.. function:: update_primary_expiry_on_card(certdata: bytes, expiry: int, pin: bytes) -> bytes:
+
+        This function updates the expiry date using the Yubikey and public key as `certdata`. You will have to pass the expiry as `int` number of seconds (after which the key will expire).
+
+        .. versionadded:: 0.15.0
+
+.. function:: update_subkeys_expiry_on_card(certdata: bytes, fingerprints: List[str], expiry: int, pin: bytes) -> bytes:
+
+        This function updates the expiry date of the given subkeys using Yubikey (the primary key must be on the Yubikey). You will have to pass the expiry as `int` number of seconds (after which the key will expire).
+
+        .. versionadded:: 0.15.0
+
+
 .. function:: upload_to_smartcard(certdata: bytes, pin: bytes, password: str, whichkeys: int) -> bool:
 
         Uploads the marked (via whichkeys argument) subkeys to the smartcard. Takes the whole certdata (from `Key.keyvalue`) in bytes, and the admin pin of the card, the password (as string) of
