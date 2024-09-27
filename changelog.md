@@ -2,6 +2,8 @@
 
 ## [unreleased]
 
+## [0.15.0] - 2024-09-26
+
 ### Fixed
 
 - Fixes #140, updates dependencies.

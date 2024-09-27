@@ -43,17 +43,24 @@ In most cases you don't have to use these, but if you have a reason, feel free t
             >>> rjce.get_key_cipher_details(key.keyvalue)
             [('F4F388BBB194925AE301F844C52B42177857DD79', 'EdDSA', 256), ('102EBD23BD5D2D340FBBDE0ADFD1C55926648D2F', 'EdDSA', 256), ('85B67F139D835FA56BA703DB5A7A1560D46ED4F6', 'ECDH', 256)]
 
-.. function:: update_primary_expiry_on_card(certdata: bytes, expiry: int, pin: bytes) -> bytes:
+.. function:: update_subkeys_expiry_in_cert(certdata: bytes, fingerprints: List[str], expirytime: int, password: string) -> bytes:
 
-        This function updates the expiry date using the Yubikey and public key as `certdata`. You will have to pass the expiry as `int` number of seconds (after which the key will expire).
+        This function updates the expiry date of the given subkeys and returns the new certificate.
 
-        .. versionadded:: 0.15.0
+.. function:: revoke_uid_in_cert(certdata: bytes, uid: bytes, password: string) -> bytes:
 
-.. function:: update_subkeys_expiry_on_card(certdata: bytes, fingerprints: List[str], expiry: int, pin: bytes) -> bytes:
+        Revokes the given UID in the key and returns the new key with the revoked UID.
 
-        This function updates the expiry date of the given subkeys using Yubikey (the primary key must be on the Yubikey). You will have to pass the expiry as `int` number of seconds (after which the key will expire).
 
-        .. versionadded:: 0.15.0
+.. function:: add_uid_in_cert(certdata: bytes, uid: bytes, password: string) -> bytes:
+
+        Adds the given UID in the key and returns the new key.
+
+.. function:: update_password(certdata: bytes, password: str, newpass: str) -> bytes:
+
+        Updates the password of the key to a new password and then returns the updated key.
+
+
 
 .. class:: Johnny(filepath)
 
