@@ -41,5 +41,5 @@ sequoia-openpgp = { version="1.21.2", default-features = false, features = ["cry
 
 
 [dependencies.pyo3]
-version = "0.22.2"
+version = "0.22.4"
 
