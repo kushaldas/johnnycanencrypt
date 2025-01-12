@@ -4,6 +4,15 @@ import johnnycanencrypt.johnnycanencrypt as rustjce
 from tests.conftest import BASE_TESTSDIR
 
 
+def test_parse_keyring():
+    """Tests parsing of a keyring file.
+    """
+
+    ringpath = BASE_TESTSDIR / "files" / "foo_keyring.asc"
+    keys = rustjce.parse_keyring_file(str(ringpath))
+    assert len(keys) == 2
+
+
 def test_parse_expired_old_cert():
     """Tests an old expried key.
 

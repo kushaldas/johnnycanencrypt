@@ -2126,6 +2126,35 @@ fn parse_and_move_a_key(
     //Ok(true)
 }
 
+/// Parses the given keyring file path, and returns list of tuples with various data.
+///
+/// - The first item of the tuple is a list of user ids as dictionary.
+///    [{"value": xxx, "comment": "xxx", "email": "xxx", "uri": "xxx", "revoked": boolean}, ]
+/// - Second item is the `fingerprint` as string.
+/// - Boolean  to mark if secret key or public
+/// - expirationtime as datetime.datetime
+/// - creationtime as datetime.datetime
+/// - othervalues is another dictionary, inside of it.
+///   - "subkeys": [("subkey keyid as hex", "fingerprint as hex", creationtime, expirationtime,
+///                "keytype", "revoked as boolean")]. The subkey type can be of "encryption", "signing",
+///                "authentication", or "unknown".
+///   - "keyid": "primary key id in hex"
+#[pyfunction]
+fn parse_keyring_file(py: Python, certpath: String) -> Result<PyObject> {
+    let plist = PyList::empty_bound(py);
+    let ppr = PacketParser::from_file(certpath)?;
+    for certdata in CertParser::from(ppr) {
+        match certdata {
+            Ok(cert) => {
+                let data = internal_parse_cert(py, cert, true)?;
+                let _ = plist.append(data);
+            }
+            Err(err) => return Err(JceError::new(format!("{}", err))),
+        }
+    }
+    Ok(plist.into())
+}
+
 /// Parses the given file path, and returns a tuple with various data.
 ///
 /// - The first item is a list of user ids as dictionary.
@@ -3298,6 +3327,7 @@ fn johnnycanencrypt(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(encrypt_filehandler_to_file))?;
     m.add_wrapped(wrap_pyfunction!(parse_cert_file))?;
     m.add_wrapped(wrap_pyfunction!(parse_cert_bytes))?;
+    m.add_wrapped(wrap_pyfunction!(parse_keyring_file))?;
     m.add_wrapped(wrap_pyfunction!(encrypt_bytes_to_file))?;
     m.add_wrapped(wrap_pyfunction!(encrypt_bytes_to_bytes))?;
     m.add_wrapped(wrap_pyfunction!(encrypt_file_internal))?;

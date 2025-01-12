@@ -55,6 +55,11 @@ In most cases you don't have to use these, but if you have a reason, feel free t
         .. versionchanged:: 0.16.0
            `nullpolicy` argument was added.
 
+.. function:: parse_keyring_file(certfile: str) -> List[...]:
+
+        This function can parse any given keyring file. It always uses `nullpolicy` and returns a list of Tuples (as mentioned above).
+
+        .. versionadded:: 0.16.0
 
 .. function:: encrypt_bytes_to_file(publickeys, data, output, armor=False)
 
