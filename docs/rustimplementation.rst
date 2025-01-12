@@ -9,55 +9,48 @@ You will have to first import the module written in Rust.
 
 In most cases you don't have to use these, but if you have a reason, feel free to use them.
 
-.. function:: parse_cert_bytes(certdata: bytes,nullpolicy: Optional[bool])) -> Tuple[List[Dict[Any, Any]], str, bool, datetime, datetime, Dict[Any, Any]]:
+For type annotation we have a Type Alias called `KeyData` as following:
+
+::
+
+        KeyData = Tuple[List[Dict[Any, Any]], str, bool, datetime, datetime, Dict[Any, Any]]
+
+
+.. function:: parse_cert_bytes(certdata: bytes,nullpolicy: Optional[bool])) -> KeyData:
 
         This function parses the given bytes and returns the parsed output as a Tuple. If you parse the `nullpolicy` argument, then we can parse old
         `sha1` based keys too.
 
-        Return Tuple has the following:
-
-        - The first item is a list of user ids as dictionary.
-           [{"value": xxx, "comment": "xxx", "email": "xxx", "uri": "xxx", "revoked": boolean}, ]
-        - Second item is the `fingerprint` as string.
-        - Boolean  to mark if secret key or public
-        - expirationtime as datetime.datetime
-        - creationtime as datetime.datetime
-        - othervalues is another dictionary, inside of it.
-          - "subkeys": [("subkey keyid as hex", "fingerprint as hex", creationtime, expirationtime,
-                       "keytype", "revoked as boolean")]. The subkey type can be of "encryption", "signing",
-                       "authentication", or "unknown".
-          - "keyid": "primary key id in hex"
+        Returns `KeyData` type.
 
         .. versionchanged:: 0.16.0
            `nullpolicy` argument was added.
 
 
 
-.. function:: parse_cert_file(certfile: str,nullpolicy: Optional[bool]) -> Tuple[List[Dict[Any, Any]], str, bool, datetime, datetime, Dict[Any, Any]]:
+.. function:: parse_cert_file(certfile: str,nullpolicy: Optional[bool]) -> KeyData:
 
         This function parses the given `certfile` path (as string) and returns the parsed output as a Tuple. If you parse the `nullpolicy` argument, then we can parse old
         `sha1` based keys too.
 
-        Return Tuple has the following:
-
-        - The first item is a list of user ids as dictionary.
-           [{"value": xxx, "comment": "xxx", "email": "xxx", "uri": "xxx", "revoked": boolean}, ]
-        - Second item is the `fingerprint` as string.
-        - Boolean  to mark if secret key or public
-        - expirationtime as datetime.datetime
-        - creationtime as datetime.datetime
-        - othervalues is another dictionary, inside of it.
-          - "subkeys": [("subkey keyid as hex", "fingerprint as hex", creationtime, expirationtime,
-                       "keytype", "revoked as boolean")]. The subkey type can be of "encryption", "signing",
-                       "authentication", or "unknown".
-          - "keyid": "primary key id in hex"
+        Returns `KeyData` type.
 
         .. versionchanged:: 0.16.0
            `nullpolicy` argument was added.
 
-.. function:: parse_keyring_file(certfile: str) -> List[...]:
+.. function:: parse_keyring_file(certfile: str) -> List[Tuple[KeyData, bytes]]:
 
-        This function can parse any given keyring file. It always uses `nullpolicy` and returns a list of Tuples (as mentioned above).
+        This function can parse any given keyring file. It always uses `nullpolicy`, returns List of the following
+        tuple of `KeyData` and certificate in bytes. In most cases you can discard the certificate data unless you
+        want to access the indivitual certificate in future.
+
+        Tuple[KeyData, bytes]
+
+        .. versionadded:: 0.16.0
+
+.. function:: export_keyring_file(certs: List[bytes], keyringfilename: str) -> bool:
+
+        This function exports a list of given certificates (public keys in bytes format) to a keyring file.
 
         .. versionadded:: 0.16.0
 

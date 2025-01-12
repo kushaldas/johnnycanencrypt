@@ -2128,6 +2128,9 @@ fn parse_and_move_a_key(
 
 /// Parses the given keyring file path, and returns list of tuples with various data.
 ///
+/// Each item of the List is a tuple, where the first item is descripbed below and
+/// second item is the certdata in bytes.
+///
 /// - The first item of the tuple is a list of user ids as dictionary.
 ///    [{"value": xxx, "comment": "xxx", "email": "xxx", "uri": "xxx", "revoked": boolean}, ]
 /// - Second item is the `fingerprint` as string.
@@ -2146,13 +2149,43 @@ fn parse_keyring_file(py: Python, certpath: String) -> Result<PyObject> {
     for certdata in CertParser::from(ppr) {
         match certdata {
             Ok(cert) => {
+                // Now we have to export the cert's public key
+                let mut buf = Vec::new();
+                let mut buffer = Vec::new();
+                let _ = Marshal::serialize(&cert, &mut buffer);
+                let mut writer = Writer::new(&mut buf, Kind::PublicKey).unwrap();
+                writer.write_all(&buffer).unwrap();
+                writer.finalize().unwrap();
+
                 let data = internal_parse_cert(py, cert, true)?;
-                let _ = plist.append(data);
+                let certdata = PyBytes::new_bound(py, &buf);
+                let _ = plist.append((data, certdata));
             }
             Err(err) => return Err(JceError::new(format!("{}", err))),
         }
     }
     Ok(plist.into())
+}
+
+#[pyfunction]
+#[pyo3(signature = (certs, keyringname))]
+fn export_keyring_file(_py: Python, certs: Vec<Vec<u8>>, keyringname: String) -> Result<bool> {
+    let mut buf = Vec::new();
+    let mut buffer = Vec::new();
+    // Loop over the list of bytes data and generate certs and serialize them.
+    for certdata in &certs {
+        let cert = openpgp::Cert::from_bytes(certdata)?;
+        let _ = Marshal::serialize(&cert, &mut buffer);
+    }
+
+    // Now create a write and write out the whole public keys into it.
+    let mut writer = Writer::new(&mut buf, Kind::PublicKey).unwrap();
+    writer.write_all(&buffer).unwrap();
+    writer.finalize().unwrap();
+    // Now write to the file.
+    std::fs::write(keyringname, buf)?;
+
+    Ok(true)
 }
 
 /// Parses the given file path, and returns a tuple with various data.
@@ -3328,6 +3361,7 @@ fn johnnycanencrypt(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(parse_cert_file))?;
     m.add_wrapped(wrap_pyfunction!(parse_cert_bytes))?;
     m.add_wrapped(wrap_pyfunction!(parse_keyring_file))?;
+    m.add_wrapped(wrap_pyfunction!(export_keyring_file))?;
     m.add_wrapped(wrap_pyfunction!(encrypt_bytes_to_file))?;
     m.add_wrapped(wrap_pyfunction!(encrypt_bytes_to_bytes))?;
     m.add_wrapped(wrap_pyfunction!(encrypt_file_internal))?;

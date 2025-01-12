@@ -1,4 +1,6 @@
 import datetime
+import os
+import tempfile
 
 import johnnycanencrypt.johnnycanencrypt as rustjce
 from tests.conftest import BASE_TESTSDIR
@@ -11,6 +13,30 @@ def test_parse_keyring():
     ringpath = BASE_TESTSDIR / "files" / "foo_keyring.asc"
     keys = rustjce.parse_keyring_file(str(ringpath))
     assert len(keys) == 2
+    assert len(keys[0]) == 2  # The data and certdata
+
+def test_write_to_keyring():
+    """Tests writing to a keyring file.
+    """
+
+    ringpath = BASE_TESTSDIR / "files" / "foo_keyring.asc"
+    keys = rustjce.parse_keyring_file(str(ringpath))
+    assert len(keys) == 2
+    certs = []
+    for key in keys:
+        certs.append(key[1])
+    # Now write it in a temporary file
+    with tempfile.TemporaryDirectory() as tmpdir:
+        filename = os.path.join(tmpdir, "keyring.asc")
+        rustjce.export_keyring_file(certs, filename)
+        # Now the file has been written to disk
+        # let us verify that the file exists.
+        assert os.path.exists(filename) == True
+
+        # Now re-read the keyring to verify that we have the right keys back
+        newkeys = rustjce.parse_keyring_file(filename)
+        assert len(newkeys) == 2
+
 
 
 def test_parse_expired_old_cert():
