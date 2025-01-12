@@ -1,13 +1,60 @@
 The internal johnnycanencrypt module written in Rust
 ====================================================
 
-You can access the low level functions or `Johnny` class by the following way:
+You will have to first import the module written in Rust.
 
 ::
 
         >>> from johnnycanencrypt import johnnycanencrypt as rjce
 
 In most cases you don't have to use these, but if you have a reason, feel free to use them.
+
+.. function:: parse_cert_bytes(certdata: bytes,nullpolicy: Optional[bool])) -> Tuple[List[Dict[Any, Any]], str, bool, datetime, datetime, Dict[Any, Any]]:
+
+        This function parses the given bytes and returns the parsed output as a Tuple. If you parse the `nullpolicy` argument, then we can parse old
+        `sha1` based keys too.
+
+        Return Tuple has the following:
+
+        - The first item is a list of user ids as dictionary.
+           [{"value": xxx, "comment": "xxx", "email": "xxx", "uri": "xxx", "revoked": boolean}, ]
+        - Second item is the `fingerprint` as string.
+        - Boolean  to mark if secret key or public
+        - expirationtime as datetime.datetime
+        - creationtime as datetime.datetime
+        - othervalues is another dictionary, inside of it.
+          - "subkeys": [("subkey keyid as hex", "fingerprint as hex", creationtime, expirationtime,
+                       "keytype", "revoked as boolean")]. The subkey type can be of "encryption", "signing",
+                       "authentication", or "unknown".
+          - "keyid": "primary key id in hex"
+
+        .. versionchanged:: 0.16.0
+           `nullpolicy` argument was added.
+
+
+
+.. function:: parse_cert_file(certfile: str,nullpolicy: Optional[bool]) -> Tuple[List[Dict[Any, Any]], str, bool, datetime, datetime, Dict[Any, Any]]:
+
+        This function parses the given `certfile` path (as string) and returns the parsed output as a Tuple. If you parse the `nullpolicy` argument, then we can parse old
+        `sha1` based keys too.
+
+        Return Tuple has the following:
+
+        - The first item is a list of user ids as dictionary.
+           [{"value": xxx, "comment": "xxx", "email": "xxx", "uri": "xxx", "revoked": boolean}, ]
+        - Second item is the `fingerprint` as string.
+        - Boolean  to mark if secret key or public
+        - expirationtime as datetime.datetime
+        - creationtime as datetime.datetime
+        - othervalues is another dictionary, inside of it.
+          - "subkeys": [("subkey keyid as hex", "fingerprint as hex", creationtime, expirationtime,
+                       "keytype", "revoked as boolean")]. The subkey type can be of "encryption", "signing",
+                       "authentication", or "unknown".
+          - "keyid": "primary key id in hex"
+
+        .. versionchanged:: 0.16.0
+           `nullpolicy` argument was added.
+
 
 .. function:: encrypt_bytes_to_file(publickeys, data, output, armor=False)
 
@@ -61,6 +108,7 @@ In most cases you don't have to use these, but if you have a reason, feel free t
         Updates the password of the key to a new password and then returns the updated key.
 
 
+You can access the low level functions or `Johnny` class by the following way:
 
 .. class:: Johnny(filepath)
 

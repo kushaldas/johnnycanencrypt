@@ -40,6 +40,7 @@ use crate::openpgp::crypto::Decryptor;
 use crate::openpgp::packet::key;
 use crate::openpgp::packet::signature::SignatureBuilder;
 use crate::openpgp::parse::{PacketParser, PacketParserResult, Parse};
+use crate::openpgp::policy::NullPolicy as NP;
 use crate::openpgp::policy::Policy;
 use crate::openpgp::policy::StandardPolicy as P;
 use crate::openpgp::serialize::stream::{Armorer, Encryptor2, LiteralWriter, Message, Signer};
@@ -2139,13 +2140,15 @@ fn parse_and_move_a_key(
 ///                "authentication", or "unknown".
 ///   - "keyid": "primary key id in hex"
 #[pyfunction]
-#[pyo3(text_signature = "(certpath)")]
+#[pyo3(signature = (certpath, nullpolicy=None))]
 fn parse_cert_file(
     py: Python,
     certpath: String,
+    nullpolicy: Option<bool>,
 ) -> Result<(PyObject, String, bool, PyObject, PyObject, PyObject)> {
     let cert = openpgp::Cert::from_file(certpath)?;
-    internal_parse_cert(py, cert)
+    let null_policy_can_be_used = nullpolicy.unwrap_or(false);
+    internal_parse_cert(py, cert, null_policy_can_be_used)
 }
 
 /// Parses the given bytes, and returns a tuple with various data.
@@ -2162,21 +2165,28 @@ fn parse_cert_file(
 ///                "authentication", or "unknown".
 ///   - "keyid": "primary key id in hex"
 #[pyfunction]
-#[pyo3(text_signature = "(certpath)")]
+#[pyo3(signature = (certdata, nullpolicy=None))]
 fn parse_cert_bytes(
     py: Python,
     certdata: Vec<u8>,
+    nullpolicy: Option<bool>,
 ) -> Result<(PyObject, String, bool, PyObject, PyObject, PyObject)> {
     let cert = openpgp::Cert::from_bytes(&certdata)?;
-    internal_parse_cert(py, cert)
+    let null_policy_can_be_used = nullpolicy.unwrap_or(false);
+    internal_parse_cert(py, cert, null_policy_can_be_used)
 }
 
 fn internal_parse_cert(
     py: Python,
     cert: openpgp::Cert,
+    nullpolicy_can_be_used: bool,
 ) -> Result<(PyObject, String, bool, PyObject, PyObject, PyObject)> {
-    let p = P::new();
-    let creationtime = match cert.primary_key().with_policy(&p, None) {
+    let pbox: Box<dyn Policy> = if nullpolicy_can_be_used {
+        Box::new(NP::new())
+    } else {
+        Box::new(P::new())
+    };
+    let creationtime = match cert.primary_key().with_policy(pbox.as_ref(), None) {
         Ok(value) => {
             let ctime = value.creation_time();
             let dt: DateTime<Utc> = DateTime::from(ctime);
@@ -2189,7 +2199,7 @@ fn internal_parse_cert(
         _ => None,
     };
 
-    let expirationtime = match cert.primary_key().with_policy(&p, None) {
+    let expirationtime = match cert.primary_key().with_policy(pbox.as_ref(), None) {
         Ok(value) => match value.key_expiration_time() {
             Some(etime) => {
                 let dt: DateTime<Utc> = DateTime::from(etime);
@@ -2236,7 +2246,7 @@ fn internal_parse_cert(
         }
         let mut revoked = false;
         // Based on https://docs.sequoia-pgp.org/1.0.0/sequoia_openpgp/cert/struct.UserIDRevocationBuilder.html#examples
-        if let RevocationStatus::Revoked(_) = ua.revocation_status(&p, None) {
+        if let RevocationStatus::Revoked(_) = ua.revocation_status(pbox.as_ref(), None) {
             revoked = true;
         };
         pd.set_item("revoked", revoked)?;
@@ -2300,7 +2310,7 @@ fn internal_parse_cert(
     }
 
     let subkeys = PyList::empty_bound(py);
-    for ka in cert.keys().with_policy(&p, None).subkeys() {
+    for ka in cert.keys().with_policy(pbox.as_ref(), None).subkeys() {
         let expirationtime = match ka.key_expiration_time() {
             Some(etime) => {
                 let dt: DateTime<Utc> = DateTime::from(etime);
@@ -2352,7 +2362,7 @@ fn internal_parse_cert(
     }
 
     // To find out if the primary key can sign or not.
-    let can_primary_sign = match cert.primary_key().with_policy(&p, None) {
+    let can_primary_sign = match cert.primary_key().with_policy(pbox.as_ref(), None) {
         Ok(pkey) => pkey.for_signing(),
         _ => false,
     };

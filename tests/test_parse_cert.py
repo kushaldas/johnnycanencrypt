@@ -1,14 +1,30 @@
 import datetime
 
 import johnnycanencrypt.johnnycanencrypt as rustjce
-
 from tests.conftest import BASE_TESTSDIR
+
+
+def test_parse_expired_old_cert():
+    """Tests an old expried key.
+
+    This will normally fail with StandardPolicy.
+    """
+    keypath = BASE_TESTSDIR / "files" / "store" / "old.asc"
+    (
+        uids,
+        fingerprint,
+        keytype,
+        expirationtime,
+        creationtime,
+        othervalues,
+    ) = rustjce.parse_cert_file(str(keypath), nullpolicy=True)
+
 
 
 def test_parse_cert_file():
     """Tests the rust implementation of the pgp key.
 
-    Tests via Kushal's key and a new key
+    Tests via Kushal's expired key and a new key
     """
     # These two are known values from kushal
     etime = datetime.datetime(2020, 10, 16, 20, 53, 47)
@@ -31,7 +47,7 @@ def test_parse_cert_file():
 def test_parse_cert_bytes():
     """Tests the rust implementation of the pgp key.
 
-    Tests via Kushal's key and a new key
+    Tests via Kushal's expired key and a new key
     """
     # These two are known values from kushal
     etime = datetime.datetime(2020, 10, 16, 20, 53, 47)
