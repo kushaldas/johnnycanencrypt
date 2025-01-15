@@ -2,6 +2,10 @@
 
 ## [unreleased]
 
+### Added
+
+- Raises `SameKeyError` while importing same secret key again.
+
 ## [0.15.0] - 2024-09-26
 
 ### Fixed
