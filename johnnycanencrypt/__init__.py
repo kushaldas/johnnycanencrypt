@@ -2,42 +2,28 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
 import os
+import shutil
 import sqlite3
 import urllib.parse
-import shutil
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional, Union, Tuple, Any
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import httpx
 
-from .exceptions import FetchingError, KeyNotFoundError
-from .johnnycanencrypt import (
-    CryptoError,
-    Johnny,
-    SameKeyError,  # noqa: F401
-    create_key,
-    encrypt_bytes_to_bytes,
-    encrypt_bytes_to_file,
-    encrypt_file_internal,
-    encrypt_filehandler_to_file,
-    get_pub_key,
-    merge_keys,
-    parse_cert_bytes,
-    parse_cert_file,
-    TouchMode,
-)
-
 import johnnycanencrypt.johnnycanencrypt as rjce
 
-from .utils import (
-    _get_cert_data,  # noqa: F401
-    createdb,
-    convert_fingerprint,
-    to_sort_by_expiry,
-    DB_UPGRADE_DATE,
-)
+from .exceptions import FetchingError, KeyNotFoundError
+from .johnnycanencrypt import SameKeyError  # noqa: F401
+from .johnnycanencrypt import (CryptoError, Johnny, TouchMode, create_key,
+                               encrypt_bytes_to_bytes, encrypt_bytes_to_file,
+                               encrypt_file_internal,
+                               encrypt_filehandler_to_file, get_pub_key,
+                               merge_keys, parse_cert_bytes, parse_cert_file)
+from .utils import _get_cert_data  # noqa: F401
+from .utils import (DB_UPGRADE_DATE, convert_fingerprint, createdb,
+                    to_sort_by_expiry)
 
 # To use for type checking
 StrOrBytesPath = Union[str, bytes, os.PathLike]
@@ -402,9 +388,7 @@ class KeyStore:
                 else:  # Means another secret to replace
                     # We will not do anything, if you want reimport for a secret key
                     # delete the old one, and import the new one
-                    # TODO: We should also raise SameKeyError here
-                    return
-
+                    raise SameKeyError(f"{fingerprint}")
                 cursor.execute(sql, (cert, ktype, etime, ctime, key_id))
             else:
                 # Now insert the new key

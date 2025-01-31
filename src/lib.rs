@@ -40,6 +40,7 @@ use crate::openpgp::crypto::Decryptor;
 use crate::openpgp::packet::key;
 use crate::openpgp::packet::signature::SignatureBuilder;
 use crate::openpgp::parse::{PacketParser, PacketParserResult, Parse};
+use crate::openpgp::policy::NullPolicy as NP;
 use crate::openpgp::policy::Policy;
 use crate::openpgp::policy::StandardPolicy as P;
 use crate::openpgp::serialize::stream::{Armorer, Encryptor2, LiteralWriter, Message, Signer};
@@ -2125,6 +2126,68 @@ fn parse_and_move_a_key(
     //Ok(true)
 }
 
+/// Parses the given keyring file path, and returns list of tuples with various data.
+///
+/// Each item of the List is a tuple, where the first item is descripbed below and
+/// second item is the certdata in bytes.
+///
+/// - The first item of the tuple is a list of user ids as dictionary.
+///    [{"value": xxx, "comment": "xxx", "email": "xxx", "uri": "xxx", "revoked": boolean}, ]
+/// - Second item is the `fingerprint` as string.
+/// - Boolean  to mark if secret key or public
+/// - expirationtime as datetime.datetime
+/// - creationtime as datetime.datetime
+/// - othervalues is another dictionary, inside of it.
+///   - "subkeys": [("subkey keyid as hex", "fingerprint as hex", creationtime, expirationtime,
+///                "keytype", "revoked as boolean")]. The subkey type can be of "encryption", "signing",
+///                "authentication", or "unknown".
+///   - "keyid": "primary key id in hex"
+#[pyfunction]
+fn parse_keyring_file(py: Python, certpath: String) -> Result<PyObject> {
+    let plist = PyList::empty_bound(py);
+    let ppr = PacketParser::from_file(certpath)?;
+    for certdata in CertParser::from(ppr) {
+        match certdata {
+            Ok(cert) => {
+                // Now we have to export the cert's public key
+                let mut buf = Vec::new();
+                let mut buffer = Vec::new();
+                let _ = Marshal::serialize(&cert, &mut buffer);
+                let mut writer = Writer::new(&mut buf, Kind::PublicKey).unwrap();
+                writer.write_all(&buffer).unwrap();
+                writer.finalize().unwrap();
+
+                let data = internal_parse_cert(py, cert, true)?;
+                let certdata = PyBytes::new_bound(py, &buf);
+                let _ = plist.append((data, certdata));
+            }
+            Err(err) => return Err(JceError::new(format!("{}", err))),
+        }
+    }
+    Ok(plist.into())
+}
+
+#[pyfunction]
+#[pyo3(signature = (certs, keyringname))]
+fn export_keyring_file(_py: Python, certs: Vec<Vec<u8>>, keyringname: String) -> Result<bool> {
+    let mut buf = Vec::new();
+    let mut buffer = Vec::new();
+    // Loop over the list of bytes data and generate certs and serialize them.
+    for certdata in &certs {
+        let cert = openpgp::Cert::from_bytes(certdata)?;
+        let _ = Marshal::serialize(&cert, &mut buffer);
+    }
+
+    // Now create a write and write out the whole public keys into it.
+    let mut writer = Writer::new(&mut buf, Kind::PublicKey).unwrap();
+    writer.write_all(&buffer).unwrap();
+    writer.finalize().unwrap();
+    // Now write to the file.
+    std::fs::write(keyringname, buf)?;
+
+    Ok(true)
+}
+
 /// Parses the given file path, and returns a tuple with various data.
 ///
 /// - The first item is a list of user ids as dictionary.
@@ -2139,13 +2202,15 @@ fn parse_and_move_a_key(
 ///                "authentication", or "unknown".
 ///   - "keyid": "primary key id in hex"
 #[pyfunction]
-#[pyo3(text_signature = "(certpath)")]
+#[pyo3(signature = (certpath, nullpolicy=None))]
 fn parse_cert_file(
     py: Python,
     certpath: String,
+    nullpolicy: Option<bool>,
 ) -> Result<(PyObject, String, bool, PyObject, PyObject, PyObject)> {
     let cert = openpgp::Cert::from_file(certpath)?;
-    internal_parse_cert(py, cert)
+    let null_policy_can_be_used = nullpolicy.unwrap_or(false);
+    internal_parse_cert(py, cert, null_policy_can_be_used)
 }
 
 /// Parses the given bytes, and returns a tuple with various data.
@@ -2162,21 +2227,28 @@ fn parse_cert_file(
 ///                "authentication", or "unknown".
 ///   - "keyid": "primary key id in hex"
 #[pyfunction]
-#[pyo3(text_signature = "(certpath)")]
+#[pyo3(signature = (certdata, nullpolicy=None))]
 fn parse_cert_bytes(
     py: Python,
     certdata: Vec<u8>,
+    nullpolicy: Option<bool>,
 ) -> Result<(PyObject, String, bool, PyObject, PyObject, PyObject)> {
     let cert = openpgp::Cert::from_bytes(&certdata)?;
-    internal_parse_cert(py, cert)
+    let null_policy_can_be_used = nullpolicy.unwrap_or(false);
+    internal_parse_cert(py, cert, null_policy_can_be_used)
 }
 
 fn internal_parse_cert(
     py: Python,
     cert: openpgp::Cert,
+    nullpolicy_can_be_used: bool,
 ) -> Result<(PyObject, String, bool, PyObject, PyObject, PyObject)> {
-    let p = P::new();
-    let creationtime = match cert.primary_key().with_policy(&p, None) {
+    let pbox: Box<dyn Policy> = if nullpolicy_can_be_used {
+        Box::new(NP::new())
+    } else {
+        Box::new(P::new())
+    };
+    let creationtime = match cert.primary_key().with_policy(pbox.as_ref(), None) {
         Ok(value) => {
             let ctime = value.creation_time();
             let dt: DateTime<Utc> = DateTime::from(ctime);
@@ -2189,7 +2261,7 @@ fn internal_parse_cert(
         _ => None,
     };
 
-    let expirationtime = match cert.primary_key().with_policy(&p, None) {
+    let expirationtime = match cert.primary_key().with_policy(pbox.as_ref(), None) {
         Ok(value) => match value.key_expiration_time() {
             Some(etime) => {
                 let dt: DateTime<Utc> = DateTime::from(etime);
@@ -2236,7 +2308,7 @@ fn internal_parse_cert(
         }
         let mut revoked = false;
         // Based on https://docs.sequoia-pgp.org/1.0.0/sequoia_openpgp/cert/struct.UserIDRevocationBuilder.html#examples
-        if let RevocationStatus::Revoked(_) = ua.revocation_status(&p, None) {
+        if let RevocationStatus::Revoked(_) = ua.revocation_status(pbox.as_ref(), None) {
             revoked = true;
         };
         pd.set_item("revoked", revoked)?;
@@ -2300,7 +2372,7 @@ fn internal_parse_cert(
     }
 
     let subkeys = PyList::empty_bound(py);
-    for ka in cert.keys().with_policy(&p, None).subkeys() {
+    for ka in cert.keys().with_policy(pbox.as_ref(), None).subkeys() {
         let expirationtime = match ka.key_expiration_time() {
             Some(etime) => {
                 let dt: DateTime<Utc> = DateTime::from(etime);
@@ -2352,7 +2424,7 @@ fn internal_parse_cert(
     }
 
     // To find out if the primary key can sign or not.
-    let can_primary_sign = match cert.primary_key().with_policy(&p, None) {
+    let can_primary_sign = match cert.primary_key().with_policy(pbox.as_ref(), None) {
         Ok(pkey) => pkey.for_signing(),
         _ => false,
     };
@@ -3288,6 +3360,8 @@ fn johnnycanencrypt(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(encrypt_filehandler_to_file))?;
     m.add_wrapped(wrap_pyfunction!(parse_cert_file))?;
     m.add_wrapped(wrap_pyfunction!(parse_cert_bytes))?;
+    m.add_wrapped(wrap_pyfunction!(parse_keyring_file))?;
+    m.add_wrapped(wrap_pyfunction!(export_keyring_file))?;
     m.add_wrapped(wrap_pyfunction!(encrypt_bytes_to_file))?;
     m.add_wrapped(wrap_pyfunction!(encrypt_bytes_to_bytes))?;
     m.add_wrapped(wrap_pyfunction!(encrypt_file_internal))?;

@@ -163,13 +163,15 @@ For the rest of the documentation we assume that you imported the module as foll
 
         .. method:: import_key(keypath: str) -> Key:
 
-                Imports a pgp key file from a path on the system. 
+                Imports an Openpgp key file (certificate) from a path on the system. 
                 The method returns the newly import `Key` object to the caller.
 
                 ::
 
                         >>> key = ks.import_key("tests/files/store/public.asc")
                         >>> print(key)
+
+                .. note:: If you import the same Secret key (same ID), then it will raise `SameKeyError`. Right now the idea is to delete the old key from store and then import the new key.
 
         .. method:: revoke_userid(key: Key, userid: str, pass: str) -> Key:
 

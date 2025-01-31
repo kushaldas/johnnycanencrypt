@@ -66,18 +66,6 @@ common-steps:
 
 version: 2
 jobs:
-  build-buster-3.8:
-    docker:
-      - image: circleci/python:3.8-buster
-    steps:
-      - checkout
-      - *install_system_packages
-      - *install_rustup
-      - *install_dependencies
-      - *build_jce
-      - *test_jce
-      - *typelint_jce
-
   build-buster-3.9:
     docker:
       - image: circleci/python:3.9-buster
@@ -126,6 +114,19 @@ jobs:
       - *test_jce
       - *typelint_jce
 
+  build-bullseye-3.13:
+    docker:
+      - image: cimg/python:3.13.1
+    steps:
+      - checkout
+      - *install_system_packages_ubuntu22
+      - *install_rustup
+      - *install_dependencies
+      - *build_jce
+      - *test_jce
+      - *typelint_jce
+
+
 
 
 
@@ -136,6 +137,6 @@ workflows:
     - build-bullseye-3.10
     - build-bullseye-3.11
     - build-bullseye-3.12
+    - build-bullseye-3.13
     - build-buster-3.9
-    - build-buster-3.8
 
