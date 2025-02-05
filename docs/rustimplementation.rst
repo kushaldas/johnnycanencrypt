@@ -38,6 +38,12 @@ For type annotation we have a Type Alias called `KeyData` as following:
         .. versionchanged:: 0.16.0
            `nullpolicy` argument was added.
 
+.. function:: update_primary_expiry_in_cert(certdata: bytes, expirytime: int, password: str ) -> bytes:
+
+        Updates primary key expiry time in the certificate and returns the udpated certificate as bytes.
+
+        .. versionadded:: 0.16.0
+
 .. function:: parse_keyring_file(certfile: str) -> List[Tuple[KeyData, bytes]]:
 
         This function can parse any given keyring file. It always uses `nullpolicy`, returns List of the following
