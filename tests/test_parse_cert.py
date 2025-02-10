@@ -7,17 +7,16 @@ from tests.conftest import BASE_TESTSDIR
 
 
 def test_parse_keyring():
-    """Tests parsing of a keyring file.
-    """
+    """Tests parsing of a keyring file."""
 
     ringpath = BASE_TESTSDIR / "files" / "foo_keyring.asc"
     keys = rustjce.parse_keyring_file(str(ringpath))
     assert len(keys) == 2
     assert len(keys[0]) == 2  # The data and certdata
 
+
 def test_write_to_keyring():
-    """Tests writing to a keyring file.
-    """
+    """Tests writing to a keyring file."""
 
     ringpath = BASE_TESTSDIR / "files" / "foo_keyring.asc"
     keys = rustjce.parse_keyring_file(str(ringpath))
@@ -38,7 +37,6 @@ def test_write_to_keyring():
         assert len(newkeys) == 2
 
 
-
 def test_parse_expired_old_cert():
     """Tests an old expried key.
 
@@ -53,7 +51,6 @@ def test_parse_expired_old_cert():
         creationtime,
         othervalues,
     ) = rustjce.parse_cert_file(str(keypath), nullpolicy=True)
-
 
 
 def test_parse_cert_file():

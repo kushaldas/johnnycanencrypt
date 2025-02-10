@@ -3248,6 +3248,49 @@ pub fn disable_otp_usb() -> Result<bool> {
     }
 }
 
+/// Returns updated key with new expiration time for primary key
+/// Takes the secret key data, expirytime as the duration to be added as integer
+/// and the secret key password.
+#[pyfunction]
+#[pyo3(text_signature = "(certdata, expirytime, password)")]
+pub fn update_primary_expiry_in_cert(
+    py: Python,
+    certdata: Vec<u8>,
+    expirytime: u64,
+    password: String,
+) -> Result<PyObject> {
+    let cert = openpgp::Cert::from_bytes(&certdata)?;
+
+    let p = &P::new();
+    let vc = cert.with_policy(p, None)?;
+    let pk = cert.primary_key().key();
+    let mut signer = pk
+        .clone()
+        .parts_into_secret()?
+        .decrypt_secret(&openpgp::crypto::Password::from(password))?
+        .into_keypair()?;
+
+    // New expiry time.
+    let t = SystemTime::now() + Duration::new(expirytime, 0);
+    // New expiration signature
+    let sigs = vc.primary_key().set_expiration_time(&mut signer, Some(t))?;
+    let cert = cert.insert_packets(sigs)?;
+
+    // Now let us return the secret key as Python Bytes
+    let mut buf = Vec::new();
+    let mut buffer = Vec::new();
+
+    // We are writing the secret key out.
+    let mut writer = Writer::new(&mut buf, Kind::SecretKey)?;
+    cert.as_tsk().serialize(&mut buffer)?;
+    writer.write_all(&buffer)?;
+    writer.finalize()?;
+
+    // Let us return the cert data which can be saved in the database
+    let res = PyBytes::new_bound(py, &buf);
+    Ok(res.into())
+}
+
 #[pyfunction]
 #[pyo3(text_signature = "(certdata, expirytime, pin)")]
 pub fn update_primary_expiry_on_card(
@@ -3369,6 +3412,7 @@ fn johnnycanencrypt(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(add_uid_in_cert))?;
     m.add_wrapped(wrap_pyfunction!(revoke_uid_in_cert))?;
     m.add_wrapped(wrap_pyfunction!(update_subkeys_expiry_in_cert))?;
+    m.add_wrapped(wrap_pyfunction!(update_primary_expiry_in_cert))?;
     m.add_wrapped(wrap_pyfunction!(update_subkeys_expiry_on_card))?;
     m.add_wrapped(wrap_pyfunction!(update_primary_expiry_on_card))?;
     m.add_wrapped(wrap_pyfunction!(certify_key))?;

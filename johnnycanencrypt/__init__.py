@@ -16,14 +16,22 @@ import johnnycanencrypt.johnnycanencrypt as rjce
 
 from .exceptions import FetchingError, KeyNotFoundError
 from .johnnycanencrypt import SameKeyError  # noqa: F401
-from .johnnycanencrypt import (CryptoError, Johnny, TouchMode, create_key,
-                               encrypt_bytes_to_bytes, encrypt_bytes_to_file,
-                               encrypt_file_internal,
-                               encrypt_filehandler_to_file, get_pub_key,
-                               merge_keys, parse_cert_bytes, parse_cert_file)
+from .johnnycanencrypt import (
+    CryptoError,
+    Johnny,
+    TouchMode,
+    create_key,
+    encrypt_bytes_to_bytes,
+    encrypt_bytes_to_file,
+    encrypt_file_internal,
+    encrypt_filehandler_to_file,
+    get_pub_key,
+    merge_keys,
+    parse_cert_bytes,
+    parse_cert_file,
+)
 from .utils import _get_cert_data  # noqa: F401
-from .utils import (DB_UPGRADE_DATE, convert_fingerprint, createdb,
-                    to_sort_by_expiry)
+from .utils import DB_UPGRADE_DATE, convert_fingerprint, createdb, to_sort_by_expiry
 
 # To use for type checking
 StrOrBytesPath = Union[str, bytes, os.PathLike]
@@ -536,6 +544,44 @@ class KeyStore:
                 )
         con.close()
         # Regnerate the key object and return it
+        return self.get_key(fingerprint)
+
+    def update_expiry_in_primary(
+        self, key: Key, expiration: datetime, password: str
+    ) -> Key:
+        """Updates the expiry date for the primary key, saves on the database. Then returns the modified key object
+
+        :param key: The secret key object
+        :param expiration: datetime.datetime for the new expiration date and time, can not be none
+        :param password: The password for the secret key
+
+        :returns: Key object
+        """
+        if key.keytype != KeyType.SECRET:
+            raise ValueError(f"The {key} is not a secret key.")
+
+        fingerprint = key.fingerprint
+
+        if expiration:
+            etime = expiration.timestamp()
+            now = datetime.now()
+            # We need to send in the difference between expiration time and now
+            etime = int(etime - now.timestamp())
+        else:
+            raise ValueError("The expiration must not be none.")
+
+        # Now get the key material
+        newcert = rjce.update_primary_expiry_in_cert(key.keyvalue, etime, password)
+
+        # We only need get the subkeys and get the expiration time from them
+        _, _, _, expirytime, _, _ = rjce.parse_cert_bytes(newcert)
+
+        sql = "UPDATE keys set expiration=? where fingerprint=?"
+        etime_str = str(expirytime.timestamp())
+        con = sqlite3.connect(self.dbpath)
+        with con:
+            cursor = con.cursor()
+            cursor.execute(sql, (etime_str, fingerprint))
         return self.get_key(fingerprint)
 
     def add_userid(self, key: Key, userid: str, password: str) -> Key:
