@@ -2,6 +2,10 @@
 
 ## [unreleased]
 
+### Fixed
+
+- Fixes #162 method to update expiry of primary key.
+
 ### Added
 
 - Raises `SameKeyError` while importing same secret key again.
