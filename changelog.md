@@ -2,9 +2,15 @@
 
 ## [unreleased]
 
+### Fixed
+
+- Fixes #162 method to update expiry of primary key.
+
 ### Added
 
 - Raises `SameKeyError` while importing same secret key again.
+- Updates pyo3 to `0.23.4`.
+- More API documentation related to rust functions available.
 
 ## [0.15.0] - 2024-09-26
 

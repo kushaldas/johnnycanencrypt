@@ -181,6 +181,10 @@ For the rest of the documentation we assume that you imported the module as foll
 
                 Updates the expiry time for the given subkeys (as a list of fingerprints) for the given secret key.
 
+        .. method:: update_expiry_in_primary(key: Key, expiration: datetime, password: str) -> Key:
+
+                Updates the expiry time for the primary key.
+
         .. method:: sign_detached(key, data, password) -> str:
 
                 Signs the given *data* (can be either str or bytes) using the secret key. Returns the armored signature string.

@@ -195,6 +195,19 @@ def test_ks_update_expiry_time_for_subkeys(tmp_path):
         newkey = ks.update_expiry_in_subkeys(key, subkeys, None, "redhat")
 
 
+def test_ks_update_expiry_time_for_primary(tmp_path):
+    "Updates expiry time for a given primary key"
+    ks = jce.KeyStore(tmp_path)
+    ks.import_key((BASE_TESTSDIR / "files" / "store" / "hellosecret.asc"))
+    ks.import_key((BASE_TESTSDIR / "files" / "store" / "secret.asc"))
+
+    key = ks.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
+    newexpiration = datetime.datetime(2050, 10, 25, 10)
+    newkey = ks.update_expiry_in_primary(key, newexpiration, "redhat")
+    assert newkey.expirationtime
+    assert newkey.expirationtime.date() == datetime.date(2050, 10, 25)
+
+
 def test_ks_encrypt_decrypt_bytes():
     "Encrypts and decrypt some bytes"
     ks = jce.KeyStore(BASE_TESTSDIR / "files" / "store")
