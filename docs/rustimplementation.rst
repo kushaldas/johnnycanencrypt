@@ -15,6 +15,38 @@ For type annotation we have a Type Alias called `KeyData` as following:
 
         KeyData = Tuple[List[Dict[Any, Any]], str, bool, datetime, datetime, Dict[Any, Any]]
 
+Which has the following structure.
+
+The first item of the tuple is about `certifications`, where each item is a dictionary, the following details:
+
+::
+
+         {'certifications': [{'certification_list': [('fingerprint',
+                                               '93DA7006C2E7043E8C33ED1BA6C152738D03C7D1'),
+                                              ('keyid', 'A6C152738D03C7D1')],
+                       'certification_type': 'generic',
+                       'creationtime': datetime.datetime(2021, 11, 3, 10, 54, 6)},
+                      {'certification_list': [('fingerprint',
+                                               '749596FAA93B58C88423141F198C1AFD505152DD'),
+                                              ('keyid', '198C1AFD505152DD')],
+                       'certification_type': 'generic',
+                       'creationtime': datetime.datetime(2021, 11, 3, 10, 52, 50)}],
+           'email': 'kushal@sunet.se',
+           'name': 'Kushal Das',
+           'revoked': False,
+           'value': 'Kushal Das <kushal@sunet.se>'}
+
+A list of certifications for the given UID, shows *email* and *name* and if
+*revoked* or not, and the full *value* of the UID. Then fingerprint of the
+primary key, and a *boolean* value to say if it secret key (`True`) or public
+key (`False`). Next twovalues are *expirarion* and *creation* of the primary
+key. *expiration* can be `None`.
+The last time of the tuple is another dictionary, with keys explaining *can_primary_sign*, then *keyid* of the
+primary key, and *subkeys* contains a list of tuples for each usable subkey. Each tuple in turn contains the following
+`(subkey_id, fingerprint, creation, Optional[expriation])`
+
+
+
 
 .. function:: parse_cert_bytes(certdata: bytes,nullpolicy: Optional[bool])) -> KeyData:
 
@@ -25,7 +57,6 @@ For type annotation we have a Type Alias called `KeyData` as following:
 
         .. versionchanged:: 0.16.0
            `nullpolicy` argument was added.
-
 
 
 .. function:: parse_cert_file(certfile: str,nullpolicy: Optional[bool]) -> KeyData:
@@ -44,9 +75,11 @@ For type annotation we have a Type Alias called `KeyData` as following:
 
         .. versionadded:: 0.16.0
 
+
 .. function:: update_subkeys_expiry_in_cert(certdata: bytes, fingerprints: List[str], expirytime: int, password: str ) -> bytes:
 
         Updates the expiry date of the given subkeys.
+
 
 .. function:: update_primary_expiry_on_card(certdata: bytes, expirytime: int, pin: bytes ) -> bytes:
 
@@ -55,8 +88,7 @@ For type annotation we have a Type Alias called `KeyData` as following:
 
 .. function:: update_subkeys_expiry_on_card(certdata: bytes, fingerprints: List[str], expirytime: int, pin: bytes) -> bytes:
 
-        Updates the expiry date of the given subkeys.
-
+        This function updates the expiry date of the given subkeys and returns the new certificate.
 
 .. function:: parse_keyring_file(certfile: str) -> List[Tuple[KeyData, bytes]]:
 
@@ -108,9 +140,6 @@ For type annotation we have a Type Alias called `KeyData` as following:
             >>> rjce.get_key_cipher_details(key.keyvalue)
             [('F4F388BBB194925AE301F844C52B42177857DD79', 'EdDSA', 256), ('102EBD23BD5D2D340FBBDE0ADFD1C55926648D2F', 'EdDSA', 256), ('85B67F139D835FA56BA703DB5A7A1560D46ED4F6', 'ECDH', 256)]
 
-.. function:: update_subkeys_expiry_in_cert(certdata: bytes, fingerprints: List[str], expirytime: int, password: string) -> bytes:
-
-        This function updates the expiry date of the given subkeys and returns the new certificate.
 
 .. function:: revoke_uid_in_cert(certdata: bytes, uid: bytes, password: string) -> bytes:
 
