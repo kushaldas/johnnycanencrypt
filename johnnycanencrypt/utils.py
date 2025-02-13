@@ -112,7 +112,7 @@ CREATE TABLE uiduris (
 CREATE TABLE dbupgrade (upgradedate TEXT)
 """
 
-DB_UPGRADE_DATE = "20220828"
+DB_UPGRADE_DATE = "20250213"
 
 
 def _get_cert_data(filepath):

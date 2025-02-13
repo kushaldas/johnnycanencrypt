@@ -5,6 +5,7 @@
 ### Fixed
 
 - Fixes #162 method to update expiry of primary key.
+- Fixes #161 delete_key deletes all different rows.
 
 ### Added
 
