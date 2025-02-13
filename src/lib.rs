@@ -300,6 +300,49 @@ pub fn revoke_uid_in_cert(
 }
 
 #[pyfunction]
+#[pyo3(text_signature = "(certdata, uid, pin)")]
+pub fn revoke_uid_on_card(
+    py: Python,
+    certdata: Vec<u8>,
+    uid: Vec<u8>,
+    pin: Vec<u8>,
+) -> Result<PyObject> {
+    // This is where we will store all the signing keys.
+    let mut cert = openpgp::Cert::from_bytes(&certdata)?;
+    // Because we will update cert below.
+    let cert2 = cert.clone();
+    let pk = cert2.primary_key().key();
+    // The cloned key is only used signing the revokation.
+
+    let mut keypair = scard::KeyPair::new(pin, pk)?;
+
+    // now let us find the user id from the cert.
+    for ua in cert.clone().userids() {
+        let value = ua.value().to_vec();
+        if value == uid {
+            // We found the uid which we can now revoke
+            let sig = UserIDRevocationBuilder::new()
+                .set_reason_for_revocation(ReasonForRevocation::UIDRetired, b"Revoked via code.")?
+                .build(&mut keypair, &cert, ua.userid(), None)?;
+            // Now merge this back
+            cert = cert.insert_packets(sig.clone())?;
+        }
+    }
+
+    let mut buf = Vec::new();
+    let mut buffer = Vec::new();
+
+    let mut writer = Writer::new(&mut buf, Kind::PublicKey)?;
+    cert.as_tsk().serialize(&mut buffer)?;
+    writer.write_all(&buffer)?;
+    writer.finalize()?;
+
+    // Let us return the cert data which can be saved in the database
+    let res = PyBytes::new(py, &buf);
+    Ok(res.into())
+}
+
+#[pyfunction]
 #[pyo3(text_signature = "(certdata, uid, password)")]
 pub fn add_uid_in_cert(
     py: Python,
@@ -3683,6 +3726,7 @@ fn johnnycanencrypt(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(add_uid_in_cert))?;
     m.add_wrapped(wrap_pyfunction!(add_uid_on_card))?;
     m.add_wrapped(wrap_pyfunction!(revoke_uid_in_cert))?;
+    m.add_wrapped(wrap_pyfunction!(revoke_uid_on_card))?;
     m.add_wrapped(wrap_pyfunction!(update_subkeys_expiry_in_cert))?;
     m.add_wrapped(wrap_pyfunction!(update_primary_expiry_in_cert))?;
     m.add_wrapped(wrap_pyfunction!(update_subkeys_expiry_on_card))?;

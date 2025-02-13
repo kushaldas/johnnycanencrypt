@@ -68,6 +68,13 @@ Smartcard API
 
         .. versionadded:: 0.16.0
 
+.. function:: revoke_uid_on_card(certdata: bytes, uid: bytes, pin: bytes) -> bytes:
+
+        Revokes the given UID in the key and returns the new key with the revoked UID as `bytes`.
+
+        .. versionadded:: 0.16.0
+
+
 .. function:: get_card_details() -> Dict[str, Any]:
 
         Returns a dictionary containing various card information in a dictionary.
