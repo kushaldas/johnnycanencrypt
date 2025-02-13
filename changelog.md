@@ -13,6 +13,7 @@
 - Updates pyo3 to `0.23.4`.
 - More API documentation related to rust functions available.
 - Added 3 experimental funcions, #169
+- Fixes #165 add_uid_on_card function introduced.
 
 ## [0.15.0] - 2024-09-26
 

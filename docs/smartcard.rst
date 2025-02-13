@@ -61,6 +61,13 @@ Smartcard API
 
         .. warning:: This is a dangerous function as it will destroy all the data in the card. Use it carefully.
 
+.. function:: add_uid_on_card(certdata: bytes, uid: bytes, pin: bytes) -> bytes:
+
+        Adds a new UID to the certificate, assumes the smartcard is in place and has the secret key for the
+        public key we are adding to. Returns the `bytes` of the new key.
+
+        .. versionadded:: 0.16.0
+
 .. function:: get_card_details() -> Dict[str, Any]:
 
         Returns a dictionary containing various card information in a dictionary.

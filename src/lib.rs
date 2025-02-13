@@ -358,6 +358,39 @@ pub fn add_uid_in_cert(
 }
 
 #[pyfunction]
+#[pyo3(text_signature = "(certdata, uid, pin)")]
+pub fn add_uid_on_card(
+    py: Python,
+    certdata: Vec<u8>,
+    uid: Vec<u8>,
+    pin: Vec<u8>,
+) -> Result<PyObject> {
+    // This is where we will store all the signing keys
+    let cert = openpgp::Cert::from_bytes(&certdata)?;
+    let pk = cert.primary_key().key();
+    let mut keypair = scard::KeyPair::new(pin, pk)?;
+
+    let userid = openpgp::packet::UserID::from(uid);
+    let builder = openpgp::packet::signature::SignatureBuilder::new(
+        openpgp::types::SignatureType::PositiveCertification,
+    );
+    let binding = userid.bind(&mut keypair, &cert, builder)?;
+    let cert = cert.insert_packets(vec![Packet::from(userid), binding.into()])?;
+
+    let mut buf = Vec::new();
+    let mut buffer = Vec::new();
+
+    let mut writer = Writer::new(&mut buf, Kind::PublicKey)?;
+    cert.as_tsk().serialize(&mut buffer)?;
+    writer.write_all(&buffer)?;
+    writer.finalize()?;
+
+    // Let us return the cert data which can be saved in the database
+    let res = PyBytes::new(py, &buf);
+    Ok(res.into())
+}
+
+#[pyfunction]
 pub fn update_password(
     py: Python,
     certdata: Vec<u8>,
@@ -3648,6 +3681,7 @@ fn johnnycanencrypt(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(encrypt_file_internal))?;
     m.add_wrapped(wrap_pyfunction!(update_password))?;
     m.add_wrapped(wrap_pyfunction!(add_uid_in_cert))?;
+    m.add_wrapped(wrap_pyfunction!(add_uid_on_card))?;
     m.add_wrapped(wrap_pyfunction!(revoke_uid_in_cert))?;
     m.add_wrapped(wrap_pyfunction!(update_subkeys_expiry_in_cert))?;
     m.add_wrapped(wrap_pyfunction!(update_primary_expiry_in_cert))?;
