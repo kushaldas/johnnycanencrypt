@@ -13,7 +13,7 @@ For type annotation we have a Type Alias called `KeyData` as following:
 
 ::
 
-        KeyData = Tuple[List[Dict[Any, Any]], str, bool, datetime, datetime, Dict[Any, Any]]
+        KeyData = Tuple[List[Dict[Any, Any]], str, bool, Optional[datetime], datetime, Dict[Any, Any]]
 
 Which has the following structure.
 

@@ -569,7 +569,10 @@ class KeyStore:
         _, _, _, expirytime, _, _ = rjce.parse_cert_bytes(newcert)
 
         sql = "UPDATE keys set expiration=? where fingerprint=?"
-        etime_str = str(expirytime.timestamp())
+        if expirytime:
+            etime_str = str(expirytime.timestamp())
+        else:
+            etime_str = None
         con = sqlite3.connect(self.dbpath)
         with con:
             cursor = con.cursor()

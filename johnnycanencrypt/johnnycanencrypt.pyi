@@ -3,7 +3,7 @@ from datetime import datetime
 from enum import IntEnum
 from typing import Any, BinaryIO, Dict, List, Optional, Tuple
 
-KeyData = Tuple[List[Dict[Any, Any]], str, bool, datetime, datetime, Dict[Any, Any]]
+KeyData = Tuple[List[Dict[Any, Any]], str, bool, Optional[datetime], datetime, Dict[Any, Any]]
 
 class CryptoError(BaseException): ...
 class SameKeyError(BaseException): ...
