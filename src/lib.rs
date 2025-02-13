@@ -2198,6 +2198,248 @@ fn export_keyring_file(_py: Python, certs: Vec<Vec<u8>>, keyringname: String) ->
     Ok(true)
 }
 
+// EXPERIMENTAL CODE
+// HACK:
+//
+#[pyfunction]
+fn exp_parse_keyring_file(py: Python, certpath: String) -> Result<PyObject> {
+    let plist = PyList::empty(py);
+    let ppr = PacketParser::from_file(certpath)?;
+    for certdata in CertParser::from(ppr) {
+        match certdata {
+            Ok(cert) => {
+                // Now we have to export the cert's public key
+                let mut buf = Vec::new();
+                let mut buffer = Vec::new();
+                let _ = Marshal::serialize(&cert, &mut buffer);
+                let mut writer = Writer::new(&mut buf, Kind::PublicKey).unwrap();
+                writer.write_all(&buffer).unwrap();
+                writer.finalize().unwrap();
+
+                let data = exp_internal_parse_cert(py, cert, true)?;
+                let certdata = PyBytes::new(py, &buf);
+                let _ = plist.append((data, certdata));
+            }
+            Err(err) => return Err(JceError::new(format!("{}", err))),
+        }
+    }
+    Ok(plist.into())
+}
+
+#[pyfunction]
+#[pyo3(signature = (certpath, nullpolicy=None))]
+fn exp_parse_cert_file(py: Python, certpath: String, nullpolicy: Option<bool>) -> Result<PyObject> {
+    let cert = openpgp::Cert::from_file(certpath)?;
+    let null_policy_can_be_used = nullpolicy.unwrap_or(false);
+    exp_internal_parse_cert(py, cert, null_policy_can_be_used)
+}
+
+#[pyfunction]
+#[pyo3(signature = (certdata, nullpolicy=None))]
+fn exp_parse_cert_bytes(
+    py: Python,
+    certdata: Vec<u8>,
+    nullpolicy: Option<bool>,
+) -> Result<PyObject> {
+    let cert = openpgp::Cert::from_bytes(&certdata)?;
+    let null_policy_can_be_used = nullpolicy.unwrap_or(false);
+    exp_internal_parse_cert(py, cert, null_policy_can_be_used)
+}
+
+fn exp_internal_parse_cert(
+    py: Python,
+    cert: openpgp::Cert,
+    nullpolicy_can_be_used: bool,
+) -> Result<PyObject> {
+    let mainresult = PyDict::new(py);
+    let pbox: Box<dyn Policy> = if nullpolicy_can_be_used {
+        Box::new(NP::new())
+    } else {
+        Box::new(P::new())
+    };
+    let creationtime = match cert.primary_key().with_policy(pbox.as_ref(), None) {
+        Ok(value) => {
+            let ctime = value.creation_time();
+            let dt: DateTime<Utc> = DateTime::from(ctime);
+            Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None)?)
+        }
+        _ => None,
+    };
+
+    let expirationtime = match cert.primary_key().with_policy(pbox.as_ref(), None) {
+        Ok(value) => match value.key_expiration_time() {
+            Some(etime) => {
+                let dt: DateTime<Utc> = DateTime::from(etime);
+                Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None)?)
+            }
+            _ => None,
+        },
+        Err(txt) => {
+            let mut err_msg = Vec::new();
+            let eiters = txt.chain();
+            for error in eiters {
+                err_msg.push(error.to_string());
+            }
+            return Err(JceError::new(err_msg.join(", ")));
+        }
+    };
+    let plist = PyList::empty(py);
+    for ua in cert.userids() {
+        let pd = PyDict::new(py);
+        //println!("  {}", String::from_utf8_lossy(ua.value()));
+        pd.set_item("userid", String::from_utf8_lossy(ua.value()))?;
+        // If we have a name part in the UID
+        if let Ok(Some(name)) = ua.name2() {
+            pd.set_item("name", name)?;
+        }
+
+        // If we have a comment part in the UID
+        if let Ok(Some(comment)) = ua.comment2() {
+            pd.set_item("comment", comment)?;
+        }
+
+        // If we have a email part in the UID
+        if let Ok(Some(email)) = ua.email2() {
+            pd.set_item("email", email)?;
+        }
+
+        // If we have a URI part in the UID
+        if let Ok(Some(uri)) = ua.uri2() {
+            pd.set_item("uri", uri)?;
+        }
+        let mut revoked = false;
+        // Based on https://docs.sequoia-pgp.org/1.0.0/sequoia_openpgp/cert/struct.UserIDRevocationBuilder.html#examples
+        if let RevocationStatus::Revoked(_) = ua.revocation_status(pbox.as_ref(), None) {
+            revoked = true;
+        };
+        pd.set_item("revoked", revoked)?;
+
+        // This list contains a list of dictionary
+        let certification_list = PyList::empty(py);
+        // Now we will deal with the certifications, that is if anyone else signed this UID.
+        for c in ua.certifications() {
+            // This is the type of certification
+            let c_type = match c.typ() {
+                SignatureType::GenericCertification => "generic",
+                SignatureType::CasualCertification => "casual",
+                SignatureType::PersonaCertification => "persona",
+                SignatureType::PositiveCertification => "postive",
+                _ => "unknown",
+            };
+
+            let creationtime = {
+                let sct = c.signature_creation_time();
+                match sct {
+                    Some(sct_value) => {
+                        let dt: DateTime<Utc> = DateTime::from(sct_value);
+                        Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None)?)
+                    }
+                    None => None,
+                }
+            };
+
+            // Now we need a list of issuers for this certification
+            //
+            let issuer_list = PyList::empty(py);
+            for issuer in c.get_issuers() {
+                //let fp_keyid = PyTuple::new(py, &[issuer.])
+                match issuer {
+                    KeyHandle::Fingerprint(finger) => {
+                        let ptuple =
+                            PyTuple::new(py, &["fingerprint".to_string(), finger.to_hex()])?;
+                        let _ = issuer_list.append(ptuple);
+                    }
+                    KeyHandle::KeyID(kid) => {
+                        let ptuple = PyTuple::new(py, &["keyid".to_string(), kid.to_hex()])?;
+                        let _ = issuer_list.append(ptuple);
+                    }
+                }
+            }
+
+            // Now add this one certification
+            let ud_dict = PyDict::new(py);
+            ud_dict.set_item("type", c_type)?;
+            ud_dict.set_item("issuers", issuer_list)?;
+            ud_dict.set_item("creation", creationtime)?;
+
+            certification_list.append(ud_dict)?;
+        }
+
+        // Now let us set the certifications for this user id
+        pd.set_item("certifications", certification_list)?;
+
+        plist.append(pd)?;
+    }
+
+    let subkeys = PyList::empty(py);
+    for ka in cert.keys().with_policy(pbox.as_ref(), None).subkeys() {
+        let expirationtime = match ka.key_expiration_time() {
+            Some(etime) => {
+                let dt: DateTime<Utc> = DateTime::from(etime);
+                Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None)?)
+            }
+            _ => None,
+        };
+
+        let creationtime = {
+            let dt: DateTime<Utc> = DateTime::from(ka.creation_time());
+            Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None)?)
+        };
+
+        // To find what kind of subkey is this.
+        let keytype = if ka.for_storage_encryption() | ka.for_transport_encryption() {
+            String::from("encryption")
+        } else if ka.for_signing() {
+            String::from("signing")
+        } else if ka.for_authentication() {
+            String::from("authentication")
+        } else {
+            String::from("unknown")
+        };
+
+        // To check if it is revoked or not
+        // Just the oppostie from the filter values in
+        // https://docs.sequoia-pgp.org/1.0.0/sequoia_openpgp/cert/amalgamation/struct.ValidComponentAmalgamationIter.html#method.revoked
+        let revoked = match ka.revocation_status() {
+            RevocationStatus::Revoked(_) => true,
+            RevocationStatus::CouldBe(_) => false,
+            RevocationStatus::NotAsFarAsWeKnow => false,
+        };
+
+        let pd = PyDict::new(py);
+        pd.set_item("keyid", ka.keyid().to_hex())?;
+        pd.set_item("fingerprint", ka.fingerprint().to_hex())?;
+        pd.set_item("creation", creationtime)?;
+        pd.set_item("expiraton", expirationtime)?;
+        pd.set_item("keytype", keytype)?;
+        pd.set_item("revoked", revoked)?;
+
+        subkeys.append(pd)?;
+    }
+
+    // To find out if the primary key can sign or not.
+    let can_primary_sign = match cert.primary_key().with_policy(pbox.as_ref(), None) {
+        Ok(pkey) => pkey.for_signing(),
+        _ => false,
+    };
+
+    let othervalues = PyDict::new(py);
+    othervalues.set_item("keyid", cert.primary_key().keyid().to_hex())?;
+    othervalues.set_item("subkeys", subkeys)?;
+    othervalues.set_item("can_primary_sign", can_primary_sign)?;
+
+    mainresult.set_item("uids", plist)?;
+    mainresult.set_item("fingerprint", cert.fingerprint().to_hex())?;
+    mainresult.set_item("secretkey", cert.is_tsk())?;
+    mainresult.set_item("expiration", expirationtime.into_pyobject(py)?)?;
+    mainresult.set_item("creation", creationtime.into_pyobject(py)?)?;
+    mainresult.set_item("othervalues", othervalues.into_pyobject(py)?)?;
+
+    Ok(mainresult.into())
+}
+//
+// END EXPERIMENTAL CODE
+
 /// Parses the given file path, and returns a tuple with various data.
 ///
 /// - The first item is a list of user ids as dictionary.
@@ -3396,6 +3638,9 @@ fn johnnycanencrypt(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(encrypt_filehandler_to_file))?;
     m.add_wrapped(wrap_pyfunction!(parse_cert_file))?;
     m.add_wrapped(wrap_pyfunction!(parse_cert_bytes))?;
+    m.add_wrapped(wrap_pyfunction!(exp_parse_cert_file))?;
+    m.add_wrapped(wrap_pyfunction!(exp_parse_cert_bytes))?;
+    m.add_wrapped(wrap_pyfunction!(exp_parse_keyring_file))?;
     m.add_wrapped(wrap_pyfunction!(parse_keyring_file))?;
     m.add_wrapped(wrap_pyfunction!(export_keyring_file))?;
     m.add_wrapped(wrap_pyfunction!(encrypt_bytes_to_file))?;
