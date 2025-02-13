@@ -17,7 +17,7 @@ For type annotation we have a Type Alias called `KeyData` as following:
 
 Which has the following structure.
 
-The first item of the tuple is about `certifications`, where each item is a dictionary, the following details:
+The first item of the tuple is about `UID` and `certifications` for each UID., where each item is a dictionary, the following details:
 
 ::
 
@@ -46,7 +46,61 @@ primary key, and *subkeys* contains a list of tuples for each usable subkey. Eac
 `(subkey_id, fingerprint, creation, Optional[expriation])`
 
 
+.. dropdown:: Experimental simpler API
+    :open:
+    :color: info
 
+    .. function:: exp_parse_cert_bytes(certdata: bytes,nullpolicy: Optional[bool])) -> Dict[str, Any]:
+
+        This function parses the given bytes and returns the parsed output as a Tuple. If you parse the `nullpolicy` argument, then we can parse old
+        `sha1` based keys too.
+
+    .. function:: exp_parse_cert_file(certfile: str,nullpolicy: Optional[bool]) -> Dict[str, Any]:
+
+        This function parses the given `certfile` path (as string) and returns the parsed output as a Tuple. If you parse the `nullpolicy` argument, then we can parse old
+        `sha1` based keys too.
+
+    .. function:: exp_parse_keyring_file(certfile: str) -> List[Tuple[Dict[str, Any], bytes]]:
+
+        This function can parse any given keyring file. It always uses `nullpolicy`, returns List of the following
+        tuple of `KeyData` and certificate in bytes. In most cases you can discard the certificate data unless you
+        want to access the indivitual certificate in future.
+
+    Each of the above 3 functions provides dictioaries like below for each key.
+
+    ::
+
+        {'creation': datetime.datetime(2025, 1, 22, 22, 25, 25),
+        'expiration': datetime.datetime(2026, 1, 22, 22, 25, 25),
+        'fingerprint': '363F0180891AB46098F4463864AB0060FAB80A18',
+        'othervalues': {'can_primary_sign': True,
+                 'keyid': '64AB0060FAB80A18',
+                 'subkeys': [{'creation': datetime.datetime(2025, 1, 22, 22, 25, 25),
+                              'expiraton': datetime.datetime(2026, 1, 22, 22, 25, 25),
+                              'fingerprint': '867555C6BD0F49A5FBC7EF0D1C29FABC7B9CFD3B',
+                              'keyid': '1C29FABC7B9CFD3B',
+                              'keytype': 'encryption',
+                              'revoked': False},
+                             {'creation': datetime.datetime(2025, 1, 22, 22, 25, 25),
+                              'expiraton': datetime.datetime(2026, 1, 22, 22, 25, 25),
+                              'fingerprint': '940B1446A0597D4F124A9DBEDDECF252395B4001',
+                              'keyid': 'DDECF252395B4001',
+                              'keytype': 'authentication',
+                              'revoked': False}]},
+        'secretkey': False,
+        'uids': [{'certifications': [{'issuers': [('fingerprint',
+                                                       '93DA7006C2E7043E8C33ED1BA6C152738D03C7D1'),
+                                                      ('keyid',
+                                                       'A6C152738D03C7D1')],
+                               'type': 'generic',
+                               'creation': datetime.datetime(2021, 11, 3, 10, 54, 6)}],
+           'email': 'test@sunet.se',
+           'name': 'Test Key',
+           'revoked': False,
+           'value': 'Test Key <test@sunet.se>'}]}
+
+
+    .. versionadded:: 0.16.0
 
 .. function:: parse_cert_bytes(certdata: bytes,nullpolicy: Optional[bool])) -> KeyData:
 
@@ -80,15 +134,6 @@ primary key, and *subkeys* contains a list of tuples for each usable subkey. Eac
 
         Updates the expiry date of the given subkeys.
 
-
-.. function:: update_primary_expiry_on_card(certdata: bytes, expirytime: int, pin: bytes ) -> bytes:
-
-        Updates primary key expiry time in the certificate and returns the udpated certificate as bytes.
-
-
-.. function:: update_subkeys_expiry_on_card(certdata: bytes, fingerprints: List[str], expirytime: int, pin: bytes) -> bytes:
-
-        This function updates the expiry date of the given subkeys and returns the new certificate.
 
 .. function:: parse_keyring_file(certfile: str) -> List[Tuple[KeyData, bytes]]:
 
