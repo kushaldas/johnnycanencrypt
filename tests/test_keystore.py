@@ -167,6 +167,21 @@ def test_key_deletion(tmp_path):
     with pytest.raises(TypeError):
         ks.delete_key(2441139)
 
+# https://github.com/kushaldas/johnnycanencrypt/issues/161
+def test_key_deletion_cleanup(tmp_path):
+    ks = jce.KeyStore(tmp_path)
+    ks.import_key((BASE_TESTSDIR / "files" / "store" / "public.asc"))
+    ks.delete_key("F4F388BBB194925AE301F844C52B42177857DD79")
+    con = sqlite3.connect(ks.dbpath)
+    con.row_factory = sqlite3.Row
+    with con:
+        cursor = con.cursor()
+        # Verify all subkeys should be deleted
+        sql = "SELECT * from subkeys"
+        cursor.execute(sql)
+        fromdb = cursor.fetchone()
+        assert not fromdb
+
 
 def test_key_equality():
     ks = jce.KeyStore(BASE_TESTSDIR / "files" / "store")

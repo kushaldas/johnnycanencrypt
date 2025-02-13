@@ -40,7 +40,7 @@ CREATE TABLE uidvalues (
 
 CREATE TABLE uidcerts (
 	id INTEGER PRIMARY KEY,
-    ctype TEXT NOT NULL,
+	ctype TEXT NOT NULL,
 	creation TEXT,
 	key_id INTEGER,
 	value_id INTEGER,

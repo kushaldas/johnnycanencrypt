@@ -16,22 +16,14 @@ import johnnycanencrypt.johnnycanencrypt as rjce
 
 from .exceptions import FetchingError, KeyNotFoundError
 from .johnnycanencrypt import SameKeyError  # noqa: F401
-from .johnnycanencrypt import (
-    CryptoError,
-    Johnny,
-    TouchMode,
-    create_key,
-    encrypt_bytes_to_bytes,
-    encrypt_bytes_to_file,
-    encrypt_file_internal,
-    encrypt_filehandler_to_file,
-    get_pub_key,
-    merge_keys,
-    parse_cert_bytes,
-    parse_cert_file,
-)
+from .johnnycanencrypt import (CryptoError, Johnny, TouchMode, create_key,
+                               encrypt_bytes_to_bytes, encrypt_bytes_to_file,
+                               encrypt_file_internal,
+                               encrypt_filehandler_to_file, get_pub_key,
+                               merge_keys, parse_cert_bytes, parse_cert_file)
 from .utils import _get_cert_data  # noqa: F401
-from .utils import DB_UPGRADE_DATE, convert_fingerprint, createdb, to_sort_by_expiry
+from .utils import (DB_UPGRADE_DATE, convert_fingerprint, createdb,
+                    to_sort_by_expiry)
 
 # To use for type checking
 StrOrBytesPath = Union[str, bytes, os.PathLike]
@@ -1082,9 +1074,22 @@ class KeyStore:
                 "The key for the given fingerprint={fingerprint} is not found in the keystore"
             )
         con = sqlite3.connect(self.dbpath)
+        con.row_factory = sqlite3.Row
         with con:
             cursor = con.cursor()
-            cursor.execute("DELETE FROM keys where fingerprint=?", (fingerprint,))
+            sql = "SELECT id from keys where fingerprint=?"
+            cursor.execute(sql, (fingerprint,))
+            result = cursor.fetchone()
+            if result:
+                keyid = result["id"]
+                cursor.execute("DELETE FROM keys where fingerprint=?", (fingerprint,))
+                cursor.execute("DELETE FROM subkeys where key_id=?", (keyid,))
+                cursor.execute("DELETE FROM uidvalues where key_id=?", (keyid,))
+                cursor.execute("DELETE FROM uidcerts where key_id=?", (keyid,))
+                cursor.execute("DELETE FROM uidcertlist where key_id=?", (keyid,))
+                cursor.execute("DELETE FROM uidemails where key_id=?", (keyid,))
+                cursor.execute("DELETE FROM uidnames where key_id=?", (keyid,))
+                cursor.execute("DELETE FROM uiduris where key_id=?", (keyid,))
 
     def _find_keys(self, keys: List[Union[str, Key]]):
         "To find all the key paths"
