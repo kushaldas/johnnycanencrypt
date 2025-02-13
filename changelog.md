@@ -2,6 +2,8 @@
 
 ## [unreleased]
 
+## [0.16.0] - 2025-02-13
+
 ### Fixed
 
 - Fixes #162 method to update expiry of primary key.
