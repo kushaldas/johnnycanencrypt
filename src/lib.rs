@@ -8,7 +8,7 @@ use pyo3::exceptions::*;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use pyo3::types::PyTuple;
-use pyo3::types::{PyDateTime, PyDict, PyList};
+use pyo3::types::{PyDateTime, PyDict, PyList, PyTzInfo};
 use pyo3::wrap_pyfunction;
 use std::convert::Infallible;
 
@@ -2333,7 +2333,8 @@ fn exp_internal_parse_cert<'py>(
         Ok(value) => {
             let ctime = value.creation_time();
             let dt: DateTime<Utc> = DateTime::from(ctime);
-            Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None)?)
+            let tz = PyTzInfo::timezone(py, "UTC")?;
+            Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, Some(&tz))?)
         }
         _ => None,
     };
@@ -2342,7 +2343,8 @@ fn exp_internal_parse_cert<'py>(
         Ok(value) => match value.key_expiration_time() {
             Some(etime) => {
                 let dt: DateTime<Utc> = DateTime::from(etime);
-                Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None)?)
+                let tz = PyTzInfo::timezone(py, "UTC")?;
+                Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, Some(&tz))?)
             }
             _ => None,
         },
@@ -2404,7 +2406,8 @@ fn exp_internal_parse_cert<'py>(
                 match sct {
                     Some(sct_value) => {
                         let dt: DateTime<Utc> = DateTime::from(sct_value);
-                        Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None)?)
+                        let tz = PyTzInfo::timezone(py, "UTC")?;
+                        Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, Some(&tz))?)
                     }
                     None => None,
                 }
@@ -2448,14 +2451,16 @@ fn exp_internal_parse_cert<'py>(
         let expirationtime = match ka.key_expiration_time() {
             Some(etime) => {
                 let dt: DateTime<Utc> = DateTime::from(etime);
-                Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None)?)
+                let tz = PyTzInfo::timezone(py, "UTC")?;
+                Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, Some(&tz))?)
             }
             _ => None,
         };
 
         let creationtime = {
             let dt: DateTime<Utc> = DateTime::from(ka.creation_time());
-            Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None)?)
+            let tz = PyTzInfo::timezone(py, "UTC")?;
+            Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, Some(&tz))?)
         };
 
         // To find what kind of subkey is this.
@@ -2576,7 +2581,8 @@ fn internal_parse_cert<'py>(
         Ok(value) => {
             let ctime = value.creation_time();
             let dt: DateTime<Utc> = DateTime::from(ctime);
-            Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None)?)
+            let tz = PyTzInfo::timezone(py, "UTC")?;
+            Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, Some(&tz))?)
         }
         _ => None,
     };
@@ -2585,7 +2591,8 @@ fn internal_parse_cert<'py>(
         Ok(value) => match value.key_expiration_time() {
             Some(etime) => {
                 let dt: DateTime<Utc> = DateTime::from(etime);
-                Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None)?)
+                let tz = PyTzInfo::timezone(py, "UTC")?;
+                Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, Some(&tz))?)
             }
             _ => None,
         },
@@ -2647,7 +2654,8 @@ fn internal_parse_cert<'py>(
                 match sct {
                     Some(sct_value) => {
                         let dt: DateTime<Utc> = DateTime::from(sct_value);
-                        Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None)?)
+                        let tz = PyTzInfo::timezone(py, "UTC")?;
+                        Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, Some(&tz))?)
                     }
                     None => None,
                 }
@@ -2691,14 +2699,16 @@ fn internal_parse_cert<'py>(
         let expirationtime = match ka.key_expiration_time() {
             Some(etime) => {
                 let dt: DateTime<Utc> = DateTime::from(etime);
-                Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None)?)
+                let tz = PyTzInfo::timezone(py, "UTC")?;
+                Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, Some(&tz))?)
             }
             _ => None,
         };
 
         let creationtime = {
             let dt: DateTime<Utc> = DateTime::from(ka.creation_time());
-            Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, None)?)
+            let tz = PyTzInfo::timezone(py, "UTC")?;
+            Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, Some(&tz))?)
         };
 
         // To find what kind of subkey is this.
