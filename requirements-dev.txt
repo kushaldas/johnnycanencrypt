@@ -1,9 +1,9 @@
 pytest
 setuptools
 wheel
-setuptools-rust
 mypy
 httpx
 vcrpy
 scriv
 tzdata
+maturin

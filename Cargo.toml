@@ -42,4 +42,5 @@ sequoia-openpgp = { version="1.22.0", default-features = false, features = ["cry
 
 [dependencies.pyo3]
 version = "0.27.1"
+features = ["abi3-py310"]
 
