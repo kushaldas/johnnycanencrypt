@@ -2333,7 +2333,7 @@ fn exp_internal_parse_cert<'py>(
         Ok(value) => {
             let ctime = value.creation_time();
             let dt: DateTime<Utc> = DateTime::from(ctime);
-            let tz = PyTzInfo::timezone(py, "UTC")?;
+            let tz = PyTzInfo::timezone(py, "Etc/UTC")?;
             Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, Some(&tz))?)
         }
         _ => None,
@@ -2343,7 +2343,7 @@ fn exp_internal_parse_cert<'py>(
         Ok(value) => match value.key_expiration_time() {
             Some(etime) => {
                 let dt: DateTime<Utc> = DateTime::from(etime);
-                let tz = PyTzInfo::timezone(py, "UTC")?;
+                let tz = PyTzInfo::timezone(py, "Etc/UTC")?;
                 Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, Some(&tz))?)
             }
             _ => None,
@@ -2406,7 +2406,7 @@ fn exp_internal_parse_cert<'py>(
                 match sct {
                     Some(sct_value) => {
                         let dt: DateTime<Utc> = DateTime::from(sct_value);
-                        let tz = PyTzInfo::timezone(py, "UTC")?;
+                        let tz = PyTzInfo::timezone(py, "Etc/UTC")?;
                         Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, Some(&tz))?)
                     }
                     None => None,
@@ -2451,7 +2451,7 @@ fn exp_internal_parse_cert<'py>(
         let expirationtime = match ka.key_expiration_time() {
             Some(etime) => {
                 let dt: DateTime<Utc> = DateTime::from(etime);
-                let tz = PyTzInfo::timezone(py, "UTC")?;
+                let tz = PyTzInfo::timezone(py, "Etc/UTC")?;
                 Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, Some(&tz))?)
             }
             _ => None,
@@ -2459,7 +2459,7 @@ fn exp_internal_parse_cert<'py>(
 
         let creationtime = {
             let dt: DateTime<Utc> = DateTime::from(ka.creation_time());
-            let tz = PyTzInfo::timezone(py, "UTC")?;
+            let tz = PyTzInfo::timezone(py, "Etc/UTC")?;
             Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, Some(&tz))?)
         };
 
@@ -2581,7 +2581,7 @@ fn internal_parse_cert<'py>(
         Ok(value) => {
             let ctime = value.creation_time();
             let dt: DateTime<Utc> = DateTime::from(ctime);
-            let tz = PyTzInfo::timezone(py, "UTC")?;
+            let tz = PyTzInfo::timezone(py, "Etc/UTC")?;
             Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, Some(&tz))?)
         }
         _ => None,
@@ -2591,7 +2591,7 @@ fn internal_parse_cert<'py>(
         Ok(value) => match value.key_expiration_time() {
             Some(etime) => {
                 let dt: DateTime<Utc> = DateTime::from(etime);
-                let tz = PyTzInfo::timezone(py, "UTC")?;
+                let tz = PyTzInfo::timezone(py, "Etc/UTC")?;
                 Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, Some(&tz))?)
             }
             _ => None,
@@ -2654,7 +2654,7 @@ fn internal_parse_cert<'py>(
                 match sct {
                     Some(sct_value) => {
                         let dt: DateTime<Utc> = DateTime::from(sct_value);
-                        let tz = PyTzInfo::timezone(py, "UTC")?;
+                        let tz = PyTzInfo::timezone(py, "Etc/UTC")?;
                         Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, Some(&tz))?)
                     }
                     None => None,
@@ -2699,7 +2699,7 @@ fn internal_parse_cert<'py>(
         let expirationtime = match ka.key_expiration_time() {
             Some(etime) => {
                 let dt: DateTime<Utc> = DateTime::from(etime);
-                let tz = PyTzInfo::timezone(py, "UTC")?;
+                let tz = PyTzInfo::timezone(py, "Etc/UTC")?;
                 Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, Some(&tz))?)
             }
             _ => None,
@@ -2707,7 +2707,7 @@ fn internal_parse_cert<'py>(
 
         let creationtime = {
             let dt: DateTime<Utc> = DateTime::from(ka.creation_time());
-            let tz = PyTzInfo::timezone(py, "UTC")?;
+            let tz = PyTzInfo::timezone(py, "Etc/UTC")?;
             Some(PyDateTime::from_timestamp(py, dt.timestamp() as f64, Some(&tz))?)
         };
 
