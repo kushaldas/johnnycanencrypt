@@ -1568,7 +1568,7 @@ class KeyStore:
         else:
             raise FetchingError(f"Server returned: {resp.status_code}")
 
-    def sync_smartcard(self):
+    def sync_smartcard(self) -> str:
         """
         Syncs the attached smartcard to the right public keys in the KeyStore.
 

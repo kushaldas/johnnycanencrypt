@@ -28,7 +28,7 @@ jobs:
               env:
                 PYTHON: ${{ matrix.python-version }}
               run: |
-                python -m pip install -U pip setuptools
+                python -m pip install -U pip setuptools tzdata
                 python -m pip install -r requirements-dev.txt
 
             - name: Build wheel

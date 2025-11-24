@@ -5,3 +5,5 @@ setuptools-rust
 mypy
 httpx
 vcrpy
+scriv
+tzdata

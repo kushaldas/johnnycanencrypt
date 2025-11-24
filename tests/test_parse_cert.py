@@ -108,6 +108,7 @@ def test_merge_certs():
     """
     # These two are known values from kushal
     ctime = datetime.datetime(2017, 10, 17, 20, 53, 47)
+    etime = datetime.datetime(2027, 10, 15)
     # First let us read from the file
     keypath = BASE_TESTSDIR / "files" / "store" / "pgp_keys.asc"
     with open(keypath, "rb") as fobj:
@@ -130,7 +131,8 @@ def test_merge_certs():
     ) = rustjce.parse_cert_bytes(newcert)
 
     assert ctime.date() == creationtime.date()
-    assert not expirationtime
+    # check for the new expirate time
+    assert expirationtime.date() == etime.date()
 
 
 def test_no_primary_sign():
@@ -160,7 +162,7 @@ def test_uid_certs():
     for uid in uids:
         if uid["value"] == "Kushal Das <kushaldas@gmail.com>":
             ctypes = {}
-            assert len(uid["certifications"]) == 17
+            assert len(uid["certifications"]) == 18
             for cert in uid["certifications"]:
                 assert "creationtime" in cert
                 assert "certification_type" in cert
