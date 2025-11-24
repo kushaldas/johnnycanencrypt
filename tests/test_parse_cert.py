@@ -108,7 +108,7 @@ def test_merge_certs():
     """
     # These two are known values from kushal
     ctime = datetime.datetime(2017, 10, 17, 20, 53, 47)
-    etime = datetime.datetime(2027, 10, 16)
+    etime = datetime.datetime(2027, 10, 15)
     # First let us read from the file
     keypath = BASE_TESTSDIR / "files" / "store" / "pgp_keys.asc"
     with open(keypath, "rb") as fobj:

@@ -89,6 +89,14 @@ impl std::convert::From<std::fmt::Error> for JceError {
     }
 }
 
+impl std::convert::From<pyo3::pyclass::PyClassGuardError<'_, '_>> for JceError {
+    fn from(err: pyo3::pyclass::PyClassGuardError) -> JceError {
+        JceError {
+            msg: err.to_string(),
+        }
+    }
+}
+
 impl std::convert::From<anyhow::Error> for JceError {
     fn from(err: anyhow::Error) -> JceError {
         JceError {
@@ -146,7 +154,10 @@ impl JceError {
 /// Finds all keys in a cert and creates a list of fingerprint, algo, bitsize
 #[pyfunction]
 #[pyo3(signature = (certdata))]
-pub fn get_key_cipher_details<'py>(py: Python, certdata: Vec<u8>) -> Result<PyObject> {
+pub fn get_key_cipher_details<'py>(
+    py: Python<'py>,
+    certdata: Vec<u8>,
+) -> Result<Bound<'py, PyList>> {
     let cert = openpgp::Cert::from_bytes(&certdata)?;
     let list = PyList::empty(py);
 
@@ -178,7 +189,7 @@ pub fn get_key_cipher_details<'py>(py: Python, certdata: Vec<u8>) -> Result<PyOb
         // list.append(<&PyTuple>::clone(&kt))?;
         list.append(kt.clone())?;
     }
-    Ok(list.into())
+    Ok(list)
 }
 
 /// Returns updated key with new expiration time for subkeys
@@ -186,13 +197,13 @@ pub fn get_key_cipher_details<'py>(py: Python, certdata: Vec<u8>) -> Result<PyOb
 /// expirytime as the duration to be added as integer, and the secret key password.
 #[pyfunction]
 #[pyo3(text_signature = "(certdata, fingerprints, expirytime, password)")]
-pub fn update_subkeys_expiry_in_cert(
-    py: Python,
+pub fn update_subkeys_expiry_in_cert<'py>(
+    py: Python<'py>,
     certdata: Vec<u8>,
     fingerprints: Vec<String>,
     expirytime: u64,
     password: String,
-) -> Result<PyObject> {
+) -> Result<Bound<'py, PyBytes>> {
     let cert = openpgp::Cert::from_bytes(&certdata)?;
 
     let p = &P::new();
@@ -231,17 +242,17 @@ pub fn update_subkeys_expiry_in_cert(
 
     // Let us return the cert data which can be saved in the database
     let res = PyBytes::new(py, &buf);
-    Ok(res.into())
+    Ok(res)
 }
 
 #[pyfunction]
 #[pyo3(text_signature = "(certdata, uid, password)")]
-pub fn revoke_uid_in_cert(
-    py: Python,
+pub fn revoke_uid_in_cert<'py>(
+    py: Python<'py>,
     certdata: Vec<u8>,
     uid: Vec<u8>,
     password: String,
-) -> Result<PyObject> {
+) -> Result<Bound<'py, PyBytes>> {
     // This is where we will store all the signing keys
     let mut cert = openpgp::Cert::from_bytes(&certdata)?;
 
@@ -296,17 +307,17 @@ pub fn revoke_uid_in_cert(
 
     // Let us return the cert data which can be saved in the database
     let res = PyBytes::new(py, &buf);
-    Ok(res.into())
+    Ok(res)
 }
 
 #[pyfunction]
 #[pyo3(text_signature = "(certdata, uid, pin)")]
-pub fn revoke_uid_on_card(
-    py: Python,
+pub fn revoke_uid_on_card<'py>(
+    py: Python<'py>,
     certdata: Vec<u8>,
     uid: Vec<u8>,
     pin: Vec<u8>,
-) -> Result<PyObject> {
+) -> Result<Bound<'py, PyBytes>> {
     // This is where we will store all the signing keys.
     let mut cert = openpgp::Cert::from_bytes(&certdata)?;
     // Because we will update cert below.
@@ -339,17 +350,17 @@ pub fn revoke_uid_on_card(
 
     // Let us return the cert data which can be saved in the database
     let res = PyBytes::new(py, &buf);
-    Ok(res.into())
+    Ok(res)
 }
 
 #[pyfunction]
 #[pyo3(text_signature = "(certdata, uid, password)")]
-pub fn add_uid_in_cert(
-    py: Python,
+pub fn add_uid_in_cert<'py>(
+    py: Python<'py>,
     certdata: Vec<u8>,
     uid: Vec<u8>,
     password: String,
-) -> Result<PyObject> {
+) -> Result<Bound<'py, PyBytes>> {
     // This is where we will store all the signing keys
     let cert = openpgp::Cert::from_bytes(&certdata)?;
 
@@ -397,17 +408,12 @@ pub fn add_uid_in_cert(
 
     // Let us return the cert data which can be saved in the database
     let res = PyBytes::new(py, &buf);
-    Ok(res.into())
+    Ok(res)
 }
 
 #[pyfunction]
 #[pyo3(text_signature = "(certdata, uid, pin)")]
-pub fn add_uid_on_card(
-    py: Python,
-    certdata: Vec<u8>,
-    uid: Vec<u8>,
-    pin: Vec<u8>,
-) -> Result<PyObject> {
+pub fn add_uid_on_card<'py>(py: Python<'py>, certdata: Vec<u8>, uid: Vec<u8>, pin: Vec<u8>) -> Result<Bound<'py, PyBytes>> {
     // This is where we will store all the signing keys
     let cert = openpgp::Cert::from_bytes(&certdata)?;
     let pk = cert.primary_key().key();
@@ -430,16 +436,16 @@ pub fn add_uid_on_card(
 
     // Let us return the cert data which can be saved in the database
     let res = PyBytes::new(py, &buf);
-    Ok(res.into())
+    Ok(res)
 }
 
 #[pyfunction]
-pub fn update_password(
-    py: Python,
+pub fn update_password<'py>(
+    py: Python<'py>,
     certdata: Vec<u8>,
     password: String,
     newpass: String,
-) -> Result<PyObject> {
+) -> Result<Bound<'py, PyBytes>> {
     let p = P::new();
     let mut cert = openpgp::Cert::from_bytes(&certdata)?;
     let mut keys = Vec::new();
@@ -484,7 +490,7 @@ pub fn update_password(
     writer.finalize()?;
     // Let us return the cert data which can be saved in the database
     let res = PyBytes::new(py, &buf);
-    Ok(res.into())
+    Ok(res)
 }
 
 pub struct YuBi {
@@ -557,12 +563,12 @@ impl VerificationHelper for YuBi {
 
 #[pyfunction]
 #[pyo3(text_signature = "(certdata, data, pin)")]
-fn decrypt_bytes_on_card(
-    _py: Python,
+fn decrypt_bytes_on_card<'py>(
+    _py: Python<'py>,
     certdata: Vec<u8>,
     data: Vec<u8>,
     pin: Vec<u8>,
-) -> Result<PyObject> {
+) -> Result<Bound<'py, PyBytes>> {
     //let keys: HashMap<openpgp::KeyID, String> = HashMap::new();
     //for (key, val) in keys_from_py.iter() {
     //let kid: openpgp::KeyID = key.parse().unwrap();
@@ -584,7 +590,7 @@ fn decrypt_bytes_on_card(
     };
     std::io::copy(&mut decryptor, &mut result)?;
     let res = PyBytes::new(_py, &result);
-    Ok(res.into())
+    Ok(res)
 }
 
 #[pyfunction]
@@ -612,19 +618,18 @@ pub fn decrypt_file_on_card(
 
 #[pyfunction]
 #[pyo3(text_signature = "(certdata, fh, output, pin)")]
-pub fn decrypt_filehandler_on_card(
-    py: Python,
+pub fn decrypt_filehandler_on_card<'py>(
+    _py: Python<'py>,
     certdata: Vec<u8>,
-    fh: PyObject,
+    fh: Bound<'py, PyAny>,
     output: Vec<u8>,
     pin: Vec<u8>,
 ) -> Result<bool> {
     let p = P::new();
 
-    let filedata = fh.call_method(py, "read", (), None)?;
-    let pbytes: &Bound<'_, PyBytes> = filedata
-        .downcast_bound::<PyBytes>(py)
-        .expect("Excepted bytes");
+    let filedata = fh.call_method("read", (), None)?;
+    let pbytes: Bound<'py, PyBytes> = filedata.extract()
+        .map_err(|e| JceError::new(format!("Expected bytes: {}", e)))?;
     let data: Vec<u8> = Vec::from(pbytes.as_bytes());
 
     let reader = std::io::BufReader::new(&data[..]);
@@ -713,7 +718,7 @@ fn reset_yubikey() -> PyResult<bool> {
 }
 
 #[pyfunction]
-fn get_card_details(py: Python) -> PyResult<PyObject> {
+fn get_card_details<'py>(py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
     let card = talktosc::create_connection();
     let card = match card {
         Ok(card) => card,
@@ -841,7 +846,7 @@ fn get_card_details(py: Python) -> PyResult<PyObject> {
 
     // Disconnect
     talktosc::disconnect(card);
-    Ok(pd.into())
+    Ok(pd)
 }
 
 /// Change user pin (PW1)
@@ -1097,15 +1102,15 @@ pub fn sign_file_detached_on_card(
 
 #[pyfunction]
 #[pyo3(text_signature = "(certdata, othercertdata, sig_type, uids, password, oncard)")]
-fn certify_key(
-    py: Python,
+fn certify_key<'py>(
+    py: Python<'py>,
     certdata: Vec<u8>,
     othercertdata: Vec<u8>,
     sig_type: u8,
     uids: Vec<String>,
     password: Vec<u8>,
     oncard: bool,
-) -> Result<PyObject> {
+) -> Result<Bound<'py, PyBytes>> {
     let policy = &P::new();
 
     let cert = openpgp::Cert::from_bytes(&certdata)?;
@@ -1221,7 +1226,7 @@ fn certify_key(
 
     // Let us return the cert data which can be saved in the database
     let res = PyBytes::new(py, &buf);
-    Ok(res.into())
+    Ok(res)
 }
 
 // This is the internal function which signs either bytes or an input file on the smartcard
@@ -1502,13 +1507,13 @@ fn sign_file_internal(
     Ok(true)
 }
 
-fn sign_bytes_internal(
-    py: Python,
+fn sign_bytes_internal<'py>(
+    py: Python<'py>,
     cert: &openpgp::cert::Cert,
     input: &mut dyn io::Read,
     password: String,
     cleartext: bool,
-) -> Result<PyObject> {
+) -> Result<Bound<'py, PyBytes>> {
     // TODO: WHY?
     let mut input = input;
 
@@ -1561,7 +1566,7 @@ fn sign_bytes_internal(
 
     // Let us return the cert data which can be saved in the database
     let res = PyBytes::new(py, &result);
-    Ok(res.into())
+    Ok(res)
 }
 
 fn sign_bytes_detached_internal(
@@ -1606,12 +1611,7 @@ fn sign_bytes_detached_internal(
 
 #[pyfunction]
 #[pyo3(text_signature = "(certdata, newcertdata, force)")]
-fn merge_keys(
-    _py: Python,
-    certdata: Vec<u8>,
-    newcertdata: Vec<u8>,
-    force: bool,
-) -> Result<PyObject> {
+fn merge_keys<'py>(_py: Python<'py>, certdata: Vec<u8>, newcertdata: Vec<u8>, force: bool) -> Result<Bound<'py, PyBytes>> {
     let cert = openpgp::Cert::from_bytes(&certdata)?;
     let newcert = openpgp::Cert::from_bytes(&newcertdata)?;
     if cert.as_tsk() == newcert.as_tsk() && !force {
@@ -1624,7 +1624,7 @@ fn merge_keys(
     let mergred_cert = cert.merge_public_and_secret(newcert)?;
     let cert_packets = mergred_cert.armored().to_vec()?;
     let res = PyBytes::new(_py, &cert_packets);
-    Ok(res.into())
+    Ok(res)
 }
 
 /// This function takes a path to an encrypted message and tries to guess the keyids it was
@@ -1632,7 +1632,7 @@ fn merge_keys(
 /// care.
 #[pyfunction]
 #[pyo3(text_signature = "(filepath)")]
-fn file_encrypted_for(_py: Python, filepath: String) -> Result<PyObject> {
+fn file_encrypted_for<'py>(_py: Python<'py>, filepath: String) -> Result<Bound<'py, PyList>> {
     let mut ppr = PacketParser::from_file(filepath)?;
     let plist = PyList::empty(_py);
     while let PacketParserResult::Some(pp) = ppr {
@@ -1646,7 +1646,7 @@ fn file_encrypted_for(_py: Python, filepath: String) -> Result<PyObject> {
             plist.append(id)?;
         }
     }
-    Ok(plist.into())
+    Ok(plist)
 }
 
 /// This function takes an encrypted message as bytes and tries to guess the keyids it was
@@ -1654,7 +1654,7 @@ fn file_encrypted_for(_py: Python, filepath: String) -> Result<PyObject> {
 /// with care.
 #[pyfunction]
 #[pyo3(text_signature = "(messagedata)")]
-fn bytes_encrypted_for(_py: Python, messagedata: Vec<u8>) -> Result<PyObject> {
+fn bytes_encrypted_for<'py>(_py: Python<'py>, messagedata: Vec<u8>) -> Result<Bound<'py, PyList>> {
     let mut ppr = PacketParser::from_bytes(&messagedata[..])?;
     let plist = PyList::empty(_py);
     while let PacketParserResult::Some(pp) = ppr {
@@ -1668,7 +1668,7 @@ fn bytes_encrypted_for(_py: Python, messagedata: Vec<u8>) -> Result<PyObject> {
             plist.append(id)?;
         }
     }
-    Ok(plist.into())
+    Ok(plist)
 }
 
 #[pyfunction]
@@ -1744,7 +1744,7 @@ fn upload_to_smartcard(
 
 #[pyfunction]
 #[pyo3(text_signature = "(certdata)")]
-fn get_signing_pubkey(py: Python, certdata: Vec<u8>) -> Result<PyObject> {
+fn get_signing_pubkey<'py>(py: Python<'py>, certdata: Vec<u8>) -> Result<Bound<'py, PyDict>> {
     // Note: For now we will return the first signing key (maybe the primary key).
     use std::fmt::Write;
     let pd = PyDict::new(py);
@@ -1775,7 +1775,7 @@ fn get_signing_pubkey(py: Python, certdata: Vec<u8>) -> Result<PyObject> {
                 pd.set_item("key_type", "RSA")?;
                 pd.set_item("n", result_n)?;
                 pd.set_item("e", result_e)?;
-                return Ok(pd.into());
+                return Ok(pd);
             }
             _ => {
                 return Err(JceError::new("Not yet implemented".to_string()));
@@ -2229,7 +2229,7 @@ fn parse_and_move_a_key(
 ///                "authentication", or "unknown".
 ///   - "keyid": "primary key id in hex"
 #[pyfunction]
-fn parse_keyring_file(py: Python, certpath: String) -> Result<PyObject> {
+fn parse_keyring_file<'py>(py: Python<'py>, certpath: String) -> Result<Bound<'py, PyList>> {
     let plist = PyList::empty(py);
     let ppr = PacketParser::from_file(certpath)?;
     for certdata in CertParser::from(ppr) {
@@ -2250,7 +2250,7 @@ fn parse_keyring_file(py: Python, certpath: String) -> Result<PyObject> {
             Err(err) => return Err(JceError::new(format!("{}", err))),
         }
     }
-    Ok(plist.into())
+    Ok(plist)
 }
 
 #[pyfunction]
@@ -2278,7 +2278,7 @@ fn export_keyring_file(_py: Python, certs: Vec<Vec<u8>>, keyringname: String) ->
 // HACK:
 //
 #[pyfunction]
-fn exp_parse_keyring_file(py: Python, certpath: String) -> Result<PyObject> {
+fn exp_parse_keyring_file<'py>(py: Python<'py>, certpath: String) -> Result<Bound<'py, PyList>> {
     let plist = PyList::empty(py);
     let ppr = PacketParser::from_file(certpath)?;
     for certdata in CertParser::from(ppr) {
@@ -2299,12 +2299,12 @@ fn exp_parse_keyring_file(py: Python, certpath: String) -> Result<PyObject> {
             Err(err) => return Err(JceError::new(format!("{}", err))),
         }
     }
-    Ok(plist.into())
+    Ok(plist)
 }
 
 #[pyfunction]
 #[pyo3(signature = (certpath, nullpolicy=None))]
-fn exp_parse_cert_file(py: Python, certpath: String, nullpolicy: Option<bool>) -> Result<PyObject> {
+fn exp_parse_cert_file<'py>(py: Python<'py>, certpath: String, nullpolicy: Option<bool>) -> Result<Bound<'py, PyDict>> {
     let cert = openpgp::Cert::from_file(certpath)?;
     let null_policy_can_be_used = nullpolicy.unwrap_or(false);
     exp_internal_parse_cert(py, cert, null_policy_can_be_used)
@@ -2312,21 +2312,17 @@ fn exp_parse_cert_file(py: Python, certpath: String, nullpolicy: Option<bool>) -
 
 #[pyfunction]
 #[pyo3(signature = (certdata, nullpolicy=None))]
-fn exp_parse_cert_bytes(
-    py: Python,
-    certdata: Vec<u8>,
-    nullpolicy: Option<bool>,
-) -> Result<PyObject> {
+fn exp_parse_cert_bytes<'py>(py: Python<'py>, certdata: Vec<u8>, nullpolicy: Option<bool>) -> Result<Bound<'py, PyDict>> {
     let cert = openpgp::Cert::from_bytes(&certdata)?;
     let null_policy_can_be_used = nullpolicy.unwrap_or(false);
     exp_internal_parse_cert(py, cert, null_policy_can_be_used)
 }
 
-fn exp_internal_parse_cert(
-    py: Python,
+fn exp_internal_parse_cert<'py>(
+    py: Python<'py>,
     cert: openpgp::Cert,
     nullpolicy_can_be_used: bool,
-) -> Result<PyObject> {
+) -> Result<Bound<'py, PyDict>> {
     let mainresult = PyDict::new(py);
     let pbox: Box<dyn Policy> = if nullpolicy_can_be_used {
         Box::new(NP::new())
@@ -2511,7 +2507,7 @@ fn exp_internal_parse_cert(
     mainresult.set_item("creation", creationtime.into_pyobject(py)?)?;
     mainresult.set_item("othervalues", othervalues.into_pyobject(py)?)?;
 
-    Ok(mainresult.into())
+    Ok(mainresult)
 }
 //
 // END EXPERIMENTAL CODE
@@ -2531,11 +2527,11 @@ fn exp_internal_parse_cert(
 ///   - "keyid": "primary key id in hex"
 #[pyfunction]
 #[pyo3(signature = (certpath, nullpolicy=None))]
-fn parse_cert_file(
-    py: Python,
+fn parse_cert_file<'py>(
+    py: Python<'py>,
     certpath: String,
     nullpolicy: Option<bool>,
-) -> Result<(PyObject, String, bool, PyObject, PyObject, PyObject)> {
+) -> Result<(Bound<'py, PyList>, String, bool, Bound<'py, PyAny>, Bound<'py, PyAny>, Bound<'py, PyDict>)> {
     let cert = openpgp::Cert::from_file(certpath)?;
     let null_policy_can_be_used = nullpolicy.unwrap_or(false);
     internal_parse_cert(py, cert, null_policy_can_be_used)
@@ -2556,21 +2552,21 @@ fn parse_cert_file(
 ///   - "keyid": "primary key id in hex"
 #[pyfunction]
 #[pyo3(signature = (certdata, nullpolicy=None))]
-fn parse_cert_bytes(
-    py: Python,
+fn parse_cert_bytes<'py>(
+    py: Python<'py>,
     certdata: Vec<u8>,
     nullpolicy: Option<bool>,
-) -> Result<(PyObject, String, bool, PyObject, PyObject, PyObject)> {
+) -> Result<(Bound<'py, PyList>, String, bool, Bound<'py, PyAny>, Bound<'py, PyAny>, Bound<'py, PyDict>)> {
     let cert = openpgp::Cert::from_bytes(&certdata)?;
     let null_policy_can_be_used = nullpolicy.unwrap_or(false);
     internal_parse_cert(py, cert, null_policy_can_be_used)
 }
 
-fn internal_parse_cert(
-    py: Python,
+fn internal_parse_cert<'py>(
+    py: Python<'py>,
     cert: openpgp::Cert,
     nullpolicy_can_be_used: bool,
-) -> Result<(PyObject, String, bool, PyObject, PyObject, PyObject)> {
+) -> Result<(Bound<'py, PyList>, String, bool, Bound<'py, PyAny>, Bound<'py, PyAny>, Bound<'py, PyDict>)> {
     let pbox: Box<dyn Policy> = if nullpolicy_can_be_used {
         Box::new(NP::new())
     } else {
@@ -2746,12 +2742,12 @@ fn internal_parse_cert(
     othervalues.set_item("can_primary_sign", can_primary_sign)?;
 
     Ok((
-        plist.into(),
+        plist,
         cert.fingerprint().to_hex(),
         cert.is_tsk(),
-        expirationtime.into_pyobject(py)?.into(),
-        creationtime.into_pyobject(py)?.into(),
-        othervalues.into_pyobject(py)?.into(),
+        expirationtime.into_pyobject(py)?,
+        creationtime.into_pyobject(py)?,
+        othervalues.into_pyobject(py)?,
     ))
 }
 
@@ -2905,15 +2901,16 @@ fn create_key(
 /// return bytes.
 #[pyfunction]
 #[pyo3(signature = (publickeys, fh, output, armor=false))]
-fn encrypt_filehandler_to_file(
-    py: Python,
+fn encrypt_filehandler_to_file<'py>(
+    _py: Python<'py>,
     publickeys: Vec<Vec<u8>>,
-    fh: PyObject,
+    fh: Bound<'py, PyAny>,
     output: Vec<u8>,
     armor: Option<bool>,
 ) -> Result<bool> {
-    let data = fh.call_method(py, "read", (), None)?;
-    let pbytes: &Bound<'_, PyBytes> = data.downcast_bound::<PyBytes>(py).expect("Excepted bytes");
+    let data = fh.call_method("read", (), None)?;
+    let pbytes: Bound<'py, PyBytes> = data.extract()
+        .map_err(|e| JceError::new(format!("Expected bytes: {}", e)))?;
     let filedata: Vec<u8> = Vec::from(pbytes.as_bytes());
     encrypt_bytes_to_file(publickeys, filedata, output, armor)
 }
@@ -3082,12 +3079,12 @@ fn encrypt_file_internal(
 /// You can also pass boolen flag armor for armored output.
 #[pyfunction]
 #[pyo3(signature = (publickeys, data, armor=false))]
-fn encrypt_bytes_to_bytes(
-    py: Python,
+fn encrypt_bytes_to_bytes<'py>(
+    py: Python<'py>,
     publickeys: Vec<Vec<u8>>,
     data: Vec<u8>,
     armor: Option<bool>,
-) -> Result<PyObject> {
+) -> Result<Bound<'py, PyBytes>> {
     let mut certs = Vec::new();
     for certdata in publickeys {
         certs.push(openpgp::Cert::from_bytes(&certdata)?);
@@ -3134,11 +3131,11 @@ fn encrypt_bytes_to_bytes(
             // Finalize the armor writer.
             sink.finalize().expect("Failed to write data");
             let res = PyBytes::new(py, &result2);
-            Ok(res.into())
+            Ok(res)
         }
         _ => {
             let res = PyBytes::new(py, &result);
-            Ok(res.into())
+            Ok(res)
         }
     }
 }
@@ -3158,12 +3155,7 @@ impl Johnny {
     }
 
     #[pyo3(signature = (data, armor=false))]
-    pub fn encrypt_bytes(
-        &self,
-        py: Python,
-        data: Vec<u8>,
-        armor: Option<bool>,
-    ) -> Result<PyObject> {
+    pub fn encrypt_bytes<'py>(&self, py: Python<'py>, data: Vec<u8>, armor: Option<bool>) -> Result<Bound<'py, PyBytes>> {
         let mode = KeyFlags::empty().set_storage_encryption();
         let p = P::new();
         let recipients = self
@@ -3204,16 +3196,16 @@ impl Johnny {
                 // Finalize the armor writer.
                 sink.finalize().expect("Failed to write data");
                 let res = PyBytes::new(py, &result2);
-                Ok(res.into())
+                Ok(res)
             }
             _ => {
                 let res = PyBytes::new(py, &result);
-                Ok(res.into())
+                Ok(res)
             }
         }
     }
 
-    pub fn decrypt_bytes(&self, py: Python, data: Vec<u8>, password: String) -> Result<PyObject> {
+    pub fn decrypt_bytes<'py>(&self, py: Python<'py>, data: Vec<u8>, password: String) -> Result<Bound<'py, PyBytes>> {
         let p = P::new();
 
         let mut result = Vec::new();
@@ -3231,7 +3223,7 @@ impl Johnny {
         };
         std::io::copy(&mut decryptor, &mut result)?;
         let res = PyBytes::new(py, &result);
-        Ok(res.into())
+        Ok(res)
     }
     #[pyo3(signature = (filepath, output, armor=false))]
     pub fn encrypt_file(
@@ -3324,19 +3316,18 @@ impl Johnny {
         Ok(true)
     }
 
-    pub fn decrypt_filehandler(
+    pub fn decrypt_filehandler<'py>(
         &self,
-        py: Python,
-        fh: PyObject,
+        _py: Python<'py>,
+        fh: Bound<'py, PyAny>,
         output: Vec<u8>,
         password: String,
     ) -> Result<bool> {
         let p = P::new();
 
-        let filedata = fh.call_method(py, "read", (), None)?;
-        let pbytes: &Bound<'_, PyBytes> = filedata
-            .downcast_bound::<PyBytes>(py)
-            .expect("Excepted bytes");
+        let filedata = fh.call_method("read", (), None)?;
+        let pbytes: Bound<'py, PyBytes> = filedata.extract()
+            .map_err(|e| JceError::new(format!("Expected bytes: {}", e)))?;
         let data: Vec<u8> = Vec::from(pbytes.as_bytes());
 
         let reader = std::io::BufReader::new(&data[..]);
@@ -3357,13 +3348,13 @@ impl Johnny {
         Ok(true)
     }
 
-    pub fn sign_bytes(
+    pub fn sign_bytes<'py>(
         &self,
-        py: Python,
+        py: Python<'py>,
         data: Vec<u8>,
         password: String,
         cleartext: bool,
-    ) -> Result<PyObject> {
+    ) -> Result<Bound<'py, PyBytes>> {
         let mut localdata = io::Cursor::new(data);
         sign_bytes_internal(py, &self.cert, &mut localdata, password, cleartext)
     }
@@ -3430,7 +3421,7 @@ impl Johnny {
         Ok(v.message_processed())
     }
 
-    pub fn verify_and_extract_bytes(&self, py: Python<'_>, data: Vec<u8>) -> Result<PyObject> {
+    pub fn verify_and_extract_bytes<'py>(&self, py: Python<'py>, data: Vec<u8>) -> Result<Bound<'py, PyBytes>> {
         let p = P::new();
         let vh = VHelper::new(&self.cert);
         let mut v = VerifierBuilder::from_bytes(&data[..])?.with_policy(&p, None, vh)?;
@@ -3440,7 +3431,7 @@ impl Johnny {
         let mut inside: Vec<u8> = Vec::new();
         let _ = tmp.read_to_end(&mut inside)?;
         let output = PyBytes::new(py, &inside);
-        Ok(output.into())
+        Ok(output)
     }
 
     pub fn verify_file(&self, filepath: Vec<u8>) -> Result<bool> {
@@ -3474,13 +3465,13 @@ pub fn is_smartcard_connected() -> PyResult<bool> {
 
 /// Returns a tuple with the firmware version.
 #[pyfunction]
-pub fn get_card_version(py: Python) -> Result<PyObject> {
+pub fn get_card_version<'py>(py: Python<'py>) -> Result<Bound<'py, PyTuple>> {
     let data = match scard::internal_get_version() {
         Ok(value) => value,
         Err(_) => return Err(JceError::new("Can not get Yubikey version".to_string())),
     };
     let result = PyTuple::new(py, data.iter())?;
-    Ok(result.into())
+    Ok(result)
 }
 
 /// TouchMode for Yubikeys
@@ -3564,12 +3555,12 @@ pub fn disable_otp_usb() -> Result<bool> {
 /// and the secret key password.
 #[pyfunction]
 #[pyo3(text_signature = "(certdata, expirytime, password)")]
-pub fn update_primary_expiry_in_cert(
-    py: Python,
+pub fn update_primary_expiry_in_cert<'py>(
+    py: Python<'py>,
     certdata: Vec<u8>,
     expirytime: u64,
     password: String,
-) -> Result<PyObject> {
+) -> Result<Bound<'py, PyBytes>> {
     let cert = openpgp::Cert::from_bytes(&certdata)?;
 
     let p = &P::new();
@@ -3599,17 +3590,17 @@ pub fn update_primary_expiry_in_cert(
 
     // Let us return the cert data which can be saved in the database
     let res = PyBytes::new(py, &buf);
-    Ok(res.into())
+    Ok(res)
 }
 
 #[pyfunction]
 #[pyo3(text_signature = "(certdata, expirytime, pin)")]
-pub fn update_primary_expiry_on_card(
-    py: Python,
+pub fn update_primary_expiry_on_card<'py>(
+    py: Python<'py>,
     certdata: Vec<u8>,
     expirytime: u64,
     pin: Vec<u8>,
-) -> Result<PyObject> {
+) -> Result<Bound<'py, PyBytes>> {
     let cert = openpgp::Cert::from_bytes(&certdata)?;
 
     let p = &P::new();
@@ -3634,7 +3625,7 @@ pub fn update_primary_expiry_on_card(
 
     // Let us return the cert data as bytes which can be saved in the database
     let res = PyBytes::new(py, &buf);
-    Ok(res.into())
+    Ok(res)
 }
 
 /// Returns updated key with new expiration time for subkeys
@@ -3642,13 +3633,13 @@ pub fn update_primary_expiry_on_card(
 /// expirytime as the duration to be added as integer, and the pin for the card.
 #[pyfunction]
 #[pyo3(text_signature = "(certdata, fingerprints, expirytime, pin)")]
-pub fn update_subkeys_expiry_on_card(
-    py: Python,
+pub fn update_subkeys_expiry_on_card<'py>(
+    py: Python<'py>,
     certdata: Vec<u8>,
     fingerprints: Vec<String>,
     expirytime: u64,
     pin: Vec<u8>,
-) -> Result<PyObject> {
+) -> Result<Bound<'py, PyBytes>> {
     let cert = openpgp::Cert::from_bytes(&certdata)?;
 
     let p = &P::new();
@@ -3685,7 +3676,7 @@ pub fn update_subkeys_expiry_on_card(
 
     // Let us return the cert data which can be saved in the database
     let res = PyBytes::new(py, &buf);
-    Ok(res.into())
+    Ok(res)
 }
 
 /// A Python module implemented in Rust.
