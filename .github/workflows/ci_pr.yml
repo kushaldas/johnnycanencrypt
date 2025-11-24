@@ -10,108 +10,6 @@ env:
   UV_LINK_MODE: "copy"
 jobs:
 
-  sdist:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    strategy:
-      fail-fast: false
-    steps:
-
-    - uses: actions/setup-python@v6
-      with:
-        python-version: "3.14"
-
-    - name: rustup stable
-      run: |
-        curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain "${RUST_TOOLCHAIN_STABLE}" -y
-        rustup default "${RUST_TOOLCHAIN_STABLE}"
-
-    - uses: actions/checkout@v5
-
-    - name: Cargo.toml and pyproject.toml version must match
-      run: ./scripts/check-version
-
-    - run: python3 -m pip install --user --upgrade pip "maturin>=1,<2" wheel
-
-    - name: Vendor dependencies
-      run: |
-        maturin build
-        cargo fetch
-        mkdir .cargo
-        cp ci/sdist.toml .cargo/config.toml
-        cargo vendor include/cargo --versioned-dirs
-
-    - run: maturin sdist --out=dist
-
-    - run: python3 -m pip install --user dist/johnnycanencrypt*.tar.gz
-      env:
-        CARGO_NET_OFFLINE: "true"
-
-    - run: python3 -m pip install --user -r requirements-dev.txt
-
-    - run: python3 -m pytest -vvv
-      env:
-        PYTHONMALLOC: "debug"
-
-    - name: Store sdist
-      uses: actions/upload-artifact@v4
-      with:
-        name: jce_sdist
-        path: dist
-        overwrite: true
-        retention-days: 1
-        if-no-files-found: "error"
-        compression-level: 0
-
-  manylinux_amd64:
-    runs-on: ubuntu-24.04
-    container:
-      image: fedora:rawhide
-    timeout-minutes: 10
-    strategy:
-      fail-fast: false
-      matrix:
-        python: [
-          { interpreter: 'python3.14t', compatibility: "manylinux_2_34", publish: false },
-          { interpreter: 'python3.14', compatibility: "manylinux_2_17", publish: true },
-          { interpreter: 'python3.13', compatibility: "manylinux_2_17", publish: true },
-          { interpreter: 'python3.12', compatibility: "manylinux_2_17", publish: true },
-          { interpreter: 'python3.11', compatibility: "manylinux_2_17", publish: true },
-          { interpreter: 'python3.10', compatibility: "manylinux_2_17", publish: true },
-        ]
-    env:
-      CARGO_TARGET_DIR: "/tmp/jce"
-      CC: "clang"
-      CFLAGS: "-O2 -fstrict-aliasing -fno-plt -emit-llvm"
-      LDFLAGS: "-fuse-ld=lld -Wl,-plugin-opt=also-emit-llvm -Wl,--as-needed -Wl,-zrelro,-znow"
-      RUSTFLAGS: "-Z unstable-options -C panic=immediate-abort -C linker=clang -C link-arg=-fuse-ld=lld -C linker-plugin-lto -C link-arg=-Wl,-zrelro,-znow -Z mir-opt-level=4 -Z threads=4 -D warnings"
-      VENV: ".venv"
-    steps:
-
-      - name: CPU info
-        run: cat /proc/cpuinfo
-
-      - run: dnf install --setopt=install_weak_deps=false -y git
-
-      - uses: actions/checkout@v5
-
-      - name: Build and test
-        uses: ./.github/actions/manylinux
-        with:
-          arch: "x86_64"
-          interpreter: "${{ matrix.python.interpreter }}"
-          compatibility: "${{ matrix.python.compatibility }}"
-          publish: "${{ matrix.python.publish }}"
-
-      - name: Store wheels
-        if: matrix.python.publish == true
-        uses: actions/upload-artifact@v4
-        with:
-          name: "johnnycanencrypt_manylinux_amd64_${{ matrix.python.interpreter }}_${{ matrix.python.compatibility }}"
-          path: dist
-          overwrite: true
-          retention-days: 1
-
   macos_aarch64:
     runs-on: macos-26
     timeout-minutes: 10
@@ -136,6 +34,10 @@ jobs:
     - name: CPU info
       run: sysctl -a | grep brand
 
+    - name: Set up Homebrew
+      id: set-up-homebrew
+      uses: Homebrew/actions/setup-homebrew@main
+
     - uses: actions/checkout@v5
 
     - uses: actions/setup-python@v6
@@ -155,6 +57,7 @@ jobs:
 
         export PATH=$HOME/.cargo/bin:$HOME/.local/bin:$PATH
 
+        brew install nettle pkg-config
         curl -LsSf https://astral.sh/uv/install.sh | sh
         uv venv --python python${{ matrix.python.version }}
         uv pip install --upgrade "maturin>=1,<2" -r requirements-dev.txt
@@ -175,7 +78,9 @@ jobs:
           --target=aarch64-apple-darwin
         uv pip install target/wheels/johnnycanencrypt*.whl
 
-    - run: pytest -v test
+    - run: |
+        source .venv/bin/activate
+        python -m pytest -vvv tests
       env:
         PYTHONMALLOC: "debug"
 
@@ -191,8 +96,8 @@ jobs:
         if-no-files-found: "error"
         compression-level: 0
 
-  macos_universal2_aarch64:
-    runs-on: macos-26
+  macos_intel:
+    runs-on: macos-15
     timeout-minutes: 10
     strategy:
       fail-fast: false
@@ -208,14 +113,15 @@ jobs:
       CC: "clang"
       CFLAGS: "-O2 -fstrict-aliasing"
       LDFLAGS: "-Wl,--as-needed"
-      CFLAGS_x86_64_apple_darwin: "-O2 -fstrict-aliasing -fno-plt -march=x86-64-v2 -mtune=generic"
-      CFLAGS_aarch64_apple_darwin: "-O2 -fstrict-aliasing -fno-plt -mcpu=apple-m1 -mtune=generic"
-      RUSTFLAGS: "-Z unstable-options -C panic=immediate-abort -Z mir-opt-level=4 -Z threads=3 -D warnings"
       PATH: "/Users/runner/work/johnnycanencrypt/johnnycanencrypt/.venv/bin:/Users/runner/.cargo/bin:/usr/local/opt/curl/bin:/usr/local/bin:/usr/local/sbin:/Users/runner/bin:/Library/Frameworks/Python.framework/Versions/Current/bin:/usr/bin:/bin:/usr/sbin:/sbin"
     steps:
 
     - name: CPU info
       run: sysctl -a | grep brand
+
+    - name: Set up Homebrew
+      id: set-up-homebrew
+      uses: Homebrew/actions/setup-homebrew@main
 
     - uses: actions/checkout@v5
 
@@ -224,17 +130,18 @@ jobs:
         allow-prereleases: true
         python-version: "${{ matrix.python.version }}"
 
-    - uses: dtolnay/rust-toolchain@master
+    - uses: dtolnay/rust-toolchain@stable
       with:
-        toolchain: "${{ env.RUST_TOOLCHAIN }}"
-        targets: "aarch64-apple-darwin, x86_64-apple-darwin"
+        toolchain: stable
+        target: x86_64-apple-darwin
         components: "rust-src"
 
     - name: Build environment
       run: |
-        cargo fetch --target aarch64-apple-darwin &
+        cargo fetch --target x86_64-apple-darwin &
 
         export PATH=$HOME/.cargo/bin:$HOME/.local/bin:$PATH
+        brew install nettle pkg-config
 
         curl -LsSf https://astral.sh/uv/install.sh | sh
         uv venv --python python${{ matrix.python.version }}
@@ -248,21 +155,21 @@ jobs:
         export PATH=$HOME/.cargo/bin:$HOME/.local/bin:$PATH
 
         MACOSX_DEPLOYMENT_TARGET="${{ matrix.python.macosx_target }}" \
-        PYO3_CROSS_LIB_DIR=$(python -c "import sysconfig;print(sysconfig.get_config_var('LIBDIR'))") \
+        #PYO3_CROSS_LIB_DIR=$(python -c "import sysconfig;print(sysconfig.get_config_var('LIBDIR'))") \
         maturin build \
           --release \
           --strip \
           --interpreter python${{ matrix.python.version }} \
-          --target=universal2-apple-darwin
+          --target=x86_64-apple-darwin
+        source .venv/bin/activate
         uv pip install target/wheels/johnnycanencrypt*.whl
 
-    - run: pytest -v test
+
+    - run: |
+        source .venv/bin/activate
+        python -m pytest -vvv tests
       env:
         PYTHONMALLOC: "debug"
-
-    - run: source .venv/bin/activate && ./integration/run thread
-    - run: source .venv/bin/activate && ./integration/run http
-    - run: source .venv/bin/activate && ./integration/run init
 
     - name: Store wheels
       if: matrix.python.publish == true
@@ -289,8 +196,8 @@ jobs:
           { version: '3.10', publish: true },
         ]
         platform: [
-          { arch: "x64", target: "x86_64-pc-windows-msvc", features: "avx512" },
-          { arch: "x86", target: "i686-pc-windows-msvc", features: "" },
+          { arch: "x64", target: "x86_64-pc-windows-msvc",  },
+          { arch: "x86", target: "i686-pc-windows-msvc", },
         ]
     env:
       CFLAGS: "-O2"
@@ -328,12 +235,9 @@ jobs:
 
     - name: maturin
       run: |
-        maturin.exe build --release --strip --features="${{ matrix.platform.features }}" --target="${{ matrix.platform.target }}"
+        maturin.exe build --release --strip --target="${{ matrix.platform.target }}"
         python.exe -m pip install johnnycanencrypt --no-index --find-links target\wheels
-
-    - run: python.exe -m pytest -vvv
-      env:
-        PYTHONMALLOC: "debug"
+        python.exe -m pytest -vvv tests
 
     - name: Store wheels
       if: matrix.python.publish == true
@@ -400,10 +304,7 @@ jobs:
       run: |
         maturin.exe build --release --strip --target="$env:TARGET"
         python.exe -m pip install johnnycanencrypt --no-index --find-links target\wheels
-
-    - run: python.exe -m pytest -vvv
-      env:
-        PYTHONMALLOC: "debug"
+        python.exe -m pytest -vvv tests
 
     - name: Store wheels
       if: matrix.python.publish == true
