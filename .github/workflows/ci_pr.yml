@@ -1,0 +1,417 @@
+name: ci-pr
+on: [pull_request, workflow_dispatch]
+env:
+  FORCE_COLOR: "1"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  RUST_TOOLCHAIN: "nightly-2025-10-21"
+  RUST_TOOLCHAIN_STABLE: "1.85"
+  UNSAFE_PYO3_BUILD_FREE_THREADED: "1"
+  UNSAFE_PYO3_SKIP_VERSION_CHECK: "1"
+  UV_LINK_MODE: "copy"
+jobs:
+
+  sdist:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+    steps:
+
+    - uses: actions/setup-python@v6
+      with:
+        python-version: "3.14"
+
+    - name: rustup stable
+      run: |
+        curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain "${RUST_TOOLCHAIN_STABLE}" -y
+        rustup default "${RUST_TOOLCHAIN_STABLE}"
+
+    - uses: actions/checkout@v5
+
+    - name: Cargo.toml and pyproject.toml version must match
+      run: ./scripts/check-version
+
+    - run: python3 -m pip install --user --upgrade pip "maturin>=1,<2" wheel
+
+    - name: Vendor dependencies
+      run: |
+        maturin build
+        cargo fetch
+        mkdir .cargo
+        cp ci/sdist.toml .cargo/config.toml
+        cargo vendor include/cargo --versioned-dirs
+
+    - run: maturin sdist --out=dist
+
+    - run: python3 -m pip install --user dist/johnnycanencrypt*.tar.gz
+      env:
+        CARGO_NET_OFFLINE: "true"
+
+    - run: python3 -m pip install --user -r requirements-dev.txt
+
+    - run: python3 -m pytest -vvv
+      env:
+        PYTHONMALLOC: "debug"
+
+    - name: Store sdist
+      uses: actions/upload-artifact@v4
+      with:
+        name: jce_sdist
+        path: dist
+        overwrite: true
+        retention-days: 1
+        if-no-files-found: "error"
+        compression-level: 0
+
+  manylinux_amd64:
+    runs-on: ubuntu-24.04
+    container:
+      image: fedora:rawhide
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python: [
+          { interpreter: 'python3.14t', compatibility: "manylinux_2_34", publish: false },
+          { interpreter: 'python3.14', compatibility: "manylinux_2_17", publish: true },
+          { interpreter: 'python3.13', compatibility: "manylinux_2_17", publish: true },
+          { interpreter: 'python3.12', compatibility: "manylinux_2_17", publish: true },
+          { interpreter: 'python3.11', compatibility: "manylinux_2_17", publish: true },
+          { interpreter: 'python3.10', compatibility: "manylinux_2_17", publish: true },
+        ]
+    env:
+      CARGO_TARGET_DIR: "/tmp/jce"
+      CC: "clang"
+      CFLAGS: "-O2 -fstrict-aliasing -fno-plt -emit-llvm"
+      LDFLAGS: "-fuse-ld=lld -Wl,-plugin-opt=also-emit-llvm -Wl,--as-needed -Wl,-zrelro,-znow"
+      RUSTFLAGS: "-Z unstable-options -C panic=immediate-abort -C linker=clang -C link-arg=-fuse-ld=lld -C linker-plugin-lto -C link-arg=-Wl,-zrelro,-znow -Z mir-opt-level=4 -Z threads=4 -D warnings"
+      VENV: ".venv"
+    steps:
+
+      - name: CPU info
+        run: cat /proc/cpuinfo
+
+      - run: dnf install --setopt=install_weak_deps=false -y git
+
+      - uses: actions/checkout@v5
+
+      - name: Build and test
+        uses: ./.github/actions/manylinux
+        with:
+          arch: "x86_64"
+          interpreter: "${{ matrix.python.interpreter }}"
+          compatibility: "${{ matrix.python.compatibility }}"
+          publish: "${{ matrix.python.publish }}"
+
+      - name: Store wheels
+        if: matrix.python.publish == true
+        uses: actions/upload-artifact@v4
+        with:
+          name: "johnnycanencrypt_manylinux_amd64_${{ matrix.python.interpreter }}_${{ matrix.python.compatibility }}"
+          path: dist
+          overwrite: true
+          retention-days: 1
+
+  macos_aarch64:
+    runs-on: macos-26
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python: [
+          { version: '3.14t', macosx_target: "15.0", publish: false },
+          { version: '3.14', macosx_target: "15.0", publish: true },
+          { version: '3.13', macosx_target: "15.0", publish: true },
+          { version: '3.12', macosx_target: "15.0", publish: true },
+          { version: '3.11', macosx_target: "15.0", publish: true },
+        ]
+    env:
+      CC: "clang"
+      LDFLAGS: "-Wl,--as-needed"
+      CFLAGS: "-O2 -fstrict-aliasing -fno-plt -mcpu=apple-m1 -mtune=generic"
+      RUSTFLAGS: "-Z unstable-options -C panic=immediate-abort -Z mir-opt-level=4 -Z threads=3 -D warnings"
+      PATH: "/Users/runner/work/johnnycanencrypt/johnnycanencrypt/.venv/bin:/Users/runner/.cargo/bin:/usr/local/opt/curl/bin:/usr/local/bin:/usr/local/sbin:/Users/runner/bin:/Library/Frameworks/Python.framework/Versions/Current/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+    steps:
+
+    - name: CPU info
+      run: sysctl -a | grep brand
+
+    - uses: actions/checkout@v5
+
+    - uses: actions/setup-python@v6
+      with:
+        allow-prereleases: true
+        python-version: "${{ matrix.python.version }}"
+
+    - uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: "${{ env.RUST_TOOLCHAIN }}"
+        targets: "aarch64-apple-darwin"
+        components: "rust-src"
+
+    - name: Build environment
+      run: |
+        cargo fetch --target aarch64-apple-darwin &
+
+        export PATH=$HOME/.cargo/bin:$HOME/.local/bin:$PATH
+
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+        uv venv --python python${{ matrix.python.version }}
+        uv pip install --upgrade "maturin>=1,<2" -r requirements-dev.txt
+
+        mkdir .cargo
+        cp ci/config.toml .cargo/config.toml
+
+    - name: maturin
+      run: |
+        export PATH=$HOME/.cargo/bin:$HOME/.local/bin:$PATH
+
+        MACOSX_DEPLOYMENT_TARGET="${{ matrix.python.macosx_target }}" \
+        PYO3_CROSS_LIB_DIR=$(python -c "import sysconfig;print(sysconfig.get_config_var('LIBDIR'))") \
+        maturin build \
+          --release \
+          --strip \
+          --interpreter python${{ matrix.python.version }} \
+          --target=aarch64-apple-darwin
+        uv pip install target/wheels/johnnycanencrypt*.whl
+
+    - run: pytest -v test
+      env:
+        PYTHONMALLOC: "debug"
+
+
+    - name: Store wheels
+      if: matrix.python.publish == true
+      uses: actions/upload-artifact@v4
+      with:
+        name: johnnycanencrypt_macos_aarch64_${{ matrix.python.version }}
+        path: target/wheels
+        overwrite: true
+        retention-days: 1
+        if-no-files-found: "error"
+        compression-level: 0
+
+  macos_universal2_aarch64:
+    runs-on: macos-26
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python: [
+          { version: '3.14', macosx_target: "10.15", publish: true },
+          { version: '3.13', macosx_target: "10.15", publish: true },
+          { version: '3.12', macosx_target: "10.15", publish: true },
+          { version: '3.11', macosx_target: "10.15", publish: true },
+          { version: '3.10', macosx_target: "10.15", publish: true },
+        ]
+    env:
+      CC: "clang"
+      CFLAGS: "-O2 -fstrict-aliasing"
+      LDFLAGS: "-Wl,--as-needed"
+      CFLAGS_x86_64_apple_darwin: "-O2 -fstrict-aliasing -fno-plt -march=x86-64-v2 -mtune=generic"
+      CFLAGS_aarch64_apple_darwin: "-O2 -fstrict-aliasing -fno-plt -mcpu=apple-m1 -mtune=generic"
+      RUSTFLAGS: "-Z unstable-options -C panic=immediate-abort -Z mir-opt-level=4 -Z threads=3 -D warnings"
+      PATH: "/Users/runner/work/johnnycanencrypt/johnnycanencrypt/.venv/bin:/Users/runner/.cargo/bin:/usr/local/opt/curl/bin:/usr/local/bin:/usr/local/sbin:/Users/runner/bin:/Library/Frameworks/Python.framework/Versions/Current/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+    steps:
+
+    - name: CPU info
+      run: sysctl -a | grep brand
+
+    - uses: actions/checkout@v5
+
+    - uses: actions/setup-python@v6
+      with:
+        allow-prereleases: true
+        python-version: "${{ matrix.python.version }}"
+
+    - uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: "${{ env.RUST_TOOLCHAIN }}"
+        targets: "aarch64-apple-darwin, x86_64-apple-darwin"
+        components: "rust-src"
+
+    - name: Build environment
+      run: |
+        cargo fetch --target aarch64-apple-darwin &
+
+        export PATH=$HOME/.cargo/bin:$HOME/.local/bin:$PATH
+
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+        uv venv --python python${{ matrix.python.version }}
+        uv pip install --upgrade "maturin>=1,<2" -r requirements-dev.txt
+
+        mkdir .cargo
+        cp ci/config.toml .cargo/config.toml
+
+    - name: maturin
+      run: |
+        export PATH=$HOME/.cargo/bin:$HOME/.local/bin:$PATH
+
+        MACOSX_DEPLOYMENT_TARGET="${{ matrix.python.macosx_target }}" \
+        PYO3_CROSS_LIB_DIR=$(python -c "import sysconfig;print(sysconfig.get_config_var('LIBDIR'))") \
+        maturin build \
+          --release \
+          --strip \
+          --interpreter python${{ matrix.python.version }} \
+          --target=universal2-apple-darwin
+        uv pip install target/wheels/johnnycanencrypt*.whl
+
+    - run: pytest -v test
+      env:
+        PYTHONMALLOC: "debug"
+
+    - run: source .venv/bin/activate && ./integration/run thread
+    - run: source .venv/bin/activate && ./integration/run http
+    - run: source .venv/bin/activate && ./integration/run init
+
+    - name: Store wheels
+      if: matrix.python.publish == true
+      uses: actions/upload-artifact@v4
+      with:
+        name: johnnycanencrypt_universal2_aarch64_${{ matrix.python.version }}
+        path: target/wheels
+        overwrite: true
+        retention-days: 1
+        if-no-files-found: "error"
+        compression-level: 0
+
+  windows_amd64:
+    runs-on: windows-2025
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python: [
+          { version: '3.14', publish: true },
+          { version: '3.13', publish: true },
+          { version: '3.12', publish: true },
+          { version: '3.11', publish: true },
+          { version: '3.10', publish: true },
+        ]
+        platform: [
+          { arch: "x64", target: "x86_64-pc-windows-msvc", features: "avx512" },
+          { arch: "x86", target: "i686-pc-windows-msvc", features: "" },
+        ]
+    env:
+      CFLAGS: "-O2"
+      LDFLAGS: "-Wl,--as-needed"
+      RUSTFLAGS: "-Z unstable-options -C panic=immediate-abort -Z mir-opt-level=4 -D warnings"
+    steps:
+
+    - name: CPU info
+      shell: pwsh
+      run: Get-WmiObject -Class Win32_Processor -ComputerName. | Select-Object -Property Name, NumberOfCores, NumberOfLogicalProcessors
+
+    - uses: actions/checkout@v5
+
+    - uses: actions/setup-python@v6
+      with:
+        allow-prereleases: true
+        python-version: "${{ matrix.python.version }}"
+        architecture: "${{ matrix.platform.arch }}"
+
+    - uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: "${{ env.RUST_TOOLCHAIN }}"
+        targets: "${{ matrix.platform.target }}"
+        components: "rust-src"
+
+    - name: Build environment
+      run: |
+        cargo fetch --target "${{ matrix.platform.target }}" &
+
+        python.exe -m pip install --upgrade pip "maturin>=1,<2" wheel
+        python.exe -m pip install -r requirements-dev.txt
+
+        mkdir .cargo
+        cp ci\config.toml .cargo\config.toml
+
+    - name: maturin
+      run: |
+        maturin.exe build --release --strip --features="${{ matrix.platform.features }}" --target="${{ matrix.platform.target }}"
+        python.exe -m pip install johnnycanencrypt --no-index --find-links target\wheels
+
+    - run: python.exe -m pytest -vvv
+      env:
+        PYTHONMALLOC: "debug"
+
+    - name: Store wheels
+      if: matrix.python.publish == true
+      uses: actions/upload-artifact@v4
+      with:
+        name: johnnycanencrypt_windows_amd64_${{ matrix.platform.arch }}_${{ matrix.python.version }}
+        path: target\wheels
+        overwrite: true
+        retention-days: 1
+        if-no-files-found: "error"
+        compression-level: 0
+
+  windows_aarch64:
+    runs-on: windows-11-arm
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python: [
+          { version: '3.14', publish: true },
+          { version: '3.13', publish: true },
+          { version: '3.12', publish: true },
+          { version: '3.11', publish: true },
+        ]
+    env:
+      CFLAGS: "-O2"
+      LDFLAGS: "-Wl,--as-needed"
+      RUSTFLAGS: "-Z unstable-options -C panic=immediate-abort -Z mir-opt-level=4 -D warnings"
+      TARGET: "aarch64-pc-windows-msvc"
+    steps:
+
+    - name: CPU info
+      shell: pwsh
+      run: Get-WmiObject -Class Win32_Processor -ComputerName. | Select-Object -Property Name, NumberOfCores, NumberOfLogicalProcessors
+
+    - uses: actions/checkout@v5
+
+    - uses: actions/setup-python@v6
+      with:
+        allow-prereleases: true
+        python-version: "${{ matrix.python.version }}"
+        architecture: "arm64"
+
+    # from maturin
+    - shell: pwsh
+      run: |
+        Invoke-WebRequest -Uri "https://static.rust-lang.org/rustup/dist/$env:TARGET/rustup-init.exe" -OutFile rustup-init.exe
+        .\rustup-init.exe --default-toolchain "$env:RUST_TOOLCHAIN-$env:TARGET" --profile minimal --component rust-src -y
+        "$env:USERPROFILE\.cargo\bin" | Out-File -Append -Encoding ascii $env:GITHUB_PATH
+        "CARGO_HOME=$env:USERPROFILE\.cargo" | Out-File -Append -Encoding ascii $env:GITHUB_ENV
+
+    - name: Build environment
+      run: |
+        cargo fetch --target "$" &
+
+        python.exe -m sysconfig
+        python.exe -m pip install --upgrade pip "maturin>=1,<2" wheel
+        python.exe -m pip install -r requirements-dev.txt
+
+        mkdir .cargo
+        cp ci\config.toml .cargo\config.toml
+
+    - name: maturin
+      run: |
+        maturin.exe build --release --strip --target="$env:TARGET"
+        python.exe -m pip install johnnycanencrypt --no-index --find-links target\wheels
+
+    - run: python.exe -m pytest -vvv
+      env:
+        PYTHONMALLOC: "debug"
+
+    - name: Store wheels
+      if: matrix.python.publish == true
+      uses: actions/upload-artifact@v4
+      with:
+        name: johnnycanencrypt_windows_aarch64_${{ matrix.python.version }}
+        path: target\wheels
+        overwrite: true
+        retention-days: 1
+        if-no-files-found: "error"
+        compression-level: 0
