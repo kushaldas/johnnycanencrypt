@@ -1,15 +1,13 @@
 #!/usr/bin/env python
 
 
+import os
+import sys
+import tempfile
+from pprint import pprint
+
 import johnnycanencrypt as jce
 import johnnycanencrypt.johnnycanencrypt as rjce
-
-import tempfile
-import sys
-import os
-import tests.utils
-
-from pprint import pprint
 
 PUBLIC_KEY = "tests/files/primary_with_sign_public.asc"
 
