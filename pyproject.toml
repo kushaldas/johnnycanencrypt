@@ -23,6 +23,7 @@ readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
     "httpx",
+    "tzdata",
 ]
 
 [project.urls]
