@@ -9,17 +9,17 @@ class CryptoError(BaseException): ...
 class SameKeyError(BaseException): ...
 
 class TouchMode(IntEnum):
-    Off: int
-    On: int
-    Fixed: int
-    Cached: int
-    CachedFixed: int
+    Off = 0
+    On = 1
+    Fixed = 2
+    Cached = 3
+    CachedFixed = 4
 
 class KeySlot(IntEnum):
-    Signature: int
-    Encryption: int
-    Authentication: int
-    Attestation: int
+    Signature = 0
+    Encryption = 1
+    Authentication = 2
+    Attestation = 3
 
 def set_keyslot_touch_policy(
     adminpin: bytes, slot: KeySlot, mode: TouchMode
@@ -132,7 +132,7 @@ def disable_otp_usb() -> bool: ...
 def get_key_cipher_details(certdata: bytes) -> List[tuple[str, str, int]]: ...
 
 class Johnny:
-    def __init__(self, certdata: bytes) -> Johnny: ...
+    def __init__(self, certdata: bytes) -> None: ...
     def encrypt_bytes(self, data: bytes, armor: Optional[bool]) -> bytes: ...
     def decrypt_bytes(self, data: bytes, password: str) -> bytes: ...
     def encrypt_file(
