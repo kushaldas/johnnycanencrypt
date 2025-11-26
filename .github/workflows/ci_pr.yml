@@ -2,13 +2,50 @@ name: ci-pr
 on: [pull_request, workflow_dispatch]
 env:
   FORCE_COLOR: "1"
-  PIP_DISABLE_PIP_VERSION_CHECK: "1"
-  RUST_TOOLCHAIN: "nightly-2025-10-21"
-  RUST_TOOLCHAIN_STABLE: "1.91"
-  UNSAFE_PYO3_BUILD_FREE_THREADED: "1"
-  UNSAFE_PYO3_SKIP_VERSION_CHECK: "1"
   UV_LINK_MODE: "copy"
 jobs:
+
+  manylinux_x86_64:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+    steps:
+    - uses: actions/checkout@v5
+
+    - name: Pull the manylinux image
+      run: docker pull quay.io/pypa/manylinux_2_28_x86_64
+
+    - name: Build the wheel inside manylinux container
+      run: |
+        docker run --rm \
+          -v ${{ github.workspace }}:/io \
+          quay.io/pypa/manylinux_2_28_x86_64 \
+          /io/build-wheels.sh
+
+    - name: Install UV
+      run: |
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+        uv venv
+        source .venv/bin/activate
+        uv pip install pytest vcrpy
+        uv pip install ./dist/johnnycanencrypt-*.whl
+
+    - name: Rust tests
+      run: |
+        source .venv/bin/activate
+        cd tests
+        python -m pytest -vvv
+
+    - name: Store wheels
+      uses: actions/upload-artifact@v4
+      with:
+        name: johnnycanencrypt_manylinux_x86_64
+        path: target/wheels
+        overwrite: true
+        retention-days: 1
+        if-no-files-found: "error"
+        compression-level: 0
 
   macos_aarch64:
     runs-on: macos-15
@@ -269,7 +306,7 @@ jobs:
     - shell: pwsh
       run: |
         Invoke-WebRequest -Uri "https://static.rust-lang.org/rustup/dist/$env:TARGET/rustup-init.exe" -OutFile rustup-init.exe
-        .\rustup-init.exe --default-toolchain "$env:RUST_TOOLCHAIN-$env:TARGET" --profile minimal --component rust-src -y
+        .\rustup-init.exe --default-toolchain "stable-$env:TARGET" --profile minimal --component rust-src -y
         "$env:USERPROFILE\.cargo\bin" | Out-File -Append -Encoding ascii $env:GITHUB_PATH
         "CARGO_HOME=$env:USERPROFILE\.cargo" | Out-File -Append -Encoding ascii $env:GITHUB_ENV
     - name: Build environment
@@ -303,3 +340,4 @@ jobs:
         retention-days: 1
         if-no-files-found: "error"
         compression-level: 0
+ 
