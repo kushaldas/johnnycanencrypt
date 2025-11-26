@@ -4,12 +4,11 @@ import sqlite3
 
 import pytest
 import vcr
+from conftest import BASE_TESTSDIR
+from utils import verify_files
 
 import johnnycanencrypt as jce
 import johnnycanencrypt.johnnycanencrypt as rjce
-
-from .conftest import BASE_TESTSDIR
-from .utils import verify_files
 
 DATA = "Kushal loves 🦀"
 

@@ -2,32 +2,66 @@ name: ci-pr
 on: [pull_request, workflow_dispatch]
 env:
   FORCE_COLOR: "1"
-  PIP_DISABLE_PIP_VERSION_CHECK: "1"
-  RUST_TOOLCHAIN: "nightly-2025-10-21"
-  RUST_TOOLCHAIN_STABLE: "1.85"
-  UNSAFE_PYO3_BUILD_FREE_THREADED: "1"
-  UNSAFE_PYO3_SKIP_VERSION_CHECK: "1"
   UV_LINK_MODE: "copy"
 jobs:
 
+  manylinux_x86_64:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+    steps:
+    - uses: actions/checkout@v5
+
+    - name: Pull the manylinux image
+      run: docker pull quay.io/pypa/manylinux_2_28_x86_64
+
+    - name: Build the wheel inside manylinux container
+      run: |
+        docker run --rm \
+          -v ${{ github.workspace }}:/io \
+          quay.io/pypa/manylinux_2_28_x86_64 \
+          /io/build-wheels.sh
+
+    - name: Install UV
+      run: |
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+        uv venv
+        source .venv/bin/activate
+        uv pip install pytest vcrpy
+        uv pip install ./dist/johnnycanencrypt-*.whl
+
+    - name: Rust tests
+      run: |
+        source .venv/bin/activate
+        cd tests
+        python -m pytest -vvv
+
+    - name: Store wheels
+      uses: actions/upload-artifact@v4
+      with:
+        name: johnnycanencrypt_manylinux_x86_64
+        path: target/wheels
+        overwrite: true
+        retention-days: 1
+        if-no-files-found: "error"
+        compression-level: 0
+
   macos_aarch64:
-    runs-on: macos-26
+    runs-on: macos-15
     timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
         python: [
-          { version: '3.14t', macosx_target: "15.0", publish: false },
+          { version: '3.14t', macosx_target: "15.0", publish: true },
           { version: '3.14', macosx_target: "15.0", publish: true },
-          { version: '3.13', macosx_target: "15.0", publish: true },
-          { version: '3.12', macosx_target: "15.0", publish: true },
-          { version: '3.11', macosx_target: "15.0", publish: true },
         ]
     env:
       CC: "clang"
       LDFLAGS: "-Wl,--as-needed"
       CFLAGS: "-O2 -fstrict-aliasing -fno-plt -mcpu=apple-m1 -mtune=generic"
-      RUSTFLAGS: "-Z unstable-options -C panic=immediate-abort -Z mir-opt-level=4 -Z threads=3 -D warnings"
+      #RUSTFLAGS: "-Z unstable-options -C panic=immediate-abort -Z mir-opt-level=4 -Z threads=3 -D warnings"
       PATH: "/Users/runner/work/johnnycanencrypt/johnnycanencrypt/.venv/bin:/Users/runner/.cargo/bin:/usr/local/opt/curl/bin:/usr/local/bin:/usr/local/sbin:/Users/runner/bin:/Library/Frameworks/Python.framework/Versions/Current/bin:/usr/bin:/bin:/usr/sbin:/sbin"
     steps:
 
@@ -47,40 +81,36 @@ jobs:
 
     - uses: dtolnay/rust-toolchain@master
       with:
-        toolchain: "${{ env.RUST_TOOLCHAIN }}"
+        toolchain: stable
         targets: "aarch64-apple-darwin"
         components: "rust-src"
 
     - name: Build environment
       run: |
         cargo fetch --target aarch64-apple-darwin &
-
         export PATH=$HOME/.cargo/bin:$HOME/.local/bin:$PATH
-
         brew install nettle pkg-config
         curl -LsSf https://astral.sh/uv/install.sh | sh
         uv venv --python python${{ matrix.python.version }}
         uv pip install --upgrade "maturin>=1,<2" -r requirements-dev.txt
 
-        mkdir .cargo
-        cp ci/config.toml .cargo/config.toml
-
     - name: maturin
       run: |
         export PATH=$HOME/.cargo/bin:$HOME/.local/bin:$PATH
-
+        source .venv/bin/activate
         MACOSX_DEPLOYMENT_TARGET="${{ matrix.python.macosx_target }}" \
-        PYO3_CROSS_LIB_DIR=$(python -c "import sysconfig;print(sysconfig.get_config_var('LIBDIR'))") \
         maturin build \
           --release \
           --strip \
           --interpreter python${{ matrix.python.version }} \
           --target=aarch64-apple-darwin
-        uv pip install target/wheels/johnnycanencrypt*.whl
 
-    - run: |
+    - name: Runs tests
+      run: |
+        export PATH=$HOME/.cargo/bin:$HOME/.local/bin:$PATH
         source .venv/bin/activate
-        python -m pytest -vvv tests
+        uv pip install target/wheels/johnnycanencrypt*.whl
+        pytest -vvv
       env:
         PYTHONMALLOC: "debug"
 
@@ -96,18 +126,15 @@ jobs:
         if-no-files-found: "error"
         compression-level: 0
 
+
   macos_intel:
-    runs-on: macos-15
+    runs-on: macos-15-intel
     timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
         python: [
           { version: '3.14', macosx_target: "10.15", publish: true },
-          { version: '3.13', macosx_target: "10.15", publish: true },
-          { version: '3.12', macosx_target: "10.15", publish: true },
-          { version: '3.11', macosx_target: "10.15", publish: true },
-          { version: '3.10', macosx_target: "10.15", publish: true },
         ]
     env:
       CC: "clang"
@@ -138,36 +165,36 @@ jobs:
 
     - name: Build environment
       run: |
-        cargo fetch --target x86_64-apple-darwin &
+        #cargo fetch --target x86_64-apple-darwin &
 
         export PATH=$HOME/.cargo/bin:$HOME/.local/bin:$PATH
-        brew install nettle pkg-config
 
         curl -LsSf https://astral.sh/uv/install.sh | sh
         uv venv --python python${{ matrix.python.version }}
+        source .venv/bin/activate
         uv pip install --upgrade "maturin>=1,<2" -r requirements-dev.txt
 
-        mkdir .cargo
-        cp ci/config.toml .cargo/config.toml
+        #mkdir .cargo
+        #cp ci/config.toml .cargo/config.toml
 
     - name: maturin
       run: |
         export PATH=$HOME/.cargo/bin:$HOME/.local/bin:$PATH
-
+        source .venv/bin/activate
+        python3 --version
+        python --version
         MACOSX_DEPLOYMENT_TARGET="${{ matrix.python.macosx_target }}" \
-        #PYO3_CROSS_LIB_DIR=$(python -c "import sysconfig;print(sysconfig.get_config_var('LIBDIR'))") \
         maturin build \
           --release \
           --strip \
-          --interpreter python${{ matrix.python.version }} \
-          --target=x86_64-apple-darwin
+          --interpreter python${{ matrix.python.version }}
+
+    - name: Runs tests
+      run: |
+        export PATH=$HOME/.cargo/bin:$HOME/.local/bin:$PATH
         source .venv/bin/activate
         uv pip install target/wheels/johnnycanencrypt*.whl
-
-
-    - run: |
-        source .venv/bin/activate
-        python -m pytest -vvv tests
+        pytest -vvv
       env:
         PYTHONMALLOC: "debug"
 
@@ -190,19 +217,12 @@ jobs:
       matrix:
         python: [
           { version: '3.14', publish: true },
-          { version: '3.13', publish: true },
-          { version: '3.12', publish: true },
-          { version: '3.11', publish: true },
-          { version: '3.10', publish: true },
         ]
         platform: [
           { arch: "x64", target: "x86_64-pc-windows-msvc",  },
-          { arch: "x86", target: "i686-pc-windows-msvc", },
         ]
     env:
       CFLAGS: "-O2"
-      LDFLAGS: "-Wl,--as-needed"
-      RUSTFLAGS: "-Z unstable-options -C panic=immediate-abort -Z mir-opt-level=4 -D warnings"
     steps:
 
     - name: CPU info
@@ -219,25 +239,31 @@ jobs:
 
     - uses: dtolnay/rust-toolchain@master
       with:
-        toolchain: "${{ env.RUST_TOOLCHAIN }}"
+        toolchain: stable
         targets: "${{ matrix.platform.target }}"
         components: "rust-src"
 
     - name: Build environment
       run: |
         cargo fetch --target "${{ matrix.platform.target }}" &
-
         python.exe -m pip install --upgrade pip "maturin>=1,<2" wheel
         python.exe -m pip install -r requirements-dev.txt
-
         mkdir .cargo
         cp ci\config.toml .cargo\config.toml
-
     - name: maturin
       run: |
         maturin.exe build --release --strip --target="${{ matrix.platform.target }}"
         python.exe -m pip install johnnycanencrypt --no-index --find-links target\wheels
-        python.exe -m pytest -vvv tests
+
+    - name: Run tests in a virtual environment
+      shell: pwsh
+      run: |
+        python -m venv venv
+        .\venv\Scripts\Activate.ps1
+        pip install -r requirements-dev.txt
+        pip install johnnycanencrypt --no-index --find-links target\wheels
+        cd tests
+        python -m pytest -vvv
 
     - name: Store wheels
       if: matrix.python.publish == true
@@ -258,14 +284,9 @@ jobs:
       matrix:
         python: [
           { version: '3.14', publish: true },
-          { version: '3.13', publish: true },
-          { version: '3.12', publish: true },
-          { version: '3.11', publish: true },
         ]
     env:
       CFLAGS: "-O2"
-      LDFLAGS: "-Wl,--as-needed"
-      RUSTFLAGS: "-Z unstable-options -C panic=immediate-abort -Z mir-opt-level=4 -D warnings"
       TARGET: "aarch64-pc-windows-msvc"
     steps:
 
@@ -285,26 +306,29 @@ jobs:
     - shell: pwsh
       run: |
         Invoke-WebRequest -Uri "https://static.rust-lang.org/rustup/dist/$env:TARGET/rustup-init.exe" -OutFile rustup-init.exe
-        .\rustup-init.exe --default-toolchain "$env:RUST_TOOLCHAIN-$env:TARGET" --profile minimal --component rust-src -y
+        .\rustup-init.exe --default-toolchain "stable-$env:TARGET" --profile minimal --component rust-src -y
         "$env:USERPROFILE\.cargo\bin" | Out-File -Append -Encoding ascii $env:GITHUB_PATH
         "CARGO_HOME=$env:USERPROFILE\.cargo" | Out-File -Append -Encoding ascii $env:GITHUB_ENV
-
     - name: Build environment
       run: |
         cargo fetch --target "$" &
-
         python.exe -m sysconfig
         python.exe -m pip install --upgrade pip "maturin>=1,<2" wheel
         python.exe -m pip install -r requirements-dev.txt
 
-        mkdir .cargo
-        cp ci\config.toml .cargo\config.toml
-
     - name: maturin
       run: |
         maturin.exe build --release --strip --target="$env:TARGET"
-        python.exe -m pip install johnnycanencrypt --no-index --find-links target\wheels
-        python.exe -m pytest -vvv tests
+
+    - name: Run tests in a virtual environment
+      shell: pwsh
+      run: |
+        python -m venv venv
+        .\venv\Scripts\Activate.ps1
+        pip install -r requirements-dev.txt
+        pip install johnnycanencrypt --no-index --find-links target\wheels
+        cd tests
+        python -m pytest -vvv
 
     - name: Store wheels
       if: matrix.python.publish == true
@@ -316,3 +340,4 @@ jobs:
         retention-days: 1
         if-no-files-found: "error"
         compression-level: 0
+ 
