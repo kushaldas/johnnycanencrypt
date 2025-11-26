@@ -3,9 +3,10 @@ import datetime
 import os
 import tempfile
 
+from conftest import BASE_TESTSDIR
+
 import johnnycanencrypt as jce
 from johnnycanencrypt import johnnycanencrypt as rjce
-from tests.conftest import BASE_TESTSDIR
 
 
 def test_update_primary_expiry_in_cert(tmp_path):
