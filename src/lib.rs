@@ -1,6 +1,9 @@
 // SPDX-FileCopyrightText: © 2020 Kushal Das <mail@kushaldas.in>
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
+#![allow(clippy::type_complexity)]
+#![allow(clippy::too_many_arguments)]
+
 use openpgp::packet::Signature;
 use openpgp::KeyHandle;
 use pyo3::create_exception;
@@ -2807,7 +2810,7 @@ fn create_key(
         0 => crtbuilder,
         _ => {
             let internal_t = DateTime::from_timestamp(creation, 0).unwrap();
-            cdt = Some(internal_t.clone());
+            cdt = Some(internal_t);
             // cdt = Some(TimeZone::from_utc_datetime(&internal_t));
             crtbuilder.set_creation_time(SystemTime::from(internal_t))
         }
