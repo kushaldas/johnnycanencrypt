@@ -505,10 +505,11 @@ pub struct YuBi {
 }
 
 impl YuBi {
-    pub fn new(policy: &dyn Policy, certdata: Vec<u8>, pin: Vec<u8>) -> Self {
+    pub fn new(policy: &dyn Policy, certdata: Vec<u8>, pin: Vec<u8>) -> Result<Self> {
         let mut keys = HashMap::new();
         // This should really fail if we pass wrong data here.
-        let cert = openpgp::Cert::from_bytes(&certdata).unwrap();
+        let cert = openpgp::Cert::from_bytes(&certdata)
+            .map_err(|e| JceError::new(format!("Failed to parse certificate data: {}", e)))?;
         for ka in cert
             .keys()
             .with_policy(policy, None)
@@ -518,7 +519,7 @@ impl YuBi {
             let key = ka.key();
             keys.insert(key.keyid(), key.clone());
         }
-        YuBi { keys, pin }
+        Ok(YuBi { keys, pin })
     }
 }
 
@@ -587,7 +588,8 @@ fn decrypt_bytes_on_card<'py>(
         Ok(dec) => dec,
         Err(msg) => return Err(JceError::new(format!("Can not create decryptor: {}", msg))),
     };
-    let mut decryptor = match dec2.with_policy(&p, None, YuBi::new(&p, certdata, pin)) {
+    let yubikey = YuBi::new(&p, certdata, pin)?;
+    let mut decryptor = match dec2.with_policy(&p, None, yubikey) {
         Ok(decr) => decr,
         Err(msg) => return Err(JceError::new(format!("Failed to decrypt: {}", msg))),
     };
@@ -610,10 +612,11 @@ pub fn decrypt_file_on_card(
     let input = File::open(str::from_utf8(&filepath[..])?)?;
     let mut outfile = File::create(str::from_utf8(&output[..])?)?;
 
+    let yubikey = YuBi::new(&p, certdata, pin)?;
     let mut decryptor = DecryptorBuilder::from_reader(input)?.with_policy(
         &p,
         None,
-        YuBi::new(&p, certdata, pin),
+        yubikey,
     )?;
     std::io::copy(&mut decryptor, &mut outfile)?;
     Ok(true)
@@ -641,7 +644,8 @@ pub fn decrypt_filehandler_on_card<'py>(
         Ok(dec) => dec,
         Err(msg) => return Err(JceError::new(format!("Can not create decryptor: {}", msg))),
     };
-    let mut decryptor = match dec2.with_policy(&p, None, YuBi::new(&p, certdata, pin)) {
+    let yubikey = YuBi::new(&p, certdata, pin)?;
+    let mut decryptor = match dec2.with_policy(&p, None, yubikey) {
         Ok(decr) => decr,
         Err(msg) => return Err(JceError::new(format!("Failed to decrypt: {}", msg))),
     };
@@ -789,7 +793,8 @@ fn get_card_details<'py>(py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
     }
     // Now we have all the data in aiddata
     let tlv = &tlvs::read_list(aiddata, true)[0];
-    let sigdata = tlv.get_fingerprints().unwrap();
+    let sigdata = tlv.get_fingerprints()
+        .ok_or_else(|| CardError::new_err("Failed to read fingerprints from smart card"))?;
     let (sig_f, enc_f, auth_f) = tlvs::parse_fingerprints(sigdata);
     pd.set_item("sig_f", sig_f)?;
     pd.set_item("enc_f", enc_f)?;
@@ -925,7 +930,7 @@ struct Helper {
 
 impl Helper {
     /// Creates a Helper for the given Certs with appropriate secrets.
-    fn new(p: &dyn Policy, cert: &openpgp::Cert, pass: &str) -> Self {
+    fn new(p: &dyn Policy, cert: &openpgp::Cert, pass: &str) -> Result<Self> {
         // Map (sub)KeyIDs to secrets.
         let mut keys = HashMap::new();
 
@@ -937,18 +942,19 @@ impl Helper {
                     ka.key()
                         .clone()
                         .decrypt_secret(&openpgp::crypto::Password::from(pass))
-                        .unwrap()
+                        .map_err(|e| JceError::new(format!("Failed to decrypt secret key: {}", e)))?
                         .into_keypair()
-                        .unwrap()
+                        .map_err(|e| JceError::new(format!("Failed to convert decrypted key to keypair: {}", e)))?
                 }
                 false => {
                     // When the secret is not encrypted
-                    ka.key().clone().into_keypair().unwrap()
+                    ka.key().clone().into_keypair()
+                        .map_err(|e| JceError::new(format!("Failed to convert key to keypair: {}", e)))?
                 }
             };
             keys.insert(ka.key().keyid(), keypair.clone());
         }
-        Helper { keys }
+        Ok(Helper { keys })
     }
 }
 
@@ -1056,7 +1062,7 @@ impl VerificationHelper for VHelper {
 }
 
 // To create key pairs; from the given Cert
-fn get_keys(cert: &openpgp::cert::Cert, password: String) -> Vec<openpgp::crypto::KeyPair> {
+fn get_keys(cert: &openpgp::cert::Cert, password: String) -> Result<Vec<openpgp::crypto::KeyPair>> {
     let p = P::new();
 
     let mut keys = Vec::new();
@@ -1075,9 +1081,10 @@ fn get_keys(cert: &openpgp::cert::Cert, password: String) -> Vec<openpgp::crypto
         key.secret_mut()
             .decrypt_in_place(algo, &openpgp::crypto::Password::from(password.clone()))
             .expect("decryption failed");
-        keys.push(key.into_keypair().unwrap());
+        keys.push(key.into_keypair()
+            .map_err(|e| JceError::new(format!("Failed to convert key to keypair: {}", e)))?);
     }
-    keys
+    Ok(keys)
 }
 
 #[pyfunction]
@@ -1173,7 +1180,8 @@ fn certify_key<'py>(
             key.secret_mut()
                 .decrypt_in_place(algo, &openpgp::crypto::Password::from(password.clone()))
                 .expect("decryption failed");
-            keys.push(key.into_keypair().unwrap());
+            keys.push(key.into_keypair()
+                .map_err(|e| JceError::new(format!("Failed to create keypair for certification key: {}", e)))?);
         }
         if keys.is_empty() {
             return Err(JceError::new(
@@ -1202,11 +1210,15 @@ fn certify_key<'py>(
                     // Now certify
                     let sig = match oncard {
                         true => {
-                            let mut signer = card_signer.as_ref().unwrap().clone();
+                            let mut signer = card_signer.as_ref()
+                                .ok_or_else(|| JceError::new("Card signer not available".to_string()))?
+                                .clone();
                             u.certify(&mut signer, &othercert, stype, None, None)?
                         }
                         false => {
-                            let mut signer = disk_signer.as_ref().unwrap().clone();
+                            let mut signer = disk_signer.as_ref()
+                                .ok_or_else(|| JceError::new("Disk signer not available".to_string()))?
+                                .clone();
                             u.certify(&mut signer, &othercert, stype, None, None)?
                         }
                     };
@@ -1462,7 +1474,7 @@ fn sign_file_internal(
     // TODO: WHY?
     let mut input = input;
 
-    let mut keys = get_keys(cert, password);
+    let mut keys = get_keys(cert, password)?;
 
     if keys.is_empty() {
         return Err(JceError::new("No signing key is present.".to_string()));
@@ -1520,7 +1532,7 @@ fn sign_bytes_internal<'py>(
     // TODO: WHY?
     let mut input = input;
 
-    let mut keys = get_keys(cert, password);
+    let mut keys = get_keys(cert, password)?;
 
     if keys.is_empty() {
         return Err(JceError::new("No signing key is present.".to_string()));
@@ -1580,7 +1592,7 @@ fn sign_bytes_detached_internal(
     // TODO: WHY?
     let mut input = input;
 
-    let mut keys = get_keys(cert, password);
+    let mut keys = get_keys(cert, password)?;
 
     if keys.is_empty() {
         return Err(JceError::new("No signing key is present.".to_string()));
@@ -1811,29 +1823,34 @@ fn get_ssh_pubkey(_py: Python, certdata: Vec<u8>, comment: Option<String>) -> Re
                     e: e.value().to_vec(),
                     n: n.value().to_vec(),
                 };
-                let key_type = sshkeys::KeyType::from_name("ssh-rsa").unwrap();
+                let key_type = sshkeys::KeyType::from_name("ssh-rsa")
+                    .expect("ssh-rsa is a valid SSH key type");
                 let kind = sshkeys::PublicKeyKind::Rsa(key);
                 (key_type, kind)
             }
             openpgp::crypto::mpi::PublicKey::ECDSA { curve, q, .. } => {
                 let (ssh_curve, name) = match curve {
                     openpgp::types::Curve::NistP256 => (
-                        sshkeys::Curve::from_identifier("nistp256").unwrap(),
+                        sshkeys::Curve::from_identifier("nistp256")
+                            .expect("nistp256 is a valid curve identifier"),
                         "ecdsa-sha2-nistp256",
                     ),
                     openpgp::types::Curve::NistP384 => (
-                        sshkeys::Curve::from_identifier("nistp384").unwrap(),
+                        sshkeys::Curve::from_identifier("nistp384")
+                            .expect("nistp384 is a valid curve identifier"),
                         "ecdsa-sha2-nistp384",
                     ),
                     openpgp::types::Curve::NistP521 => (
-                        sshkeys::Curve::from_identifier("nistp521").unwrap(),
+                        sshkeys::Curve::from_identifier("nistp521")
+                            .expect("nistp521 is a valid curve identifier"),
                         "ecdsa-sha2-nistp521",
                     ),
                     _ => {
                         return Err(JceError::new("Unknown ECDSA curve for us.".to_string()));
                     }
                 };
-                let key_type = sshkeys::KeyType::from_name(name).unwrap();
+                let key_type = sshkeys::KeyType::from_name(name)
+                    .map_err(|e| JceError::new(format!("Failed to create SSH key type for {}: {}", name, e)))?;
                 let kind = sshkeys::PublicKeyKind::Ecdsa(sshkeys::EcdsaPublicKey {
                     curve: ssh_curve,
                     key: q.value().to_vec(),
@@ -1842,7 +1859,8 @@ fn get_ssh_pubkey(_py: Python, certdata: Vec<u8>, comment: Option<String>) -> Re
                 (key_type, kind)
             }
             openpgp::crypto::mpi::PublicKey::EdDSA { curve: _, q } => {
-                let key_type = sshkeys::KeyType::from_name("ssh-ed25519").unwrap();
+                let key_type = sshkeys::KeyType::from_name("ssh-ed25519")
+                    .expect("ssh-ed25519 is a valid SSH key type");
                 let kind = sshkeys::PublicKeyKind::Ed25519(sshkeys::Ed25519PublicKey {
                     key: q.value().to_vec(),
                     sk_application: None,
@@ -2041,17 +2059,26 @@ fn parse_and_move_a_key(
     match what_kind_of_key {
         "rsa" => {
             // First the exponent
-            let values: Vec<u8> = main_e.unwrap().value().to_vec();
+            let values: Vec<u8> = main_e
+                .ok_or_else(|| JceError::new("Missing RSA exponent value".to_string()))?
+                .value()
+                .to_vec();
             for value in values {
                 result.push(value);
             }
             // Then the p
-            let values: Vec<u8> = main_p.unwrap().value().to_vec();
+            let values: Vec<u8> = main_p
+                .ok_or_else(|| JceError::new("Missing RSA prime p value".to_string()))?
+                .value()
+                .to_vec();
             for value in values {
                 result.push(value);
             }
             // Then the q
-            let values: Vec<u8> = main_q.unwrap().value().to_vec();
+            let values: Vec<u8> = main_q
+                .ok_or_else(|| JceError::new("Missing RSA prime q value".to_string()))?
+                .value()
+                .to_vec();
             for value in values {
                 result.push(value);
             }
@@ -2074,7 +2101,11 @@ fn parse_and_move_a_key(
             ];
         }
         "EdDSA" | "ECDH" => {
-            let data: Vec<u8> = Vec::from(main_scalar.unwrap().value());
+            let data: Vec<u8> = Vec::from(
+                main_scalar
+                    .ok_or_else(|| JceError::new("Missing ECC scalar value".to_string()))?
+                    .value(),
+            );
             let len = data.len() as u8;
             for5f48.push(len);
             for5f48.extend(data.iter());
@@ -2139,7 +2170,7 @@ fn parse_and_move_a_key(
         // Here we will create the algorithm attributes data
         "rsa" => {
             let n_value: Vec<u8> = main_n
-                .unwrap()
+                .ok_or_else(|| JceError::new("Missing RSA modulus for algorithm attributes".to_string()))?
                 .bits()
                 .to_be_bytes()
                 .iter()
@@ -2147,7 +2178,7 @@ fn parse_and_move_a_key(
                 .copied()
                 .collect();
             let e_value: Vec<u8> = main_e_for_second_use
-                .unwrap()
+                .ok_or_else(|| JceError::new("Missing RSA public exponent for algorithm attributes".to_string()))?
                 .bits()
                 .to_be_bytes()
                 .iter()
@@ -2192,7 +2223,9 @@ fn parse_and_move_a_key(
         0xDA,
         0x00,
         fp_p2,
-        fp.unwrap().as_bytes().to_vec(),
+        fp.ok_or_else(|| JceError::new("Missing fingerprint for key".to_string()))?
+            .as_bytes()
+            .to_vec(),
     );
     let time_p2 = match keytype {
         1 => 0xCF,
@@ -2242,9 +2275,14 @@ fn parse_keyring_file<'py>(py: Python<'py>, certpath: String) -> Result<Bound<'p
                 let mut buf = Vec::new();
                 let mut buffer = Vec::new();
                 let _ = Marshal::serialize(&cert, &mut buffer);
-                let mut writer = Writer::new(&mut buf, Kind::PublicKey).unwrap();
-                writer.write_all(&buffer).unwrap();
-                writer.finalize().unwrap();
+                let mut writer = Writer::new(&mut buf, Kind::PublicKey)
+                    .map_err(|e| JceError::new(format!("Failed to create armor writer: {}", e)))?;
+                writer
+                    .write_all(&buffer)
+                    .map_err(|e| JceError::new(format!("Failed to write to armor writer: {}", e)))?;
+                writer
+                    .finalize()
+                    .map_err(|e| JceError::new(format!("Failed to finalize armor writer: {}", e)))?;
 
                 let data = internal_parse_cert(py, cert, true)?;
                 let certdata = PyBytes::new(py, &buf);
@@ -2268,9 +2306,14 @@ fn export_keyring_file(_py: Python, certs: Vec<Vec<u8>>, keyringname: String) ->
     }
 
     // Now create a write and write out the whole public keys into it.
-    let mut writer = Writer::new(&mut buf, Kind::PublicKey).unwrap();
-    writer.write_all(&buffer).unwrap();
-    writer.finalize().unwrap();
+    let mut writer = Writer::new(&mut buf, Kind::PublicKey)
+        .map_err(|e| JceError::new(format!("Failed to create armor writer: {}", e)))?;
+    writer
+        .write_all(&buffer)
+        .map_err(|e| JceError::new(format!("Failed to write to armor writer: {}", e)))?;
+    writer
+        .finalize()
+        .map_err(|e| JceError::new(format!("Failed to finalize armor writer: {}", e)))?;
     // Now write to the file.
     std::fs::write(keyringname, buf)?;
 
@@ -2291,9 +2334,14 @@ fn exp_parse_keyring_file<'py>(py: Python<'py>, certpath: String) -> Result<Boun
                 let mut buf = Vec::new();
                 let mut buffer = Vec::new();
                 let _ = Marshal::serialize(&cert, &mut buffer);
-                let mut writer = Writer::new(&mut buf, Kind::PublicKey).unwrap();
-                writer.write_all(&buffer).unwrap();
-                writer.finalize().unwrap();
+                let mut writer = Writer::new(&mut buf, Kind::PublicKey)
+                    .map_err(|e| JceError::new(format!("Failed to create armor writer: {}", e)))?;
+                writer
+                    .write_all(&buffer)
+                    .map_err(|e| JceError::new(format!("Failed to write to armor writer: {}", e)))?;
+                writer
+                    .finalize()
+                    .map_err(|e| JceError::new(format!("Failed to finalize armor writer: {}", e)))?;
 
                 let data = exp_internal_parse_cert(py, cert, true)?;
                 let certdata = PyBytes::new(py, &buf);
@@ -2809,7 +2857,8 @@ fn create_key(
     let crtbuilder = match creation {
         0 => crtbuilder,
         _ => {
-            let internal_t = DateTime::from_timestamp(creation, 0).unwrap();
+            let internal_t = DateTime::from_timestamp(creation, 0)
+                .ok_or_else(|| JceError::new(format!("Invalid creation timestamp: {}", creation)))?;
             cdt = Some(internal_t);
             // cdt = Some(TimeZone::from_utc_datetime(&internal_t));
             crtbuilder.set_creation_time(SystemTime::from(internal_t))
@@ -2851,7 +2900,7 @@ fn create_key(
                     expiration as u64
                         - SystemTime::now()
                             .duration_since(UNIX_EPOCH)
-                            .unwrap()
+                            .map_err(|e| JceError::new(format!("System time error: {}", e)))?
                             .as_secs(),
                     0,
                 ),
@@ -2957,7 +3006,8 @@ fn encrypt_bytes_to_file(
     match armor {
         // For armored output file.
         Some(true) => {
-            let mut sink = armor::Writer::new(&mut outfile, armor::Kind::Message).unwrap();
+            let mut sink = armor::Writer::new(&mut outfile, armor::Kind::Message)
+                .map_err(|e| JceError::new(format!("Failed to create armor writer: {}", e)))?;
             // Stream an OpenPGP message.
             let message = Message::new(&mut sink);
 
@@ -2996,7 +3046,9 @@ fn encrypt_bytes_to_file(
                 .expect("Failed to create literal writer");
 
             // Copy data to our writer stack to encrypt the data.
-            literal_writer.write_all(&data).unwrap();
+            literal_writer
+                .write_all(&data)
+                .map_err(|e| JceError::new(format!("Failed to write encrypted data: {}", e)))?;
 
             // Finally, finalize the OpenPGP message by tearing down the
             // writer stack.
@@ -3229,7 +3281,8 @@ impl Johnny {
             Ok(dec) => dec,
             Err(msg) => return Err(JceError::new(format!("Can not create decryptor: {}", msg))),
         };
-        let mut decryptor = match dec2.with_policy(&p, None, Helper::new(&p, &self.cert, &password))
+        let helper = Helper::new(&p, &self.cert, &password)?;
+        let mut decryptor = match dec2.with_policy(&p, None, helper)
         {
             Ok(decr) => decr,
             Err(msg) => return Err(JceError::new(format!("Failed to decrypt: {}", msg))),
@@ -3320,10 +3373,11 @@ impl Johnny {
         let input = File::open(str::from_utf8(&filepath[..])?)?;
         let mut outfile = File::create(str::from_utf8(&output[..])?)?;
 
+        let helper = Helper::new(&p, &self.cert, &password)?;
         let mut decryptor = DecryptorBuilder::from_reader(input)?.with_policy(
             &p,
             None,
-            Helper::new(&p, &self.cert, &password),
+            helper,
         )?;
         std::io::copy(&mut decryptor, &mut outfile)?;
         Ok(true)
@@ -3349,7 +3403,8 @@ impl Johnny {
             Ok(dec) => dec,
             Err(msg) => return Err(JceError::new(format!("Can not create decryptor: {}", msg))),
         };
-        let mut decryptor = match dec2.with_policy(&p, None, Helper::new(&p, &self.cert, &password))
+        let helper = Helper::new(&p, &self.cert, &password)?;
+        let mut decryptor = match dec2.with_policy(&p, None, helper)
         {
             Ok(decr) => decr,
             Err(msg) => return Err(JceError::new(format!("Failed to decrypt: {}", msg))),
@@ -3531,10 +3586,14 @@ pub fn set_keyslot_touch_policy(
     slot: Py<KeySlot>,
     mode: Py<TouchMode>,
 ) -> Result<bool> {
-    let actual_slot: KeySlot = slot.extract(py).unwrap();
+    let actual_slot: KeySlot = slot
+        .extract(py)
+        .map_err(|e| JceError::new(format!("Failed to extract KeySlot: {}", e)))?;
     let slot_value = actual_slot as u8;
 
-    let actual_mode: TouchMode = mode.extract(py).unwrap();
+    let actual_mode: TouchMode = mode
+        .extract(py)
+        .map_err(|e| JceError::new(format!("Failed to extract TouchMode: {}", e)))?;
     let mode_value = actual_mode as u8;
 
     let pw3_apdu = talktosc::apdus::create_apdu_verify_pw3(adminpin);
