@@ -1,9 +1,9 @@
 import os
 
-import johnnycanencrypt.johnnycanencrypt as jce
+from conftest import BASE_TESTSDIR
+from utils import _get_cert_data, verify_files
 
-from .conftest import BASE_TESTSDIR
-from .utils import _get_cert_data, verify_files
+import johnnycanencrypt.johnnycanencrypt as jce
 
 DATA = "Kushal loves 🦀"
 HELLO_SECRET = BASE_TESTSDIR / "files" / "hellosecret.asc"

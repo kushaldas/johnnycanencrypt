@@ -1,11 +1,10 @@
 import os
 
 import pytest
+from conftest import BASE_TESTSDIR
+from utils import _get_cert_data
 
 import johnnycanencrypt.johnnycanencrypt as jce
-
-from .conftest import BASE_TESTSDIR
-from .utils import _get_cert_data
 
 DATA = "Kushal loves 🦀"
 
