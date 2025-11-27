@@ -28,6 +28,7 @@ pub fn change_otp(enable: bool) -> Result<bool, errors::TalktoSCError> {
     // Let us try to find the major and minor number for firmware
     let res = String::from_utf8(resp.data)
         .map_err(|_| errors::TalktoSCError::OtpError)?;
+    // Note: This expect is acceptable - hardcoded regex patterns are guaranteed to compile
     let re = Regex::new(r"(\d+)\.(\d+)\.(\d+)")
         .expect("hardcoded regex pattern should always compile");
     let caps = re.captures(&res);

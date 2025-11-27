@@ -1079,8 +1079,7 @@ fn get_keys(cert: &openpgp::cert::Cert, password: String) -> Result<Vec<openpgp:
         let algo = key.pk_algo();
 
         key.secret_mut()
-            .decrypt_in_place(algo, &openpgp::crypto::Password::from(password.clone()))
-            .expect("decryption failed");
+            .decrypt_in_place(algo, &openpgp::crypto::Password::from(password.clone()))?;
         keys.push(key.into_keypair()
             .map_err(|e| JceError::new(format!("Failed to convert key to keypair: {}", e)))?);
     }
@@ -1149,15 +1148,11 @@ fn certify_key<'py>(
             let pair = scard::KeyPair::new(password.clone(), key)?;
             cardkeys.push(pair);
         }
-        if cardkeys.is_empty() {
-            return Err(JceError::new(
-                "No key is available for certification in the public key.".to_string(),
-            ));
-        }
-        // Now we know for sure that there is a key
         let key = cardkeys
             .first()
-            .expect("We must have a certification key by now");
+            .ok_or_else(|| JceError::new(
+                "No key is available for certification in the public key.".to_string(),
+            ))?;
 
         Some(key.clone())
     } else {
@@ -1178,20 +1173,15 @@ fn certify_key<'py>(
             let algo = key.pk_algo();
 
             key.secret_mut()
-                .decrypt_in_place(algo, &openpgp::crypto::Password::from(password.clone()))
-                .expect("decryption failed");
+                .decrypt_in_place(algo, &openpgp::crypto::Password::from(password.clone()))?;
             keys.push(key.into_keypair()
                 .map_err(|e| JceError::new(format!("Failed to create keypair for certification key: {}", e)))?);
         }
-        if keys.is_empty() {
-            return Err(JceError::new(
-                "No key is available for certification.".to_string(),
-            ));
-        }
-        // Now we know for sure that there is a key
         let key = keys
             .first()
-            .expect("We must have a certification key by now");
+            .ok_or_else(|| JceError::new(
+                "No key is available for certification.".to_string(),
+            ))?;
 
         Some(key.clone())
     } else {
@@ -1267,30 +1257,28 @@ fn sign_internal_detached_on_card(
         keys.push(pair);
     }
     let mut result = Vec::new();
-    let mut sink = armor::Writer::new(&mut result, armor::Kind::Signature)
-        .expect("Failed to create armored writer.");
+    let mut sink = armor::Writer::new(&mut result, armor::Kind::Signature)?;
 
     // Stream an OpenPGP message.
     let message = Message::new(&mut sink);
 
     // Now, create a signer that emits the detached signature(s).
-    let mut signer = Signer::new(message, keys.pop().expect("No key for signing"));
+    let key = keys.pop()
+        .ok_or_else(|| JceError::new("No signing key is present.".to_string()))?;
+    let mut signer = Signer::new(message, key);
     for s in keys {
         signer = signer.add_signer(s);
     }
-    let mut signer = signer.detached().build().expect("Failed to create signer");
+    let mut signer = signer.detached().build()?;
 
     // Copy all the data.
-    io::copy(input, &mut signer).expect("Failed to sign data");
+    io::copy(input, &mut signer)?;
 
     // Finally, teardown the stack to ensure all the data is written.
-    match signer.finalize() {
-        Ok(_) => (),
-        Err(msg) => return Err(JceError::new(msg.to_string())),
-    }
+    signer.finalize()?;
 
     // Finalize the armor writer.
-    sink.finalize().expect("Failed to write data");
+    sink.finalize()?;
 
     Ok(String::from_utf8(result)?)
 }
@@ -1352,8 +1340,9 @@ fn sign_file_internal_on_card(
         true => SignatureBuilder::new(SignatureType::Text),
     };
     // Now, create a signer with the builder.
-    let mut signer =
-        Signer::with_template(message, keys.pop().expect("No key for signing"), builder);
+    let key = keys.pop()
+        .ok_or_else(|| JceError::new("No signing key is present.".to_string()))?;
+    let mut signer = Signer::with_template(message, key, builder);
 
     // Now if we need cleartext signature
     if cleartext {
@@ -1371,7 +1360,7 @@ fn sign_file_internal_on_card(
     };
 
     // Copy all the data.
-    io::copy(&mut input, &mut writer).expect("Failed to sign data");
+    io::copy(&mut input, &mut writer)?;
 
     // Finally, teardown the stack to ensure all the data is written.
     // signer.finalize().expect("Failed to write data");
@@ -1434,8 +1423,9 @@ fn sign_bytes_internal_on_card(
         true => SignatureBuilder::new(SignatureType::Text),
     };
     // Now, create a signer with the builder.
-    let mut signer =
-        Signer::with_template(message, keys.pop().expect("No key for signing"), builder);
+    let key = keys.pop()
+        .ok_or_else(|| JceError::new("No signing key is present.".to_string()))?;
+    let mut signer = Signer::with_template(message, key, builder);
 
     // Now if we need cleartext signature
     if cleartext {
@@ -1453,7 +1443,7 @@ fn sign_bytes_internal_on_card(
     };
 
     // Copy all the data.
-    io::copy(&mut input, &mut writer).expect("Failed to sign data");
+    io::copy(&mut input, &mut writer)?;
 
     // Finally, teardown the stack to ensure all the data is written.
     // signer.finalize().expect("Failed to write data");
@@ -1493,8 +1483,9 @@ fn sign_file_internal(
         true => SignatureBuilder::new(SignatureType::Text),
     };
     // Now, create a signer with the builder.
-    let mut signer =
-        Signer::with_template(message, keys.pop().expect("No key for signing"), builder);
+    let key = keys.pop()
+        .ok_or_else(|| JceError::new("No signing key is present.".to_string()))?;
+    let mut signer = Signer::with_template(message, key, builder);
 
     // Now if we need cleartext signature
     if cleartext {
@@ -1512,7 +1503,7 @@ fn sign_file_internal(
     };
 
     // Copy all the data.
-    io::copy(&mut input, &mut writer).expect("Failed to sign data");
+    io::copy(&mut input, &mut writer)?;
 
     // Finally, teardown the stack to ensure all the data is written.
     // signer.finalize().expect("Failed to write data");
@@ -1552,8 +1543,9 @@ fn sign_bytes_internal<'py>(
         true => SignatureBuilder::new(SignatureType::Text),
     };
     // Now, create a signer with the builder.
-    let mut signer =
-        Signer::with_template(message, keys.pop().expect("No key for signing"), builder);
+    let key = keys.pop()
+        .ok_or_else(|| JceError::new("No signing key is present.".to_string()))?;
+    let mut signer = Signer::with_template(message, key, builder);
 
     // Now if we need cleartext signature
     if cleartext {
@@ -1571,7 +1563,7 @@ fn sign_bytes_internal<'py>(
     };
 
     // Copy all the data.
-    io::copy(&mut input, &mut writer).expect("Failed to sign data");
+    io::copy(&mut input, &mut writer)?;
 
     // Finally, teardown the stack to ensure all the data is written.
     // signer.finalize().expect("Failed to write data");
@@ -1599,27 +1591,28 @@ fn sign_bytes_detached_internal(
     }
 
     let mut result = Vec::new();
-    let mut sink = armor::Writer::new(&mut result, armor::Kind::Signature)
-        .expect("Failed to create armored writer.");
+    let mut sink = armor::Writer::new(&mut result, armor::Kind::Signature)?;
 
     // Stream an OpenPGP message.
     let message = Message::new(&mut sink);
 
     // Now, create a signer that emits the detached signature(s).
-    let mut signer = Signer::new(message, keys.pop().expect("No key for signing"));
+    let key = keys.pop()
+        .ok_or_else(|| JceError::new("No signing key is present.".to_string()))?;
+    let mut signer = Signer::new(message, key);
     for s in keys {
         signer = signer.add_signer(s);
     }
-    let mut signer = signer.detached().build().expect("Failed to create signer");
+    let mut signer = signer.detached().build()?;
 
     // Copy all the data.
-    io::copy(&mut input, &mut signer).expect("Failed to sign data");
+    io::copy(&mut input, &mut signer)?;
 
     // Finally, teardown the stack to ensure all the data is written.
-    signer.finalize().expect("Failed to write data");
+    signer.finalize()?;
 
     // Finalize the armor writer.
-    sink.finalize().expect("Failed to write data");
+    sink.finalize()?;
 
     Ok(String::from_utf8(result)?)
 }
@@ -3020,8 +3013,7 @@ fn encrypt_bytes_to_file(
             };
 
             let mut literal_writer = LiteralWriter::new(encryptor)
-                .build()
-                .expect("Failed to create literal writer");
+                .build()?;
 
             // Copy data to our writer stack to encrypt the data.
             literal_writer.write_all(&data)?;
@@ -3031,19 +3023,17 @@ fn encrypt_bytes_to_file(
             literal_writer.finalize()?;
 
             // Finalize the armor writer.
-            sink.finalize().expect("Failed to write data");
+            sink.finalize()?;
         }
         _ => {
             let message = Message::new(&mut outfile);
 
             // We want to encrypt a literal data packet.
             let encryptor = Encryptor2::for_recipients(message, recipients)
-                .build()
-                .expect("Failed to create encryptor");
+                .build()?;
 
             let mut literal_writer = LiteralWriter::new(encryptor)
-                .build()
-                .expect("Failed to create literal writer");
+                .build()?;
 
             // Copy data to our writer stack to encrypt the data.
             literal_writer
@@ -3097,15 +3087,13 @@ fn encrypt_file_internal(
 
             // We want to encrypt a literal data packet.
             let encryptor = Encryptor2::for_recipients(message, recipients)
-                .build()
-                .expect("Failed to create encryptor");
+                .build()?;
 
             let mut literal_writer = LiteralWriter::new(encryptor)
-                .build()
-                .expect("Failed to create literal writer");
+                .build()?;
 
             // Copy stdin to our writer stack to encrypt the data.
-            io::copy(&mut input, &mut literal_writer).expect("Failed to encrypt");
+            io::copy(&mut input, &mut literal_writer)?;
             //literal_writer.write_all(&data).unwrap();
 
             // Finally, finalize the OpenPGP message by tearing down the
@@ -3113,22 +3101,20 @@ fn encrypt_file_internal(
             literal_writer.finalize()?;
 
             // Finalize the armor writer.
-            sink.finalize().expect("Failed to write data");
+            sink.finalize()?;
         }
         _ => {
             let message = Message::new(&mut outfile);
 
             // We want to encrypt a literal data packet.
             let encryptor = Encryptor2::for_recipients(message, recipients)
-                .build()
-                .expect("Failed to create encryptor");
+                .build()?;
 
             let mut literal_writer = LiteralWriter::new(encryptor)
-                .build()
-                .expect("Failed to create literal writer");
+                .build()?;
 
             // Copy stdin to our writer stack to encrypt the data.
-            io::copy(&mut input, &mut literal_writer).expect("Failed to encrypt");
+            io::copy(&mut input, &mut literal_writer)?;
             //literal_writer.write_all(&data).unwrap();
 
             // Finally, finalize the OpenPGP message by tearing down the
@@ -3176,12 +3162,10 @@ fn encrypt_bytes_to_bytes<'py>(
     };
     // We want to encrypt a literal data packet.
     let encryptor = Encryptor2::for_recipients(message, recipients)
-        .build()
-        .expect("Failed to create encryptor");
+        .build()?;
 
     let mut literal_writer = LiteralWriter::new(encryptor)
-        .build()
-        .expect("Failed to create literal writer");
+        .build()?;
 
     // Copy stdin to our writer stack to encrypt the data.
     // io::copy(&mut data, &mut literal_writer).expect("Failed to encrypt");
@@ -3194,7 +3178,7 @@ fn encrypt_bytes_to_bytes<'py>(
     match armor {
         Some(true) => {
             // Finalize the armor writer.
-            sink.finalize().expect("Failed to write data");
+            sink.finalize()?;
             let res = PyBytes::new(py, &result2);
             Ok(res)
         }
@@ -3241,12 +3225,10 @@ impl Johnny {
         };
         // We want to encrypt a literal data packet.
         let encryptor = Encryptor2::for_recipients(message, recipients)
-            .build()
-            .expect("Failed to create encryptor");
+            .build()?;
 
         let mut literal_writer = LiteralWriter::new(encryptor)
-            .build()
-            .expect("Failed to create literal writer");
+            .build()?;
 
         // Copy stdin to our writer stack to encrypt the data.
         // io::copy(&mut data, &mut literal_writer).expect("Failed to encrypt");
@@ -3259,7 +3241,7 @@ impl Johnny {
         match armor {
             Some(true) => {
                 // Finalize the armor writer.
-                sink.finalize().expect("Failed to write data");
+                sink.finalize()?;
                 let res = PyBytes::new(py, &result2);
                 Ok(res)
             }
@@ -3319,15 +3301,13 @@ impl Johnny {
 
                 // We want to encrypt a literal data packet.
                 let encryptor = Encryptor2::for_recipients(message, recipients)
-                    .build()
-                    .expect("Failed to create encryptor");
+                    .build()?;
 
                 let mut literal_writer = LiteralWriter::new(encryptor)
-                    .build()
-                    .expect("Failed to create literal writer");
+                    .build()?;
 
                 // Copy stdin to our writer stack to encrypt the data.
-                io::copy(&mut input, &mut literal_writer).expect("Failed to encrypt");
+                io::copy(&mut input, &mut literal_writer)?;
                 //literal_writer.write_all(&data).unwrap();
 
                 // Finally, finalize the OpenPGP message by tearing down the
@@ -3335,22 +3315,20 @@ impl Johnny {
                 literal_writer.finalize()?;
 
                 // Finalize the armor writer.
-                sink.finalize().expect("Failed to write data");
+                sink.finalize()?;
             }
             _ => {
                 let message = Message::new(&mut outfile);
 
                 // We want to encrypt a literal data packet.
                 let encryptor = Encryptor2::for_recipients(message, recipients)
-                    .build()
-                    .expect("Failed to create encryptor");
+                    .build()?;
 
                 let mut literal_writer = LiteralWriter::new(encryptor)
-                    .build()
-                    .expect("Failed to create literal writer");
+                    .build()?;
 
                 // Copy stdin to our writer stack to encrypt the data.
-                io::copy(&mut input, &mut literal_writer).expect("Failed to encrypt");
+                io::copy(&mut input, &mut literal_writer)?;
                 //literal_writer.write_all(&data).unwrap();
 
                 // Finally, finalize the OpenPGP message by tearing down the
