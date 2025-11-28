@@ -12,17 +12,13 @@ use talktosc::*;
 
 #[allow(unused)]
 pub fn change_otp(enable: bool) -> Result<bool, errors::TalktoSCError> {
-    let card = talktosc::create_connection();
-    let card = match card {
-        Ok(card) => card,
-        Err(value) => return Err(value),
-    };
+    let card = talktosc::create_connection()?;
     let select_mgmt = apdus::create_apdu_management_selection();
     let enable_apdu = apdus::create_usb_otp_enable();
     let disable_apdu = apdus::create_usb_otp_disable();
     let resp = talktosc::send_and_parse(&card, select_mgmt);
     let resp = match resp {
-        Ok(_) => resp.unwrap(),
+        Ok(value) => value,
         Err(value) => {
             talktosc::disconnect(card);
             return Err(value);
@@ -30,18 +26,21 @@ pub fn change_otp(enable: bool) -> Result<bool, errors::TalktoSCError> {
     };
 
     // Let us try to find the major and minor number for firmware
-    let res = String::from_utf8(resp.data).unwrap();
-    let re = Regex::new(r"(\d+)\.(\d+)\.(\d+)").unwrap();
+    let res = String::from_utf8(resp.data)
+        .map_err(|_| errors::TalktoSCError::OtpError)?;
+    // Note: This expect is acceptable - hardcoded regex patterns are guaranteed to compile
+    let re = Regex::new(r"(\d+)\.(\d+)\.(\d+)")
+        .expect("hardcoded regex pattern should always compile");
     let caps = re.captures(&res);
     let (major, minor) = match caps {
         Some(caps) => {
             let major = caps
                 .get(1)
-                .map_or(0, |m| i8::from_str_radix(m.as_str(), 10).unwrap());
+                .map_or(0, |m| m.as_str().parse::<i8>().unwrap_or(0));
 
             let minor = caps
                 .get(2)
-                .map_or(0, |m| i8::from_str_radix(m.as_str(), 10).unwrap());
+                .map_or(0, |m| m.as_str().parse::<i8>().unwrap_or(0));
             (major, minor)
         }
         None => {
@@ -69,7 +68,7 @@ pub fn change_otp(enable: bool) -> Result<bool, errors::TalktoSCError> {
     // Send in the real APDU to the card
     let resp = talktosc::send_and_parse(&card, send_apdu);
     let resp = match resp {
-        Ok(_) => resp.unwrap(),
+        Ok(value) => value,
         Err(value) => {
             talktosc::disconnect(card);
             return Err(value);
@@ -88,11 +87,7 @@ pub fn change_otp(enable: bool) -> Result<bool, errors::TalktoSCError> {
 // To change the admin pin
 #[allow(unused)]
 pub fn chagne_admin_pin(pw3change: apdus::APDU) -> Result<bool, errors::TalktoSCError> {
-    let card = talktosc::create_connection();
-    let card = match card {
-        Ok(card) => card,
-        Err(value) => return Err(value),
-    };
+    let card = talktosc::create_connection()?;
 
     let select_openpgp = apdus::create_apdu_select_openpgp();
     let resp = talktosc::send_and_parse(&card, select_openpgp);
@@ -102,7 +97,7 @@ pub fn chagne_admin_pin(pw3change: apdus::APDU) -> Result<bool, errors::TalktoSC
     }
     let resp = talktosc::send_and_parse(&card, pw3change);
     let resp = match resp {
-        Ok(_) => resp.unwrap(),
+        Ok(value) => value,
         Err(value) => {
             talktosc::disconnect(card);
             return Err(value);
@@ -121,16 +116,12 @@ pub fn chagne_admin_pin(pw3change: apdus::APDU) -> Result<bool, errors::TalktoSC
 // To get the touch policy of a given slot
 #[allow(unused)]
 pub fn get_touch_policy(slot: KeySlot) -> Result<Vec<u8>, errors::TalktoSCError> {
-    let card = talktosc::create_connection();
-    let card = match card {
-        Ok(card) => card,
-        Err(value) => return Err(value),
-    };
+    let card = talktosc::create_connection()?;
 
     let select_openpgp = apdus::create_apdu_select_openpgp();
     let resp = talktosc::send_and_parse(&card, select_openpgp);
     let resp = match resp {
-        Ok(_) => resp.unwrap(),
+        Ok(value) => value,
         Err(value) => return Err(value),
     };
     // Just make sure we can talk
@@ -143,7 +134,7 @@ pub fn get_touch_policy(slot: KeySlot) -> Result<Vec<u8>, errors::TalktoSCError>
     let select_touchpolicy = apdus::APDU::new(0x00, 0xCA, 0x00, slot_value, None);
     let resp = talktosc::send_and_parse(&card, select_touchpolicy);
     let resp = match resp {
-        Ok(_) => resp.unwrap(),
+        Ok(value) => value,
         Err(value) => {
             talktosc::disconnect(card);
             return Err(value);
@@ -157,16 +148,12 @@ pub fn get_touch_policy(slot: KeySlot) -> Result<Vec<u8>, errors::TalktoSCError>
 // To get the Yubikey card firmware version
 #[allow(unused)]
 pub fn internal_get_version() -> Result<Vec<u8>, errors::TalktoSCError> {
-    let card = talktosc::create_connection();
-    let card = match card {
-        Ok(card) => card,
-        Err(value) => return Err(value),
-    };
+    let card = talktosc::create_connection()?;
 
     let select_openpgp = apdus::create_apdu_select_openpgp();
     let resp = talktosc::send_and_parse(&card, select_openpgp);
     let resp = match resp {
-        Ok(_) => resp.unwrap(),
+        Ok(value) => value,
         Err(value) => {
             talktosc::disconnect(card);
             return Err(value);
@@ -182,7 +169,7 @@ pub fn internal_get_version() -> Result<Vec<u8>, errors::TalktoSCError> {
     let select_version = apdus::APDU::new(0x00, 0xF1, 0x00, 0x00, None);
     let resp = talktosc::send_and_parse(&card, select_version);
     let resp = match resp {
-        Ok(_) => resp.unwrap(),
+        Ok(value) => value,
         Err(value) => {
             talktosc::disconnect(card);
             return Err(value);
@@ -195,16 +182,12 @@ pub fn internal_get_version() -> Result<Vec<u8>, errors::TalktoSCError> {
 
 #[allow(unused)]
 pub fn is_smartcard_connected() -> Result<bool, errors::TalktoSCError> {
-    let card = talktosc::create_connection();
-    let card = match card {
-        Ok(card) => card,
-        Err(value) => return Err(value),
-    };
+    let card = talktosc::create_connection()?;
 
     let select_openpgp = apdus::create_apdu_select_openpgp();
     let resp = talktosc::send_and_parse(&card, select_openpgp);
     let resp = match resp {
-        Ok(_) => resp.unwrap(),
+        Ok(value) => value,
         Err(value) => {
             talktosc::disconnect(card);
             return Err(value);
@@ -223,11 +206,7 @@ pub fn is_smartcard_connected() -> Result<bool, errors::TalktoSCError> {
 // Sets the name to the card
 #[allow(unused)]
 pub fn set_data(pw3_apdu: apdus::APDU, data: apdus::APDU) -> Result<bool, errors::TalktoSCError> {
-    let card = talktosc::create_connection();
-    let card = match card {
-        Ok(card) => card,
-        Err(value) => return Err(value),
-    };
+    let card = talktosc::create_connection()?;
 
     let select_openpgp = apdus::create_apdu_select_openpgp();
     let resp = talktosc::send_and_parse(&card, select_openpgp);
@@ -237,7 +216,7 @@ pub fn set_data(pw3_apdu: apdus::APDU, data: apdus::APDU) -> Result<bool, errors
     }
     let resp = talktosc::send_and_parse(&card, pw3_apdu);
     let resp = match resp {
-        Ok(_) => resp.unwrap(),
+        Ok(value) => value,
         Err(value) => return Err(value),
     };
 
@@ -248,7 +227,7 @@ pub fn set_data(pw3_apdu: apdus::APDU, data: apdus::APDU) -> Result<bool, errors
 
     let resp = talktosc::send_and_parse(&card, data);
     let resp = match resp {
-        Ok(_) => resp.unwrap(),
+        Ok(value) => value,
         Err(value) => return Err(value),
     };
 
@@ -268,11 +247,7 @@ pub fn move_subkey_to_card(
     time_apdu: apdus::APDU,
 ) -> Result<bool, errors::TalktoSCError> {
     // NOw let us move the key to the card
-    let card = talktosc::create_connection();
-    let card = match card {
-        Ok(card) => card,
-        Err(value) => return Err(value),
-    };
+    let card = talktosc::create_connection()?;
 
     let select_openpgp = apdus::create_apdu_select_openpgp();
     let resp = talktosc::send_and_parse(&card, select_openpgp);
@@ -283,7 +258,7 @@ pub fn move_subkey_to_card(
 
     let resp = talktosc::send_and_parse(&card, pw3_apdu.clone());
     let resp = match resp {
-        Ok(_) => resp.unwrap(),
+        Ok(value) => value,
         Err(value) => return Err(value),
     };
 
@@ -302,7 +277,7 @@ pub fn move_subkey_to_card(
     // Another time pw3 verification
     let resp = talktosc::send_and_parse(&card, pw3_apdu);
     let resp = match resp {
-        Ok(_) => resp.unwrap(),
+        Ok(value) => value,
         Err(value) => return Err(value),
     };
 
@@ -337,11 +312,7 @@ pub fn move_subkey_to_card(
 }
 
 fn decrypt_the_secret_in_card(c: Vec<u8>, pin: Vec<u8>) -> Result<Vec<u8>, errors::TalktoSCError> {
-    let card = talktosc::create_connection();
-    let card = match card {
-        Ok(card) => card,
-        Err(value) => return Err(value),
-    };
+    let card = talktosc::create_connection()?;
 
     let select_openpgp = apdus::create_apdu_select_openpgp();
     let resp = talktosc::send_and_parse(&card, select_openpgp);
@@ -358,13 +329,13 @@ fn decrypt_the_secret_in_card(c: Vec<u8>, pin: Vec<u8>) -> Result<Vec<u8>, error
     let dapdu = apdus::create_apdu_for_decryption(c);
     let mut aiddata: Vec<u8> = Vec::new();
 
-    let mut resp = talktosc::send_and_parse(&card, dapdu).unwrap();
+    let mut resp = talktosc::send_and_parse(&card, dapdu)?;
     aiddata.extend(resp.get_data());
     // This means we have more data to read.
     while resp.sw1 == 0x61 {
         let apdu = apdus::create_apdu_for_reading(resp.sw2);
 
-        resp = talktosc::send_and_parse(&card, apdu).unwrap();
+        resp = talktosc::send_and_parse(&card, apdu)?;
         aiddata.extend(resp.get_data());
     }
 
@@ -373,11 +344,7 @@ fn decrypt_the_secret_in_card(c: Vec<u8>, pin: Vec<u8>) -> Result<Vec<u8>, error
 }
 
 fn sign_hash_in_card(c: Vec<u8>, pin: Vec<u8>) -> Result<Vec<u8>, errors::TalktoSCError> {
-    let card = talktosc::create_connection();
-    let card = match card {
-        Ok(card) => card,
-        Err(value) => return Err(value),
-    };
+    let card = talktosc::create_connection()?;
 
     let select_openpgp = apdus::create_apdu_select_openpgp();
     let resp = talktosc::send_and_parse(&card, select_openpgp);
@@ -408,13 +375,13 @@ fn sign_hash_in_card(c: Vec<u8>, pin: Vec<u8>) -> Result<Vec<u8>, errors::Talkto
 
     let mut aiddata: Vec<u8> = Vec::new();
 
-    let mut resp = talktosc::send_and_parse(&card, dapdu).unwrap();
+    let mut resp = talktosc::send_and_parse(&card, dapdu)?;
     aiddata.extend(resp.get_data());
     // This means we have more data to read.
     while resp.sw1 == 0x61 {
         let apdu = apdus::create_apdu_for_reading(resp.sw2);
 
-        resp = talktosc::send_and_parse(&card, apdu).unwrap();
+        resp = talktosc::send_and_parse(&card, apdu)?;
         aiddata.extend(resp.get_data());
     }
     talktosc::disconnect(card);
@@ -472,7 +439,8 @@ impl<'a> crypto::Decryptor for KeyPair<'a> {
                     c_
                 };
                 // Now we have to decrypt c_ to decrypted value
-                let dec = decrypt_the_secret_in_card(c_, self.pin.clone()).unwrap();
+                let dec = decrypt_the_secret_in_card(c_, self.pin.clone())
+                    .map_err(|e| openpgp::Error::InvalidOperation(format!("Smartcard error: {:?}", e)))?;
                 let algo: SymmetricAlgorithm = dec[0].into();
                 let length = dec.len();
                 // First byte is the algo, and the last two bytes also not part of the key
