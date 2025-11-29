@@ -3509,6 +3509,24 @@ pub fn is_smartcard_connected() -> PyResult<bool> {
     }
 }
 
+/// Verifies the user PIN on the connected smartcard.
+#[pyfunction]
+pub fn verify_userpin_oncard(pin: Vec<u8>) -> Result<bool> {
+    match scard::verify_userpin(pin) {
+        Ok(value) => Ok(value),
+        Err(value) => Err(CardError::new_err(format!("Error {}", value)).into()),
+    }
+}
+
+/// Verifies the user PIN on the connected smartcard.
+#[pyfunction]
+pub fn verify_adminpin_oncard(pin: Vec<u8>) -> Result<bool> {
+    match scard::verify_adminpin(pin) {
+        Ok(value) => Ok(value),
+        Err(value) => Err(CardError::new_err(format!("Error {}", value)).into()),
+    }
+}
+
 /// Returns a tuple with the firmware version.
 #[pyfunction]
 pub fn get_card_version<'py>(py: Python<'py>) -> Result<Bound<'py, PyTuple>> {
@@ -3729,10 +3747,13 @@ pub fn update_subkeys_expiry_on_card<'py>(
     Ok(res)
 }
 
+
 /// A Python module implemented in Rust.
 #[pymodule]
 fn johnnycanencrypt(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(is_smartcard_connected))?;
+    m.add_wrapped(wrap_pyfunction!(verify_userpin_oncard))?;
+    m.add_wrapped(wrap_pyfunction!(verify_adminpin_oncard))?;
     m.add_wrapped(wrap_pyfunction!(reset_yubikey))?;
     m.add_wrapped(wrap_pyfunction!(change_admin_pin))?;
     m.add_wrapped(wrap_pyfunction!(change_user_pin))?;
