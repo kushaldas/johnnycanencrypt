@@ -343,6 +343,55 @@ fn decrypt_the_secret_in_card(c: Vec<u8>, pin: Vec<u8>) -> Result<Vec<u8>, error
     Ok(aiddata)
 }
 
+
+// Verifies the given user pin.
+pub fn verify_userpin(pin: Vec<u8>) -> Result<bool, errors::TalktoSCError> {
+    let card = talktosc::create_connection()?;
+
+    let select_openpgp = apdus::create_apdu_select_openpgp();
+    let resp = talktosc::send_and_parse(&card, select_openpgp);
+    match resp {
+        Ok(_) => (),
+        Err(value) => return Err(value),
+    }
+    let resp = talktosc::send_and_parse(&card, apdus::create_apdu_verify_pw1_for_sign(pin));
+    let resp = match resp {
+        Ok(resp) => resp,
+        Err(value) => return Err(value),
+    };
+    talktosc::disconnect(card);
+    // verify if resp.sw1 is 0x90 and sw2 is 0x00
+    if resp.is_okay() {
+        return Ok(true);
+    }
+    Ok(false)
+}
+
+// Verifies the given admin pin.
+pub fn verify_adminpin(pin: Vec<u8>) -> Result<bool, errors::TalktoSCError> {
+    let card = talktosc::create_connection()?;
+
+    let select_openpgp = apdus::create_apdu_select_openpgp();
+    let resp = talktosc::send_and_parse(&card, select_openpgp);
+    match resp {
+        Ok(_) => (),
+        Err(value) => return Err(value),
+    }
+    let resp = talktosc::send_and_parse(&card, apdus::create_apdu_verify_pw3(pin));
+    let resp = match resp {
+        Ok(resp) => resp,
+        Err(value) => return Err(value),
+    };
+    talktosc::disconnect(card);
+    // verify if resp.sw1 is 0x90 and sw2 is 0x00
+    if resp.is_okay() {
+        return Ok(true);
+    }
+    Ok(false)
+}
+
+
+
 fn sign_hash_in_card(c: Vec<u8>, pin: Vec<u8>) -> Result<Vec<u8>, errors::TalktoSCError> {
     let card = talktosc::create_connection()?;
 

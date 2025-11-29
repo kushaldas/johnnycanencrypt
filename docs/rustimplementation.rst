@@ -199,6 +199,17 @@ primary key, and *subkeys* contains a list of tuples for each usable subkey. Eac
 
         Updates the password of the key to a new password and then returns the updated key.
 
+.. function:: verify_userpin(pin: bytes) -> bool:
+
+        Verifies the given `user` pin, returns True if right or False.
+
+        .. versionadded:: 0.17.0
+
+.. function:: verify_adminpin(pin: bytes) -> bool:
+
+        Verifies the given `admin` pin, returns True if right or False.
+
+        .. versionadded:: 0.17.0
 
 You can access the low level functions or `Johnny` class by the following way:
 
