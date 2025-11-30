@@ -33,25 +33,26 @@ After you have the dependencies mentioned above, you can follow the steps below 
         python3 -m venv .venv
         source .venv/bin/activate
         python -m pip install -r requirements-dev.txt
-        python setup.py develop
+        maturin develop
+
 
 Only to build and test locally, you should execute
 
 ::
 
-        python setup.py develop
+        maturin develop
 
 
 To build a wheel use the following command.
 
 ::
 
-        python setup.py bdist_wheel
+        maturin build --release
 
 How to run the tests?
 ----------------------
 
-After you did the `python setup.py develop` as mentioned above, execute the following command.
+After you did the `maturin develop` as mentioned above, execute the following command.
 
 ::
 

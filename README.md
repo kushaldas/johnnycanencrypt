@@ -28,15 +28,14 @@ sudo apt install -y python3-dev libnettle8 nettle-dev libhogweed6 python3-pip py
 ```
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -U pip setuptools
 python -m pip install -r requirements-dev.txt
-python setup.py develop
+maturin develop
 ```
 
 For a release build use the following command.
 
 ```
-python setup.py bdist_wheel
+maturin build --release
 ```
 
 ## Introduction
