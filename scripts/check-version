@@ -1,17 +1,32 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: (Apache-2.0 OR MIT)
 
+import re
 from pathlib import Path
 
 import tomllib
 
 cargo_doc = tomllib.loads(Path("Cargo.toml").read_text(encoding="utf-8"))
 pyproject_doc = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+conf_py_content = Path("docs/conf.py").read_text(encoding="utf-8")
 
 cargo_version = cargo_doc["package"]["version"]
 pyproject_version = pyproject_doc["project"]["version"]
 
+# Extract version and release from docs/conf.py
+version_match = re.search(r"^version\s*=\s*['\"]([^'\"]+)['\"]", conf_py_content, re.MULTILINE)
+release_match = re.search(r"^release\s*=\s*['\"]([^'\"]+)['\"]", conf_py_content, re.MULTILINE)
+
+docs_version = version_match.group(1) if version_match else None
+docs_release = release_match.group(1) if release_match else None
+
 print(f"Cargo.toml version: {cargo_version}")
 print(f"pyproject.toml version: {pyproject_version}")
+print(f"docs/conf.py version: {docs_version}")
+print(f"docs/conf.py release: {docs_release}")
 
-assert cargo_version == pyproject_version
+assert cargo_version == pyproject_version, f"Version mismatch: Cargo.toml ({cargo_version}) != pyproject.toml ({pyproject_version})"
+assert cargo_version == docs_version, f"Version mismatch: Cargo.toml ({cargo_version}) != docs/conf.py version ({docs_version})"
+assert cargo_version == docs_release, f"Version mismatch: Cargo.toml ({cargo_version}) != docs/conf.py release ({docs_release})"
+
+print("\n✅ All versions match!")
