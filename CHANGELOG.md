@@ -1,6 +1,19 @@
-# Changelog
 
-## [unreleased]
+<a id='changelog-0.17.0'></a>
+# 0.17.0 — 2025-11-30
+
+## Added
+
+- Adds `verify_userpin` and `verify_adminpin` functions. #186
+
+## Fixed
+
+- #176 updates kushal's public and tests.
+- #177 uses sequoia-openpgp `1.22.0`
+- #178 uses scriv for changelog
+- #181 updates pyo3 to `0.27.1`
+- #42, we now have only acceptable `expect` calls and no `unwrap` calls.
+- Removes `cargo clippy` issues.
 
 ## [0.16.0] - 2025-02-13
 
