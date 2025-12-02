@@ -31,6 +31,9 @@ jobs:
         uv pip install pytest vcrpy
         uv pip install ./dist/johnnycanencrypt-*.whl
 
+    - name: Install libpcsclite1
+      run: sudo apt install libpcsclite1 -y
+
     - name: Rust tests
       run: |
         source .venv/bin/activate
