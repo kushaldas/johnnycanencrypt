@@ -41,7 +41,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: johnnycanencrypt_manylinux_x86_64
-        path: target/wheels
+        path: dist/
         overwrite: true
         retention-days: 1
         if-no-files-found: "error"
