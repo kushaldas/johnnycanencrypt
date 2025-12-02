@@ -31,6 +31,9 @@ jobs:
         uv pip install pytest vcrpy
         uv pip install ./dist/johnnycanencrypt-*.whl
 
+    - name: Install libpcsclite1
+      run: sudo apt install libpcsclite1 -y
+
     - name: Rust tests
       run: |
         source .venv/bin/activate
@@ -41,7 +44,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: johnnycanencrypt_manylinux_x86_64
-        path: target/wheels
+        path: dist/
         overwrite: true
         retention-days: 1
         if-no-files-found: "error"

@@ -1,7 +1,7 @@
 #!/bin/bash
 set -x
 
-yum install -y nettle clang clang-devel nettle-devel pcsc-lite-devel
+yum install -y nettle clang clang-devel nettle-devel pcsc-lite-devel pcsc-lite-libs
 
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 export PATH="$HOME/.cargo/bin:$PATH"
@@ -17,7 +17,7 @@ echo "Now we need to fix the libpcsc as Debian/Ubuntu/Fedora needs to load syste
 for whl in target/wheels/johnnycanencrypt*cp310*-manylinux*.whl; do
 	mkdir wtest
 	unzip "$whl" -d wtest/
-	patchelf --replace-needed libpcsclite-a573614e.so.1.0.0 libpcsclite.so.1 wtest/johnnycanencrypt/johnnycanencrypt.abi3.so
+	patchelf --replace-needed libpcsclite-a573614e.so.1 libpcsclite.so.1 wtest/johnnycanencrypt/johnnycanencrypt.abi3.so
 	wheel pack --dest-dir ./dist/ wtest
 	rm -rf wtest
 done
