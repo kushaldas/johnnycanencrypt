@@ -24,9 +24,9 @@ copyright = '2020-present, Kushal Das'
 author = 'Kushal Das'
 
 # The short X.Y version
-version = '0.16.0'
+version = '0.17.0'
 # The full version, including alpha/beta/rc tags
-release = '0.16.0'
+release = '0.17.0'
 
 
 # -- General configuration ---------------------------------------------------
