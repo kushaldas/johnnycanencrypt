@@ -69,14 +69,11 @@ jobs:
       run: |
         # Clone and build jcecard from source
         git clone https://github.com/kushaldas/jcecard.git /tmp/jcecard
-        cd /tmp/jcecard
         source ${{ github.workspace }}/.venv/bin/activate
-        uv pip install -e ".[dev]"
         uv pip install pyscard
-        cd ifd-jcecard
-        cargo build --release
-        cd ..
-        just install-ifd
+        uv pip install jcecard
+        cd /tmp/jcecard
+        just install-prbuilt-ifd
         mkdir -p ~/.gnupg
         chmod 700 ~/.gnupg
         echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
