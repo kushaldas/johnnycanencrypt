@@ -518,7 +518,7 @@ impl<'a> crypto::Decryptor for KeyPair<'a> {
                 // Send this for decryption on the card
                 let dec = decrypt_the_secret_in_card(c, self.pin.clone())?;
                 let S: openpgp::crypto::mem::Protected = dec.into();
-                Ok(openpgp::crypto::ecdh::decrypt_unwrap2(
+                Ok(openpgp::crypto::ecdh::decrypt_unwrap(
                     self.public,
                     &S,
                     ciphertext,
