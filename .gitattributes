@@ -1,0 +1,3 @@
+# Ensure test files have consistent Unix line endings across platforms
+tests/files/*.txt text eol=lf
+tests/files/*.asc text eol=lf
