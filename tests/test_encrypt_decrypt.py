@@ -121,6 +121,25 @@ def test_encrypt_decrypt_bytes_armored():
     assert DATA == result.decode("utf-8")
 
 
+# This tests decrypts a file encrypted by GPG
+# using one of the test key from our repo.
+def test_decrypt_file_from_gpg(tmp_path):
+    "Tests encrypt/decrypt file in binary format"
+    inputfile = BASE_TESTSDIR / "files" / "gpg_encrypted.txt"
+    encrypted_file = BASE_TESTSDIR / "files" / "gpg_encrypted.asc"
+    decrypted_output = tmp_path / "gpg_encrytped.txt"
+
+    # Now encrypt and then decrypt
+    j = jce.Johnny(_get_cert_data(PUBLIC_KEY))
+    jp = jce.Johnny(_get_cert_data(SECRET_KEY))
+    assert jp.decrypt_file(
+        str(encrypted_file).encode("utf-8"), str(decrypted_output).encode("utf-8"), "redhat"
+    )
+
+    verify_files(inputfile, decrypted_output)
+
+
+
 def test_encrypt_decrypt_files(tmp_path):
     "Tests encrypt/decrypt file in binary format"
     inputfile = BASE_TESTSDIR / "files" / "text.txt"
