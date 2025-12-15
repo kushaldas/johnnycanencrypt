@@ -40,6 +40,80 @@ jobs:
         cd tests
         python -m pytest -vvv
 
+    - name: Install smartcard dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          pcscd \
+          libpcsclite-dev \
+          pcsc-tools \
+          gnupg \
+          gnupg-agent \
+          scdaemon
+
+    - name: Install yubico-piv-tool from kushal's build
+      run: |
+        wget https://kushaldas.in/yubico.tar.gz
+        echo "222b9deb97dcd2ad03f216ac42caea91bd875d6f3e838d3f4a9ab0d01c433c4c yubico.tar.gz" | sha256sum -c -
+        tar xvf yubico.tar.gz
+        sudo apt install ./yubico/*.deb
+
+    - name: Install just
+      uses: extractions/setup-just@v2
+
+    - name: Make just available for root
+      run: |
+        sudo ln -sf $(which just) /usr/local/bin/just
+
+    - name: Install jcecard and start virtual smartcard
+      run: |
+        # Clone and build jcecard from source
+        git clone https://github.com/kushaldas/jcecard.git /tmp/jcecard
+        cd /tmp/jcecard
+        source ${{ github.workspace }}/.venv/bin/activate
+        uv pip install -e ".[dev]"
+        uv pip install pyscard
+        cd ifd-jcecard
+        cargo build --release
+        cd ..
+        just install-ifd
+        mkdir -p ~/.gnupg
+        chmod 700 ~/.gnupg
+        echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
+        echo "disable-ccid" >> ~/.gnupg/scdaemon.conf
+        gpgconf --kill all || true
+        echo "Starting jcecard TCP server"
+        nohup python -m jcecard.tcp_server --debug > /tmp/tcp_server.log 2>&1 &
+        sleep 2
+        # Stop any existing pcscd first (ubuntu-latest has it running by default)
+        sudo systemctl stop pcscd.socket pcscd.service 2>/dev/null || true
+        sudo pkill -9 pcscd 2>/dev/null || true
+        sleep 1
+        # Start pcscd in debug mode with polkit disabled (required for CI)
+        # Ubuntu's pcscd 2.0+ uses polkit for authorization which blocks non-root users
+        sudo /usr/sbin/pcscd --foreground --debug --apdu --disable-polkit > /tmp/pcscd_debug.log 2>&1 &
+        sleep 3
+        # Verify services are running
+        pgrep -f tcp_server && echo "TCP server is running"
+        pgrep pcscd && echo "pcscd is running"
+        # Verify card is accessible via PC/SC
+        python -c "from smartcard.System import readers; r = readers(); print(f'Readers: {r}'); assert len(r) > 0, 'No readers found'"
+    
+
+    - name: Run smartcard tests
+      run: |
+        source .venv/bin/activate
+        python sm2/smartcards.py
+        python sm2/smartcards_for_primary.py
+
+    - name: Upload smartcard logs on failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: smartcard-debug-logs
+        path: /tmp/pcscd_debug.log
+        retention-days: 1
+
     - name: Store wheels
       uses: actions/upload-artifact@v4
       with:
