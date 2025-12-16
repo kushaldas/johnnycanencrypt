@@ -1,5 +1,14 @@
 name: ci-pr
-on: [pull_request, workflow_dispatch]
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'sm2/**'
+      - 'Cargo.lock'
+      - 'Cargo.toml'
+      - 'pyproject.toml'
+  workflow_dispatch:
 env:
   FORCE_COLOR: "1"
   UV_LINK_MODE: "copy"

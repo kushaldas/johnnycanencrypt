@@ -1,4 +1,15 @@
 
+<a id='changelog-0.18.0'></a>
+# 0.18.0 — 2025-12-16
+
+## Added
+
+- Tests SmartCard functionalities in CI.
+
+## Security
+
+- Updates sequoia-pgp dependency to `2.1.0` due to [CVE-2025-67897](https://nvd.nist.gov/vuln/detail/CVE-2025-67897).
+
 <a id='changelog-0.17.0'></a>
 # 0.17.0 — 2025-11-30
 
