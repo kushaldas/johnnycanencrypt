@@ -8,6 +8,7 @@ on:
       - 'Cargo.lock'
       - 'Cargo.toml'
       - 'pyproject.toml'
+      - '.github/workflows/**'
   workflow_dispatch:
 env:
   FORCE_COLOR: "1"
@@ -54,8 +55,8 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y \
           pcscd \
-          libpcsclite-dev \
           pcsc-tools \
+          libpcsclite-dev \
           gnupg \
           gnupg-agent \
           scdaemon
@@ -67,44 +68,34 @@ jobs:
         tar xvf yubico.tar.gz
         sudo apt install ./yubico/*.deb
 
-    - name: Install just
-      uses: extractions/setup-just@v2
-
-    - name: Make just available for root
+    - name: Install jcecard IFD handler
       run: |
-        sudo ln -sf $(which just) /usr/local/bin/just
-
-    - name: Install jcecard and start virtual smartcard
-      run: |
-        # Clone and build jcecard from source
-        git clone https://github.com/kushaldas/jcecard.git /tmp/jcecard
-        source ${{ github.workspace }}/.venv/bin/activate
-        uv pip install pyscard
-        uv pip install jcecard
-        cd /tmp/jcecard
-        just install-prbuilt-ifd
+        wget https://kushaldas.in/ifd-jcecard.tar.gz
+        echo "74ffae1782ba974549783066045d900200609242ce3c23f38a01e3fae1c1d065  ifd-jcecard.tar.gz" | sha256sum -c -
+        tar xvf ifd-jcecard.tar.gz
+        cd ifd-jcecard
+        sudo ./install-jcecard.sh
+        cd -
+        uv pip install pyscard pexpect
         mkdir -p ~/.gnupg
         chmod 700 ~/.gnupg
         echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
         echo "disable-ccid" >> ~/.gnupg/scdaemon.conf
         gpgconf --kill all || true
-        echo "Starting jcecard TCP server"
-        nohup python -m jcecard.tcp_server --debug > /tmp/tcp_server.log 2>&1 &
-        sleep 2
-        # Stop any existing pcscd first (ubuntu-latest has it running by default)
+
+    - name: Start pcscd
+      run: |
+        # Stop any existing pcscd
         sudo systemctl stop pcscd.socket pcscd.service 2>/dev/null || true
         sudo pkill -9 pcscd 2>/dev/null || true
         sleep 1
-        # Start pcscd in debug mode with polkit disabled (required for CI)
-        # Ubuntu's pcscd 2.0+ uses polkit for authorization which blocks non-root users
-        sudo /usr/sbin/pcscd --foreground --debug --apdu --disable-polkit > /tmp/pcscd_debug.log 2>&1 &
+        # Start pcscd in debug mode (virtual card is embedded in IFD handler)
+        sudo JCECARD_STORAGE_DIR="$HOME/.jcecard" /usr/sbin/pcscd --foreground --debug --apdu --disable-polkit > /tmp/pcscd_debug.log 2>&1 &
         sleep 3
-        # Verify services are running
-        pgrep -f tcp_server && echo "TCP server is running"
+        # Verify pcscd is running and card is available
         pgrep pcscd && echo "pcscd is running"
-        # Verify card is accessible via PC/SC
-        python -c "from smartcard.System import readers; r = readers(); print(f'Readers: {r}'); assert len(r) > 0, 'No readers found'"
-    
+        source .venv/bin/activate
+        python -c "from smartcard.System import readers; r = readers(); print(f'Readers: {r}'); assert len(r) > 0"
 
     - name: Run smartcard tests
       run: |
